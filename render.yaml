@@ -1,0 +1,16 @@
+# Blueprint de Render: un solo servicio web gratuito (API + sitio).
+services:
+  - type: web
+    name: declarafacil
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/salud
+    autoDeploy: true
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: APP_URL
+        value: https://declarafacil.onrender.com

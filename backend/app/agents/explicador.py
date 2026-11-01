@@ -30,17 +30,17 @@ def _plantilla(liq: Liquidacion) -> str:
         f"Tus ingresos del año suman {cop(r.ingresos_brutos_totales)}. Después de restar aportes, rentas exentas y deducciones, "
         f"tu renta líquida gravable queda en {cop(r.renta_liquida_gravable)} y el impuesto a cargo en {cop(r.total_impuesto_cargo)}."
     )
+    if r.sancion:
+        partes.append(f"Como la declaración está vencida, se suma una sanción estimada de {cop(r.sancion)}.")
     if r.saldo_pagar > 0:
         partes.append(
-            f"Como ya te retuvieron {cop(r.retenciones)} durante el año, te queda un saldo a pagar de {cop(r.saldo_pagar)}"
+            f"Descontando las retenciones de {cop(r.retenciones)} que ya te hicieron, te queda un saldo a pagar de {cop(r.saldo_pagar)}"
             + (f", que incluye un anticipo de {cop(r.anticipo_siguiente)} para el próximo año." if r.anticipo_siguiente else ".")
         )
     elif r.saldo_favor > 0:
-        partes.append(f"Las retenciones superan el impuesto, así que te queda un saldo a favor de {cop(r.saldo_favor)}.")
+        partes.append(f"Lo que ya pagaste por retenciones supera lo que debes, así que te queda un saldo a favor de {cop(r.saldo_favor)}.")
     else:
         partes.append("No te queda saldo a pagar ni a favor.")
-    if r.sancion:
-        partes.append(f"Como la declaración está vencida, suma una sanción estimada de {cop(r.sancion)}: total a pagar {cop(r.total_a_pagar)}.")
     partes.append("Es un borrador: revísalo y fírmalo tú en el portal de la DIAN.")
     return " ".join(partes)
 

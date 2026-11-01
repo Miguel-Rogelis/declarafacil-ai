@@ -199,7 +199,7 @@ def construir_datos(filas: list[FilaInterpretada], topes: dict[str, float], anio
         if f.campo in ("patrimonio.bienes", "patrimonio.deudas"):
             lista = "deudas" if (f.campo == "patrimonio.deudas" or f.valor < 0) else "bienes"
             datos["patrimonio"][lista].append(
-                {"concepto": f"{(f.informante or 'Reportado')[:60]} · {f.detalle[:70]}", "valor": abs(f.valor), "fuente": f.id}
+                {"concepto": f"{f.detalle[:70]} ({(f.informante or 'reportado')[:50]})", "valor": abs(f.valor), "fuente": f.id}
             )
             clave = f"patrimonio.{lista}"
             resumen[clave] = resumen.get(clave, 0) + abs(f.valor)

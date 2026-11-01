@@ -142,3 +142,16 @@ def test_reglas_validan_tabla_con_huecos():
     malo = reglas.cargar(2025)
     malo["tabla_renta_art241"][2]["desde_uvt"] = 1800
     assert reglas.validar(malo)
+
+
+def test_sancion_se_descuenta_del_saldo_a_favor():
+    d = DatosDeclaracion(
+        laboral={"salarios_y_pagos_laborales": 80_000_000},
+        pagos={"declaraciones_previas": 3, "retenciones_renta": 5_000_000},
+        control={"ultimos_dos_digitos_nit": "21", "fecha_presentacion": date(2026, 9, 10)},
+    )
+    liq = liquidar(d, R)
+    favor_sin_sancion = 5_000_000 - liq.resumen.total_impuesto_cargo
+    assert liq.resumen.sancion == 524_000
+    assert liq.resumen.saldo_favor == pytest.approx(favor_sin_sancion - 524_000, abs=1000)
+    assert liq.resumen.total_a_pagar == 0

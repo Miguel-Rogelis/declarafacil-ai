@@ -110,10 +110,10 @@ async def procesar_documento(contenido: bytes, nombre: str, anio_esperado: int) 
         yield ErrorFlujo(mensaje=msg, agente="clasificador")
         return
     estado = "ok"
-    msg = f"Exógena del año {clas.anio or '¿?'} · confianza {clas.confianza:.0%}" + (" (por reglas)" if not clas.modelo else "")
+    msg = f"Exógena del año {clas.anio or '¿?'}, confianza {clas.confianza:.0%}" + (", decidido con reglas" if not clas.modelo else "")
     if clas.anio and clas.anio != anio_esperado:
         estado = "advertencia"
-        msg += f" · ojo: elegiste el año {anio_esperado}"
+        msg += f". Ojo: elegiste el año {anio_esperado}"
     yield traza.fin("clasificador", msg, t0, estado, clas.modelo)  # type: ignore[arg-type]
 
     yield traza.inicio("interprete", "Ubicando cada concepto en la declaración…")
@@ -122,7 +122,7 @@ async def procesar_documento(contenido: bytes, nombre: str, anio_esperado: int) 
     sumadas = sum(1 for f in extraccion.filas if f.tratamiento == "suma")
     revisar = sum(1 for f in extraccion.filas if f.tratamiento == "revisar")
     msg = f"{sumadas} conceptos ubicados, {revisar} para revisar"
-    msg += f" · {enviados} consultados a la IA (sin montos)" if modelo else " · todo con reglas"
+    msg += f". {enviados} consultados a la IA, sin montos ni datos personales" if modelo else ". Todo resuelto con reglas"
     yield traza.fin("interprete", msg, t0, "advertencia" if revisar else "ok", modelo)
 
     yield ResultadoDocumento(extraccion=extraccion, clasificacion=clas.model_dump(), traza=traza.eventos)
@@ -181,14 +181,14 @@ async def procesar_liquidacion(sol: SolicitudLiquidacion) -> AsyncIterator[Salid
         yield ErrorFlujo(mensaje=str(e), agente="motor")
         return
     estado = "advertencia" if reglas.get("estado") == "borrador" else "ok"
-    yield traza.fin("motor", f"Reglas AG {sol.anio_gravable} (UVT ${reglas['uvt']:,.0f}) · {sum(len(s.lineas) for s in liq.secciones)} cálculos".replace(",", "."), t0, estado)  # type: ignore[arg-type]
+    yield traza.fin("motor", f"Reglas del año gravable {sol.anio_gravable} con UVT de ${reglas['uvt']:,.0f}".replace(",", ".") + f", {sum(len(s.lineas) for s in liq.secciones)} cálculos", t0, estado)  # type: ignore[arg-type]
 
     yield traza.inicio("auditor", "Buscando inconsistencias y riesgos…")
     t0 = time.perf_counter()
     extra = auditor.auditar(datos, liq, sol.filas)
     liq.alertas = liq.alertas + extra
     criticas = sum(1 for a in liq.alertas if a.nivel == "critica")
-    yield traza.fin("auditor", f"{len(liq.alertas)} observaciones · {criticas} críticas", t0, "advertencia" if criticas else "ok")
+    yield traza.fin("auditor", f"{len(liq.alertas)} observaciones, {criticas} críticas", t0, "advertencia" if criticas else "ok")
 
     yield traza.inicio("explicador", "Redactando el resumen en lenguaje simple…")
     t0 = time.perf_counter()

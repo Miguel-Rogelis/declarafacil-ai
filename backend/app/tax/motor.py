@@ -415,8 +415,8 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
     anticipo = max(min(opciones), 0)
 
     total_cargo = impuesto_neto + res["go"]["impuesto"]
-    saldo = total_cargo + anticipo - pagos.anticipo_anio_anterior - pagos.saldo_favor_anterior - pagos.retenciones_renta
-    saldo_pagar, saldo_favor = (saldo, 0.0) if saldo > 0 else (0.0, -saldo)
+    saldo_sin_sancion = total_cargo + anticipo - pagos.anticipo_anio_anterior - pagos.saldo_favor_anterior - pagos.retenciones_renta
+    favor_sin_sancion = max(-saldo_sin_sancion, 0)
 
     # Sanción por extemporaneidad (art. 641 ET)
     venc = _vencimiento(d, r)
@@ -429,7 +429,7 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
         else:
             tope = min(
                 ingresos_totales * rs["extemporaneidad_tope_pct_ingresos"],
-                2 * saldo_favor if saldo_favor > 0 else rs["extemporaneidad_tope_uvt_sin_saldo_favor"] * uvt_pres,
+                2 * favor_sin_sancion if favor_sin_sancion > 0 else rs["extemporaneidad_tope_uvt_sin_saldo_favor"] * uvt_pres,
             )
             plena = min(ingresos_totales * rs["extemporaneidad_pct_mes_ingresos_sin_impuesto"] * venc.meses_retraso, tope)
         minima = rs["sancion_minima_uvt"] * uvt_pres
@@ -449,6 +449,10 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
             )
         )
 
+    # Como en el formulario 210, la sanción se suma antes de determinar el saldo
+    saldo = saldo_sin_sancion + sancion
+    saldo_pagar, saldo_favor = (saldo, 0.0) if saldo > 0 else (0.0, -saldo)
+
     calc.secciones.append(
         Seccion(
             id="liquidacion",
@@ -465,9 +469,9 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
                 Linea(clave="anticipo_ant", concepto="Menos: anticipo liquidado el año anterior", valor=pagos.anticipo_anio_anterior, campos=["pagos.anticipo_anio_anterior"]),
                 Linea(clave="saldo_favor_ant", concepto="Menos: saldo a favor del año anterior", valor=pagos.saldo_favor_anterior, campos=["pagos.saldo_favor_anterior"]),
                 Linea(clave="retenciones", concepto="Menos: retenciones en la fuente", valor=pagos.retenciones_renta, campos=["pagos.retenciones_renta"]),
+                Linea(clave="sancion", concepto="Más: sanción por extemporaneidad (estimada)", valor=sancion, norma="Arts. 639, 640 y 641 ET"),
                 Linea(clave="saldo_pagar", concepto="Saldo a pagar", valor=saldo_pagar),
                 Linea(clave="saldo_favor", concepto="Saldo a favor", valor=saldo_favor),
-                Linea(clave="sancion", concepto="Sanción por extemporaneidad (estimada)", valor=sancion, norma="Arts. 639, 640 y 641 ET"),
             ],
         )
     )
@@ -495,7 +499,7 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
         saldo_pagar=_redondear(saldo_pagar, redondeo),
         saldo_favor=_redondear(saldo_favor, redondeo),
         sancion=sancion,
-        total_a_pagar=_redondear(saldo_pagar + sancion, redondeo),
+        total_a_pagar=_redondear(saldo_pagar, redondeo),
     )
 
     if not obligacion.obligado:

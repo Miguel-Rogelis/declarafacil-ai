@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/Asistente.tsx","./src/components/MesaAgentes.tsx","./src/components/piezas.tsx","./src/lib/api.ts","./src/lib/estado.tsx","./src/lib/formato.ts","./src/pages/Configuracion.tsx","./src/pages/Declarar.tsx","./src/pages/Inicio.tsx","./src/pages/Resultado.tsx","./vite.config.ts"],"version":"5.9.3"}

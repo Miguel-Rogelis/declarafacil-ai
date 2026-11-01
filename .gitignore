@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+# Node
+node_modules/
+frontend/dist/
+# Datos personales: nunca subir exógenas reales
+data-in/
+*.xlsx
+!backend/tests/fixtures/*.xlsx
+*.pdf
+!backend/tests/fixtures/*.pdf
+.env

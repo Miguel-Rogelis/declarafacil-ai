@@ -15,3 +15,4 @@ data-in/
 *.pdf
 !backend/tests/fixtures/*.pdf
 .env
+*.tsbuildinfo

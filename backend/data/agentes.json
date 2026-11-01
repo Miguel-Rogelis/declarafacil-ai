@@ -1,0 +1,58 @@
+{
+  "lector": {
+    "nombre": "Lector",
+    "responsabilidad": "Lee el archivo de la exógena (Excel o PDF) y lo convierte en filas estructuradas. No interpreta nada.",
+    "usa_ia": false,
+    "activo": true
+  },
+  "anonimizador": {
+    "nombre": "Anonimizador",
+    "responsabilidad": "Enmascara cédula, nombres y números de cuenta antes de que cualquier dato salga del servidor.",
+    "usa_ia": false,
+    "activo": true
+  },
+  "clasificador": {
+    "nombre": "Clasificador",
+    "responsabilidad": "Confirma que el documento es un reporte de información exógena y de qué año. Usa reglas primero y solo consulta al modelo si hay duda.",
+    "usa_ia": true,
+    "activo": true,
+    "modelos": ["nvidia/nemotron-3.5-lightning:free", "google/gemma-4-31b-it:free", "openrouter/free"],
+    "temperatura": 0
+  },
+  "interprete": {
+    "nombre": "Intérprete",
+    "responsabilidad": "Ubica cada concepto reportado en la casilla correcta de la declaración y lo explica en lenguaje simple. Nunca ve ni escribe montos: las cifras las copia el código desde la fila original.",
+    "usa_ia": true,
+    "activo": true,
+    "modelos": ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openrouter/free"],
+    "temperatura": 0
+  },
+  "motor": {
+    "nombre": "Motor tributario",
+    "responsabilidad": "Calcula la declaración con las reglas del año gravable (UVT, topes, tabla del art. 241, límites). Sin IA.",
+    "usa_ia": false,
+    "activo": true
+  },
+  "auditor": {
+    "nombre": "Auditor",
+    "responsabilidad": "Revisa inconsistencias, datos faltantes, vencimientos y riesgos antes de que el usuario firme. Sin IA.",
+    "usa_ia": false,
+    "activo": true
+  },
+  "explicador": {
+    "nombre": "Explicador",
+    "responsabilidad": "Escribe el resumen en lenguaje simple usando solo las cifras ya calculadas. Si menciona un número que no existe en el cálculo, su texto se descarta.",
+    "usa_ia": true,
+    "activo": true,
+    "modelos": ["google/gemma-4-31b-it:free", "thinkingmachines/inkling:free", "openrouter/free"],
+    "temperatura": 0.3
+  },
+  "asistente": {
+    "nombre": "Asistente",
+    "responsabilidad": "Responde dudas del usuario apoyándose en la base de conocimiento del proyecto.",
+    "usa_ia": true,
+    "activo": true,
+    "modelos": ["google/gemma-4-31b-it:free", "nvidia/nemotron-3.5-lightning:free", "openrouter/free"],
+    "temperatura": 0.4
+  }
+}

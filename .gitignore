@@ -11,6 +11,7 @@ frontend/dist/
 data-in/
 *.xlsx
 !backend/tests/fixtures/*.xlsx
+!backend/data/demo/*.xlsx
 *.pdf
 !backend/tests/fixtures/*.pdf
 .env

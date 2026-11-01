@@ -22,6 +22,11 @@ from app.tax.modelos import (
 )
 
 
+def cop(valor: float) -> str:
+    """Formato de pesos colombianos: $1.234.567"""
+    return "$" + f"{valor:,.0f}".replace(",", ".")
+
+
 def _redondear(valor: float, multiplo: int = 1000) -> float:
     """La DIAN aproxima los valores del formulario al múltiplo de mil más cercano."""
     if multiplo <= 1:
@@ -139,9 +144,9 @@ class _Calculo:
                     nivel="info",
                     titulo="Tus beneficios superan el límite legal",
                     detalle=(
-                        f"Sumaste ${sujetas:,.0f} en rentas exentas y deducciones, pero la ley solo deja restar "
-                        f"${aceptadas:,.0f} (40 % del ingreso neto, máximo 1.340 UVT). La diferencia no reduce tu impuesto."
-                    ).replace(",", "."),
+                        f"Sumaste {cop(sujetas)} en rentas exentas y deducciones, pero la ley solo deja restar "
+                        f"{cop(aceptadas)} (40 % del ingreso neto, máximo 1.340 UVT). La diferencia no reduce tu impuesto."
+                    ),
                 )
             )
 
@@ -322,7 +327,7 @@ def _obligacion(d: DatosDeclaracion, r: dict[str, Any], ingresos_totales: float,
         supera = valor > limite if nombre.startswith("Patrimonio") else valor >= limite
         topes.append(TopeObligacion(tope=nombre, valor=valor, limite=limite, supera=supera))
         if supera:
-            razones.append(f"{nombre}: ${valor:,.0f} supera el tope de ${limite:,.0f}".replace(",", "."))
+            razones.append(f"{nombre}: {cop(valor)} supera el tope de {cop(limite)}")
     if ind.responsable_iva:
         razones.append("Eres responsable de IVA")
     return Obligacion(obligado=bool(razones), razones=razones, topes=topes)
@@ -437,10 +442,10 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
                 titulo="La declaración ya está vencida",
                 detalle=(
                     f"Tu plazo era el {venc.fecha.strftime('%d/%m/%Y')}. Con {venc.meses_retraso} mes(es) o fracción de retraso, "
-                    f"la sanción estimada es de ${sancion:,.0f}"
+                    f"la sanción estimada es de {cop(sancion)}"
                     + (" (ya reducida al 50 % por el art. 640, si no te han sancionado por lo mismo en los últimos 2 años)" if d.control.sin_sanciones_ultimos_2_anios else "")
                     + ". Entre más pronto declares, menor es."
-                ).replace(",", "."),
+                ),
             )
         )
 

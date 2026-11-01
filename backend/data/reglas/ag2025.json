@@ -1,0 +1,107 @@
+{
+  "anio_gravable": 2025,
+  "estado": "vigente",
+  "descripcion": "Reglas para la declaración de renta de personas naturales residentes del año gravable 2025 (se presenta en 2026). Ley 2277 de 2022.",
+  "uvt": 49799,
+  "uvt_anio_presentacion": 52374,
+  "fuentes": [
+    "UVT 2025: Resolución DIAN 000193 de 2024",
+    "UVT 2026 (sanciones): Resolución DIAN 000238 de 2025",
+    "Componente inflacionario: Decreto 0898 de 2026",
+    "Estatuto Tributario arts. 206, 241, 242, 254-1, 307, 311-1, 314, 317, 331, 336, 387, 592-594-3, 639, 641, 807"
+  ],
+  "topes_obligacion_uvt": {
+    "patrimonio_bruto": 4500,
+    "ingresos_brutos": 1400,
+    "consumos_tarjeta_credito": 1400,
+    "compras_consumos": 1400,
+    "consignaciones_depositos_inversiones": 1400
+  },
+  "tabla_renta_art241": [
+    {"desde_uvt": 0, "hasta_uvt": 1090, "tarifa": 0.0, "base_uvt": 1090, "impuesto_fijo_uvt": 0},
+    {"desde_uvt": 1090, "hasta_uvt": 1700, "tarifa": 0.19, "base_uvt": 1090, "impuesto_fijo_uvt": 0},
+    {"desde_uvt": 1700, "hasta_uvt": 4100, "tarifa": 0.28, "base_uvt": 1700, "impuesto_fijo_uvt": 116},
+    {"desde_uvt": 4100, "hasta_uvt": 8670, "tarifa": 0.33, "base_uvt": 4100, "impuesto_fijo_uvt": 788},
+    {"desde_uvt": 8670, "hasta_uvt": 18970, "tarifa": 0.35, "base_uvt": 8670, "impuesto_fijo_uvt": 2296},
+    {"desde_uvt": 18970, "hasta_uvt": 31000, "tarifa": 0.37, "base_uvt": 18970, "impuesto_fijo_uvt": 5901},
+    {"desde_uvt": 31000, "hasta_uvt": null, "tarifa": 0.39, "base_uvt": 31000, "impuesto_fijo_uvt": 10352}
+  ],
+  "cedula_general": {
+    "limite_rentas_exentas_deducciones_pct": 0.40,
+    "limite_rentas_exentas_deducciones_uvt": 1340,
+    "renta_exenta_laboral_pct": 0.25,
+    "renta_exenta_laboral_tope_uvt": 790,
+    "dependiente_art387_pct": 0.10,
+    "dependiente_art387_tope_uvt": 384,
+    "dependiente_adicional_uvt": 72,
+    "dependiente_adicional_max": 4,
+    "medicina_prepagada_tope_uvt": 192,
+    "intereses_vivienda_tope_uvt": 1200,
+    "gmf_deducible_pct": 0.50,
+    "aportes_voluntarios_afc_fpv_pct": 0.30,
+    "aportes_voluntarios_afc_fpv_tope_uvt": 3800,
+    "aportes_voluntarios_rais_pct": 0.25,
+    "aportes_voluntarios_rais_tope_uvt": 2500,
+    "factura_electronica_pct": 0.01,
+    "factura_electronica_tope_uvt": 240,
+    "componente_inflacionario_rendimientos_pct": 0.5543,
+    "cesantias_exencion_por_salario_promedio_uvt": [
+      {"hasta_uvt": 350, "exento_pct": 1.0},
+      {"hasta_uvt": 410, "exento_pct": 0.9},
+      {"hasta_uvt": 470, "exento_pct": 0.8},
+      {"hasta_uvt": 530, "exento_pct": 0.6},
+      {"hasta_uvt": 590, "exento_pct": 0.4},
+      {"hasta_uvt": 650, "exento_pct": 0.2},
+      {"hasta_uvt": null, "exento_pct": 0.0}
+    ]
+  },
+  "cedula_pensiones": {
+    "renta_exenta_mensual_uvt": 1000
+  },
+  "dividendos": {
+    "tarifa_subcedula_gravada": 0.35,
+    "descuento_art254_1_umbral_uvt": 1090,
+    "descuento_art254_1_pct": 0.19
+  },
+  "ganancias_ocasionales": {
+    "tarifa_general": 0.15,
+    "tarifa_loterias": 0.20,
+    "exencion_venta_casa_habitacion_uvt": 5000,
+    "exencion_herencia_vivienda_causante_uvt": 13000,
+    "exencion_herencia_otros_inmuebles_uvt": 6500,
+    "exencion_herencia_porcion_heredero_uvt": 3250,
+    "exencion_donaciones_pct": 0.20,
+    "exencion_donaciones_tope_uvt": 1625,
+    "exencion_seguros_vida_uvt": 3250
+  },
+  "anticipo": {
+    "pct_primera_declaracion": 0.25,
+    "pct_segunda_declaracion": 0.50,
+    "pct_siguientes": 0.75
+  },
+  "sanciones": {
+    "extemporaneidad_pct_mes_impuesto": 0.05,
+    "extemporaneidad_tope_pct_impuesto": 1.0,
+    "extemporaneidad_pct_mes_ingresos_sin_impuesto": 0.005,
+    "extemporaneidad_tope_pct_ingresos": 0.05,
+    "extemporaneidad_tope_uvt_sin_saldo_favor": 2500,
+    "sancion_minima_uvt": 10,
+    "reduccion_art640_pct": 0.50
+  },
+  "redondeo_pesos": 1000,
+  "vencimientos": {
+    "01-02": "2026-08-12", "03-04": "2026-08-13", "05-06": "2026-08-14", "07-08": "2026-08-18",
+    "09-10": "2026-08-19", "11-12": "2026-08-20", "13-14": "2026-08-21", "15-16": "2026-08-24",
+    "17-18": "2026-08-25", "19-20": "2026-08-26", "21-22": "2026-08-27", "23-24": "2026-08-28",
+    "25-26": "2026-08-31", "27-28": "2026-09-01", "29-30": "2026-09-02", "31-32": "2026-09-03",
+    "33-34": "2026-09-04", "35-36": "2026-09-07", "37-38": "2026-09-08", "39-40": "2026-09-09",
+    "41-42": "2026-09-10", "43-44": "2026-09-11", "45-46": "2026-09-14", "47-48": "2026-09-15",
+    "49-50": "2026-09-16", "51-52": "2026-09-17", "53-54": "2026-09-18", "55-56": "2026-09-21",
+    "57-58": "2026-09-22", "59-60": "2026-09-23", "61-62": "2026-09-24", "63-64": "2026-09-25",
+    "65-66": "2026-09-28", "67-68": "2026-10-01", "69-70": "2026-10-02", "71-72": "2026-10-05",
+    "73-74": "2026-10-06", "75-76": "2026-10-07", "77-78": "2026-10-08", "79-80": "2026-10-09",
+    "81-82": "2026-10-13", "83-84": "2026-10-14", "85-86": "2026-10-15", "87-88": "2026-10-16",
+    "89-90": "2026-10-19", "91-92": "2026-10-20", "93-94": "2026-10-21", "95-96": "2026-10-22",
+    "97-98": "2026-10-23", "99-00": "2026-10-26"
+  }
+}

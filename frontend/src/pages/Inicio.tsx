@@ -70,11 +70,11 @@ const AGENTES = [
   { nombre: "Motor tributario", tarea: "Hace todos los cálculos con las reglas del año.", ia: false },
   { nombre: "Auditor", tarea: "Busca errores, datos faltantes y fechas vencidas.", ia: false },
   { nombre: "Explicador", tarea: "Resume el resultado en palabras simples, sin inventar cifras.", ia: true },
-  { nombre: "Asistente", tarea: "Conversa contigo, responde tus dudas y anota los datos que le cuentas.", ia: true },
+  { nombre: "Asistente", tarea: "Te responde y hace lo que le pides: anota tus datos, calcula o cambia de año. Tú llevas la conversación.", ia: true },
 ];
 
 export default function Inicio() {
-  const { ir, reiniciar, setArchivoPendiente, anio, extraccion } = useSesion();
+  const { ir, reiniciar, setArchivoPendiente, extraccion } = useSesion();
   const [cargandoEjemplo, setCargandoEjemplo] = useState(false);
   const [error, setError] = useState("");
 
@@ -100,11 +100,11 @@ export default function Inicio() {
         <div>
           <h1 className="titular t-72">Tu declaración de renta, lista para revisar.</h1>
           <p className="lead">
-            Conversa con un asistente que te explica la renta sin enredos y arma contigo el borrador del año gravable {anio}: sube tu
-            exógena de la DIAN o simplemente cuéntale tus ingresos. Cada cifra queda explicada antes de que firmes.
+            Un agente que te responde la renta sin enredos y arma el borrador del año gravable que elijas (2021 a 2025): adjunta tu
+            exógena de la DIAN o cuéntale tus ingresos con tus palabras. Cada cifra queda explicada antes de que firmes.
           </p>
           <div className="acciones">
-            <button className="boton" onClick={empezar}>Hablar con el asistente</button>
+            <button className="boton" onClick={empezar}>Empezar</button>
             <button className="boton secundario" onClick={probarEjemplo} disabled={cargandoEjemplo}>
               {cargandoEjemplo ? "Cargando ejemplo…" : "Probar con un ejemplo ficticio"}
             </button>
@@ -127,12 +127,12 @@ export default function Inicio() {
         <li className="paso">
           <span className="n">2</span>
           <h3>Cuéntale tus datos</h3>
-          <p>Sube tu exógena o escribe cosas como «gano 4 millones al mes» o «tengo dos hijos». El asistente las anota y te muestra dónde.</p>
+          <p>Adjunta tu exógena o escribe cosas como «gano 4 millones al mes» o «tengo dos hijos». El agente los anota y te muestra qué anotó.</p>
         </li>
         <li className="paso">
           <span className="n">3</span>
-          <h3>Revisa y firma en la DIAN</h3>
-          <p>Ves cuánto pagas o te devuelven, por qué, y qué revisar. La firma siempre es tuya.</p>
+          <h3>Pídele el cálculo</h3>
+          <p>Escribe «calcula» y ves cuánto pagas o te devuelven, por qué y qué revisar. La firma en la DIAN siempre es tuya.</p>
         </li>
       </ol>
 

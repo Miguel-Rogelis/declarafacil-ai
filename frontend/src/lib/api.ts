@@ -225,8 +225,9 @@ export interface EstadoChat {
   perfil: Partial<Perfil>;
   resumen_exogena: Record<string, number>;
   por_revisar: string[];
+  filas: Fila[];
+  topes: Record<string, number>;
   respuestas: Respuestas;
-  temas_cubiertos: string[];
   resultado: Record<string, unknown> | null;
 }
 
@@ -240,22 +241,14 @@ export interface Anotacion {
 export interface RespuestaChat {
   respuesta: string;
   respuestas: Respuestas;
-  temas_cubiertos: string[];
   anotaciones: Anotacion[];
   rechazadas: string[];
   widgets: string[];
   cambiar_anio: number | null;
-  sugerencias: string[];
+  calcular: boolean;
   fuentes: string[];
   modelo: string | null;
   con_ia: boolean;
-}
-
-export interface Siguiente {
-  tema: string | null;
-  texto: string;
-  widgets: string[];
-  sugerencias: string[];
 }
 
 type Manejadores<R> = {
@@ -368,12 +361,6 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mensaje, historial, estado }),
-    }),
-  siguiente: (estado: EstadoChat) =>
-    json<Siguiente>("/api/chat/siguiente", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(estado),
     }),
   exogenaDemo: async (): Promise<File> => {
     const r = await fetch("/api/demo/exogena");

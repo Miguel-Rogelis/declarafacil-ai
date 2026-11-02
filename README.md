@@ -8,13 +8,15 @@ Proyecto del curso *Problem Discovery & Solution Design with AI*, Ingeniería de
 
 ## Qué hace
 
-Todo pasa en un **chat libre**. No hay un orden obligatorio:
+Todo pasa en un **chat a pantalla completa** con un agente. El usuario lleva la conversación de inicio a fin: el agente no sugiere preguntas ni guía con un cuestionario, responde lo que se le pregunta y hace lo que se le pide.
 
-- El usuario puede empezar preguntando lo que sea, incluso lo más básico ("¿qué es la DIAN?", "¿declarar es pagar?", "¿me pueden meter a la cárcel?"), sin haber subido nada.
-- Puede subir el Excel (o PDF) de exógena desde el chat o contar sus datos en sus palabras ("gano 4 millones al mes", "tengo 2 hijos", "pago 300 mil de medicina prepagada"). El asistente los anota, muestra qué anotó y deja deshacerlo.
-- El chat sabe en qué va: qué falta, si ya hay exógena, si ya hay resultado. Con eso decide qué preguntar y qué botones mostrar (subir exógena, revisar filas dudosas, calcular).
-- Puede calcular dentro del chat y preguntar "¿por qué me sale ese valor?".
-- Puede cambiar de año gravable (2021 a 2025) en cualquier momento, desde el selector de arriba o pidiéndolo en el chat.
+- Responde directo, incluso lo más básico ("¿qué es la DIAN?", "¿cómo sé si tengo que declarar?", "¿me pueden meter a la cárcel?"), sin haber subido nada. Las respuestas usan las cifras del año elegido.
+- Si el usuario cuenta sus datos con sus palabras ("gano 4 millones al mes", "tengo 2 hijos", "un carro de 40 millones"), el agente los anota, muestra qué anotó y deja deshacerlo.
+- Si pide calcular ("calcula", "¿cuánto me toca pagar?"), calcula ahí mismo. Si después cambia un dato o el año, el agente actualiza el cálculo solo.
+- Si pregunta por su caso ("¿tengo que declarar?", "¿cuándo vence?") y ya hay datos, responde con su caso: la obligación la decide el motor con sus cifras y la fecha sale de su cédula.
+- Puede adjuntar la exógena con el clip en cualquier momento. Si es de otro año, el agente cambia a las reglas de ese año.
+- Puede cambiar de año gravable (2021 a 2025) desde el selector de arriba o pidiéndolo en el chat.
+- "Tus datos" abre un panel con cada cifra y de dónde sale.
 
 Recibe: si está obligado a declarar, el saldo a pagar o a favor, la sanción si va tarde, alertas antes de firmar, el borrador por cédulas y, al tocar cada línea, la norma y las filas de la exógena de donde sale.
 
@@ -47,7 +49,7 @@ flowchart LR
 | Motor tributario | No | Liquida la declaración con las reglas del año (UVT, topes, art. 241, límite del 40 % / 1.340 UVT, etc.). |
 | Auditor | No | Detecta datos por confirmar, ingresos menores a los reportados, patrimonio, vencimientos y beneficios no usados. |
 | Explicador | Sí | Redacta el resumen. Cada cifra que escribe se compara contra el cálculo; si inventa una, se descarta y se usa la plantilla. |
-| Asistente | Sí | Conversa con el usuario: responde dudas con la base de conocimiento (`backend/data/conocimiento`), anota los datos que cuenta y decide qué preguntar según lo que falta. La IA solo propone; el código valida cada dato (lista cerrada de campos, rangos, y **cada monto debe aparecer en el mensaje del usuario**). Sin IA o sin cupo, sigue funcionando con reglas. |
+| Asistente | Sí | El agente del chat: responde con la base de conocimiento completa (`backend/data/conocimiento`, con las cifras del año elegido) y decide la acción que pide el usuario (anotar, calcular, cambiar de año, abrir la carga de la exógena). La IA solo propone; el código valida cada dato (lista cerrada de campos y rangos, **cada monto anotado debe aparecer en el mensaje del usuario** y **cada cifra de la respuesta debe estar en los datos que recibió**; si no, se descarta). Sin IA o sin cupo, sigue funcionando con reglas. |
 
 El **orquestador** (`backend/app/orquestador.py`) es un flujo fijo y trazable: cada agente emite eventos en vivo (Server-Sent Events) que el front muestra como sellos.
 
@@ -73,7 +75,7 @@ backend/
   data/agentes.json modelos y temperatura por agente
   data/conocimiento base de conocimiento del Asistente
   data/demo/        exógena ficticia para probar
-  tests/            56 pruebas (motor por año, agentes, chat, API, ruta con IA simulada)
+  tests/            71 pruebas (motor por año, agentes, chat, API, ruta con IA simulada)
   scripts/          generadores de la exógena demo y de las reglas 2021-2024
 frontend/           React + Vite + TypeScript, animaciones con Motion
 Dockerfile          construye el front y lo sirve desde FastAPI
@@ -112,6 +114,8 @@ Límites a tener en cuenta:
 
 - **Render gratis** apaga el servicio tras 15 minutos sin uso; la primera visita después tarda cerca de un minuto. Ábrelo antes de presentar.
 - **OpenRouter gratis** permite 20 solicitudes por minuto y 50 al día sin créditos (1.000 al día si se compran 10 USD una vez). Cada análisis usa de 1 a 3 llamadas y **cada mensaje del chat usa una**. Cuando se acaba el cupo, el chat sigue respondiendo con reglas y la base de conocimiento.
+- Modelos por defecto (revisados el 1 de noviembre de 2026): `nvidia/nemotron-3-ultra-550b-a55b:free`, `nvidia/nemotron-3.5-lightning:free` y `nvidia/nemotron-3.5-super-vl:free`, con `openrouter/free` de respaldo. Gemma 4 devolvía 429 de su proveedor, Inkling solo funciona con herramientas de agente y Nemotron 3 Super dejó de ser gratis.
+- Casi todos los modelos gratis razonan antes de responder y ese razonamiento gasta tokens. Por eso cada agente pide razonamiento corto y oculto (`"razonamiento": "low"` en `agentes.json`); si un proveedor no acepta el parámetro, se reintenta sin él.
 - Los modelos `:free` cambian seguido. En *Reglas y agentes* → *Agentes* → *Consultar OpenRouter* ves los disponibles hoy y los reemplazas. `openrouter/free` funciona como último respaldo.
 - Lo que se edite desde la pantalla de configuración dura hasta que el servicio se reinicie. Para dejarlo fijo, descarga el JSON y súbelo al repositorio.
 

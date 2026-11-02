@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ResultadoLiquidacion } from "../lib/api";
 import { useSesion, type Mensaje } from "../lib/estado";
 import { NOMBRES_CAMPO, pesos } from "../lib/formato";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "./MesaAgentes";
@@ -11,21 +12,20 @@ function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
   if (m.rol === "usuario") return <div className="burbuja usuario">{m.texto}</div>;
   return (
     <motion.div
-      className={`burbuja bot${m.aviso ? " aviso" : ""}`}
+      className={`burbuja bot${m.aviso ? " aviso" : ""}${m.widget ? " con-widget" : ""}`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="quien"><Marca /> DeclaraFácil</div>
       {m.texto ? m.texto.split(/\n+/).map((p, i) => <p key={i}>{p}</p>) : null}
       {children}
-      {m.fuentes?.length ? <div className="fuentes">Basado en: {m.fuentes.join("; ")}</div> : null}
+      {m.fuentes?.length ? <div className="fuentes">Fuente: {m.fuentes.join("; ")}</div> : null}
     </motion.div>
   );
 }
 
 function SubirExogena() {
-  const { procesarArchivo, usarEjemplo, enviar } = useSesion();
+  const { procesarArchivo, usarEjemplo } = useSesion();
   const input = useRef<HTMLInputElement>(null);
   const [arrastrando, setArrastrando] = useState(false);
   return (
@@ -49,7 +49,7 @@ function SubirExogena() {
         }}
       >
         <strong>Arrastra tu exógena o haz clic para elegirla</strong>
-        <span className="chico suave">Excel (.xlsx) o PDF. La leemos en memoria y no la guardamos.</span>
+        <span className="chico suave">Excel (.xlsx) o PDF. La leo en memoria y no la guardo.</span>
       </div>
       <input
         ref={input}
@@ -62,11 +62,9 @@ function SubirExogena() {
           e.target.value = "";
         }}
       />
-      <div className="opciones">
-        <button className="boton-texto" onClick={() => void enviar("¿Cómo descargo mi exógena?")}>¿Cómo la descargo?</button>
-        <button className="boton-texto" onClick={() => void usarEjemplo()}>Usar un ejemplo ficticio</button>
-        <button className="boton-texto" onClick={() => void enviar("No tengo la exógena")}>No la tengo</button>
-      </div>
+      <p className="chico suave" style={{ margin: "0.5rem 0 0" }}>
+        Para probar sin datos reales: <button className="boton-texto chico" onClick={() => void usarEjemplo()}>usar una exógena ficticia</button>
+      </p>
     </>
   );
 }
@@ -79,6 +77,7 @@ function Revisar() {
   if (!tarjetas.length) return <p className="chico suave">No hay datos pendientes por confirmar.</p>;
   return (
     <>
+      <p className="chico" style={{ margin: 0 }}>Confirma si cada dato va en tu declaración:</p>
       {tarjetas.map((f) => {
         const decidida = f.id in decididas;
         return (
@@ -99,7 +98,7 @@ function Revisar() {
             ) : null}
             <div className="acciones">
               {decidida ? (
-                <span className="chico">{decididas[f.id] ? "Lo incluimos." : "No lo incluimos."}</span>
+                <span className="chico">{decididas[f.id] ? "Lo incluí." : "No lo incluí."}</span>
               ) : (
                 <>
                   <button className="boton chico" onClick={() => decidir(f.id, true, f.campo ?? destino[f.id])} disabled={!f.campo && !destino[f.id]}>Incluirlo</button>
@@ -118,7 +117,7 @@ function Anotado({ m }: { m: Mensaje }) {
   const { deshacer } = useSesion();
   return (
     <div className={`anotado${m.deshecho ? " deshecho" : ""}`}>
-      <span className="chico suave">{m.deshecho ? "Deshice estos datos:" : "Anoté en tu hoja de trabajo:"}</span>
+      <span className="chico suave">{m.deshecho ? "Deshice estos datos:" : "Anoté:"}</span>
       <ul>
         {m.anotaciones!.map((a) => (
           <li key={a.clave + a.etiqueta}>
@@ -132,55 +131,38 @@ function Anotado({ m }: { m: Mensaje }) {
   );
 }
 
-function ResultadoCorto() {
-  const { resultado, ir } = useSesion();
-  if (!resultado) return <p className="chico suave">Este cálculo quedó desactualizado. Vuelve a calcular.</p>;
-  const r = resultado.liquidacion.resumen;
-  const pagar = r.total_a_pagar > 0;
+function ResultadoCorto({ r, actual, recalculo }: { r: ResultadoLiquidacion; actual: boolean; recalculo?: boolean }) {
+  const { ir } = useSesion();
+  const res = r.liquidacion.resumen;
+  const pagar = res.total_a_pagar > 0;
   return (
-    <div className="resultado-corto">
+    <div className={`resultado-corto${actual ? "" : " viejo"}`}>
       <span className="chico suave">
-        Año gravable {resultado.liquidacion.anio_gravable}. {resultado.liquidacion.obligacion.obligado ? "Estás obligado a declarar." : "No estás obligado a declarar."}
+        {recalculo ? "Actualicé el cálculo con tus cambios. " : ""}
+        Año gravable {r.liquidacion.anio_gravable}. {r.liquidacion.obligacion.obligado ? "Estás obligado a declarar." : "No estás obligado a declarar."}
       </span>
       <strong className="titular t-24">
-        {pagar ? `Te toca pagar ${pesos(r.total_a_pagar)}` : r.saldo_favor > 0 ? `Te queda saldo a favor de ${pesos(r.saldo_favor)}` : "No tienes saldo a pagar"}
+        {pagar ? `Te toca pagar ${pesos(res.total_a_pagar)}` : res.saldo_favor > 0 ? `Te queda saldo a favor de ${pesos(res.saldo_favor)}` : "No tienes saldo a pagar"}
       </strong>
-      <p>{resultado.explicacion.split(/\n+/)[0]}</p>
-      <button className="boton sello chico" onClick={() => ir("resultado")}>Ver el borrador completo</button>
+      <p>{r.explicacion.split(/\n+/)[0]}</p>
+      {actual ? <button className="boton sello chico" onClick={() => ir("resultado")}>Ver el borrador completo</button> : <span className="chico suave">Este cálculo ya fue reemplazado.</span>}
     </div>
   );
 }
 
 function Widget({ m }: { m: Mensaje }) {
-  const { calcular, calculando, resultado } = useSesion();
+  const { resultado } = useSesion();
   switch (m.widget) {
     case "subir_exogena":
       return <SubirExogena />;
-    case "como_descargar":
-      return (
-        <ol className="chico">
-          <li>Entra a dian.gov.co y elige «Usuario registrado».</li>
-          <li>Inicia sesión en MUISCA con tu cédula y contraseña.</li>
-          <li>Busca «Consultar información exógena» y elige el año.</li>
-          <li>Descarga el reporte en Excel y súbelo aquí.</li>
-        </ol>
-      );
     case "revisar":
       return <Revisar />;
-    case "calcular":
-      return (
-        <div className="opciones">
-          <button className="boton sello" onClick={() => void calcular()} disabled={calculando}>
-            {calculando ? "Calculando…" : resultado ? "Calcular de nuevo" : "Calcular mi declaración"}
-          </button>
-        </div>
-      );
     case "traza_documento":
       return <MesaAgentes fases={FASES_DOCUMENTO} eventos={m.eventos ?? []} compacta />;
     case "traza_calculo":
       return <MesaAgentes fases={FASES_CALCULO} eventos={m.eventos ?? []} compacta />;
     case "resultado":
-      return <ResultadoCorto />;
+      return m.resultado ? <ResultadoCorto r={m.resultado} actual={m.resultado === resultado} recalculo={m.aviso} /> : null;
     case "anotado":
       return <Anotado m={m} />;
     default:
@@ -188,13 +170,13 @@ function Widget({ m }: { m: Mensaje }) {
   }
 }
 
-/** El chat: se usa como pantalla principal y en el panel flotante, con el mismo hilo. */
-export default function Conversacion({ compacta = false }: { compacta?: boolean }) {
-  const { mensajes, enviar, escribiendo, sugerencias, procesarArchivo, archivoPendiente, setArchivoPendiente, extraccion } = useSesion();
+/** El chat a pantalla completa. El usuario lleva la conversación de inicio a fin. */
+export default function Conversacion({ barra }: { barra?: ReactNode }) {
+  const { mensajes, enviar, escribiendo, calculando, procesarArchivo, archivoPendiente, setArchivoPendiente, extraccion, anio } = useSesion();
   const [texto, setTexto] = useState("");
-  const fin = useRef<HTMLDivElement>(null);
   const lista = useRef<HTMLDivElement>(null);
   const adjuntar = useRef<HTMLInputElement>(null);
+  const caja = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (archivoPendiente && !extraccion) {
@@ -209,32 +191,50 @@ export default function Conversacion({ compacta = false }: { compacta?: boolean 
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [mensajes, escribiendo]);
 
+  useEffect(() => {
+    caja.current?.focus();
+  }, []);
+
+  // La caja crece con el texto hasta un máximo
+  useEffect(() => {
+    const el = caja.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [texto]);
+
+  const ocupado = escribiendo || calculando;
   const mandar = (t: string) => {
-    if (!t.trim() || escribiendo) return;
+    if (!t.trim() || ocupado) return;
     setTexto("");
     void enviar(t);
   };
+  const vacio = mensajes.length === 0;
 
   return (
-    <section className={`chat${compacta ? " compacta" : ""}`} aria-label="Conversación con DeclaraFácil">
+    <section className={`chat${vacio ? " vacio-inicial" : ""}`} aria-label="Conversación con DeclaraFácil">
+      {barra}
       <div className="chat-mensajes" ref={lista} aria-live="polite">
-        {mensajes.map((m) =>
-          m.widget ? (
-            <Burbuja key={m.id} m={m}><Widget m={m} /></Burbuja>
-          ) : (
-            <Burbuja key={m.id} m={m} />
-          ),
-        )}
-        {escribiendo ? (
-          <div className="burbuja bot"><span className="escribiendo" aria-label="Escribiendo"><i /><i /><i /></span></div>
-        ) : null}
-        <div ref={fin} />
-      </div>
-      {sugerencias.length && !escribiendo ? (
-        <div className="sugerencias">
-          {sugerencias.map((s) => <button key={s} onClick={() => mandar(s)}>{s}</button>)}
+        <div className="chat-columna">
+          {vacio ? (
+            <div className="chat-bienvenida">
+              <Marca />
+              <h1 className="titular t-36">¿En qué te ayudo con tu renta?</h1>
+              <p className="suave">Pregúntame lo que quieras, cuéntame tus ingresos o adjunta tu exógena con el clip. Uso las reglas del año gravable {anio}.</p>
+            </div>
+          ) : null}
+          {mensajes.map((m) =>
+            m.widget ? (
+              <Burbuja key={m.id} m={m}><Widget m={m} /></Burbuja>
+            ) : (
+              <Burbuja key={m.id} m={m} />
+            ),
+          )}
+          {escribiendo ? (
+            <div className="burbuja bot"><span className="escribiendo" aria-label="Escribiendo"><i /><i /><i /></span></div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
       <form
         className="chat-entrada"
         onSubmit={(e) => {
@@ -242,36 +242,39 @@ export default function Conversacion({ compacta = false }: { compacta?: boolean 
           mandar(texto);
         }}
       >
-        <button type="button" className="adjuntar" aria-label="Adjuntar exógena" title="Adjuntar exógena" onClick={() => adjuntar.current?.click()}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.5l-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.3-8.3" /></svg>
-        </button>
-        <input
-          ref={adjuntar}
-          type="file"
-          accept=".xlsx,.pdf"
-          className="visualmente-oculto"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void procesarArchivo(f);
-            e.target.value = "";
-          }}
-        />
-        <label htmlFor={compacta ? "mensaje-compacto" : "mensaje"} className="visualmente-oculto">Escribe tu mensaje</label>
-        <textarea
-          id={compacta ? "mensaje-compacto" : "mensaje"}
-          className="entrada"
-          rows={1}
-          value={texto}
-          placeholder="Pregúntame o cuéntame algo"
-          onChange={(e) => setTexto(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              mandar(texto);
-            }
-          }}
-        />
-        <button className="boton" disabled={!texto.trim() || escribiendo}>Enviar</button>
+        <div className="chat-columna fila-entrada">
+          <button type="button" className="adjuntar" aria-label="Adjuntar exógena" title="Adjuntar exógena (Excel o PDF)" onClick={() => adjuntar.current?.click()}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.5l-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.3-8.3" /></svg>
+          </button>
+          <input
+            ref={adjuntar}
+            type="file"
+            accept=".xlsx,.pdf"
+            className="visualmente-oculto"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void procesarArchivo(f);
+              e.target.value = "";
+            }}
+          />
+          <label htmlFor="mensaje" className="visualmente-oculto">Escribe tu mensaje</label>
+          <textarea
+            id="mensaje"
+            ref={caja}
+            className="entrada"
+            rows={1}
+            value={texto}
+            placeholder="Escribe aquí"
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                mandar(texto);
+              }
+            }}
+          />
+          <button className="boton" disabled={!texto.trim() || ocupado}>Enviar</button>
+        </div>
       </form>
     </section>
   );

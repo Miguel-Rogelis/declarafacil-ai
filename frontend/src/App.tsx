@@ -1,5 +1,4 @@
 import { MotionConfig } from "motion/react";
-import Asistente from "./components/Asistente";
 import { Marca } from "./components/piezas";
 import { ProveedorSesion, useSesion, type Ruta } from "./lib/estado";
 import Configuracion from "./pages/Configuracion";
@@ -35,18 +34,28 @@ function Encabezado() {
   );
 }
 
+function Marco() {
+  const { ruta } = useSesion();
+  return (
+    <div className={`app${ruta === "declarar" ? " app-chat" : ""}`}>
+      <Encabezado />
+      <Paginas />
+    </div>
+  );
+}
+
 function Paginas() {
   const { ruta } = useSesion();
   return (
-    <main>
+    <main className="principal">
       {ruta === "inicio" ? <Inicio /> : null}
       {ruta === "declarar" ? <Declarar /> : null}
       {ruta === "resultado" ? <Resultado /> : null}
       {ruta === "configuracion" ? <Configuracion /> : null}
-      <footer className="pie contenedor">
+      {ruta === "declarar" ? null : <footer className="pie contenedor">
         DeclaraFácil prepara un borrador con fines educativos. No reemplaza la asesoría de un contador ni presenta la declaración por ti.
         Proyecto del curso Problem Discovery &amp; Solution Design with AI, Universidad Católica de Colombia.
-      </footer>
+      </footer>}
     </main>
   );
 }
@@ -55,9 +64,7 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <ProveedorSesion>
-        <Encabezado />
-        <Paginas />
-        <Asistente />
+        <Marco />
       </ProveedorSesion>
     </MotionConfig>
   );

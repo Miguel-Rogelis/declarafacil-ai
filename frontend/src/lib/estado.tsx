@@ -16,7 +16,7 @@ import {
 
 export type Ruta = "inicio" | "declarar" | "resultado" | "configuracion";
 
-export type Widget = "subir_exogena" | "como_descargar" | "revisar" | "calcular" | "traza_documento" | "traza_calculo" | "resultado" | "anotado";
+export type Widget = "subir_exogena" | "revisar" | "traza_documento" | "traza_calculo" | "resultado" | "anotado";
 
 export interface Mensaje {
   id: number;
@@ -24,12 +24,14 @@ export interface Mensaje {
   texto?: string;
   widget?: Widget;
   anotaciones?: Anotacion[];
-  antes?: { respuestas: Respuestas; temas: string[] };
+  antes?: Respuestas;
   deshecho?: boolean;
   eventos?: EventoAgente[];
   fuentes?: string[];
   conIa?: boolean;
   aviso?: boolean;
+  /** Foto del resultado cuando se calculó (los mensajes viejos no cambian si se recalcula). */
+  resultado?: ResultadoLiquidacion;
 }
 
 interface Sesion {
@@ -45,24 +47,22 @@ interface Sesion {
   decididas: Record<string, boolean>;
   trazaDocumento: EventoAgente[];
   respuestas: Respuestas;
-  temas: string[];
   resultado: ResultadoLiquidacion | null;
-  setResultado: (r: ResultadoLiquidacion | null) => void;
   eventosCalculo: EventoAgente[];
   calculando: boolean;
   errorCalculo: string;
   mensajes: Mensaje[];
-  sugerencias: string[];
   escribiendo: boolean;
   enviar: (texto: string) => Promise<void>;
   deshacer: (id: number) => void;
   procesarArchivo: (f: File) => Promise<void>;
   usarEjemplo: () => Promise<void>;
-  calcular: () => Promise<void>;
+  calcular: (opciones?: { silencioso?: boolean }) => Promise<void>;
   archivoPendiente: File | null;
   setArchivoPendiente: (f: File | null) => void;
   reiniciar: () => void;
   porRevisar: Fila[];
+  hayDatos: boolean;
 }
 
 const Ctx = createContext<Sesion | null>(null);
@@ -73,13 +73,13 @@ const leerRuta = (): Ruta => {
   return RUTAS.includes(h) ? h : "inicio";
 };
 
-const BIENVENIDA: Mensaje = {
-  id: 0,
-  rol: "asistente",
-  texto:
-    "Hola, soy DeclaraFácil. Pregúntame lo que quieras sobre la declaración de renta, por básico que te parezca, o armemos la tuya paso a paso. ¿Por dónde empezamos?",
-};
-const SUGERENCIAS_INICIALES = ["¿Tengo que declarar renta?", "Quiero hacer mi declaración", "¿Qué es la exógena?", "Tengo mi exógena"];
+const porRevisarDe = (f: Fila[], d: Record<string, boolean>) =>
+  f.filter((x) => (x.tratamiento === "revisar" || x.origen_mapeo === "ia") && !(x.id in d));
+
+const tieneDatos = (ex: Extraccion | null, r: Respuestas) =>
+  !!ex ||
+  r.salarios_no_reportados + r.honorarios_no_reportados + r.pensiones_no_reportadas + r.otros_ingresos_no_reportados + r.arriendos_no_reportados + r.dividendos_no_reportados > 0 ||
+  r.bienes_adicionales.length > 0;
 
 export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [ruta, setRuta] = useState<Ruta>(leerRuta);
@@ -91,20 +91,19 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [decididas, setDecididas] = useState<Record<string, boolean>>({});
   const [trazaDocumento, setTrazaDocumento] = useState<EventoAgente[]>([]);
   const [respuestas, setRespuestas] = useState<Respuestas>(respuestasIniciales);
-  const [temas, setTemas] = useState<string[]>([]);
   const [resultado, setResultado] = useState<ResultadoLiquidacion | null>(null);
   const [eventosCalculo, setEventosCalculo] = useState<EventoAgente[]>([]);
   const [calculando, setCalculando] = useState(false);
   const [errorCalculo, setErrorCalculo] = useState("");
-  const [mensajes, setMensajes] = useState<Mensaje[]>([BIENVENIDA]);
-  const [sugerencias, setSugerencias] = useState<string[]>(SUGERENCIAS_INICIALES);
+  const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [escribiendo, setEscribiendo] = useState(false);
   const [archivoPendiente, setArchivoPendiente] = useState<File | null>(null);
   const contador = useRef(1);
 
-  // Referencias para leer siempre el estado más reciente dentro de callbacks asíncronos
-  const ref = useRef({ anio, extraccion, filas, decididas, respuestas, temas, resultado, ruta, mensajes });
-  ref.current = { anio, extraccion, filas, decididas, respuestas, temas, resultado, ruta, mensajes };
+  // Estado más reciente para los callbacks asíncronos. Se actualiza a mano cuando una
+  // acción depende de un cambio que React todavía no ha aplicado (p. ej. cambiar de año y calcular).
+  const ref = useRef({ anio, extraccion, filas, decididas, respuestas, resultado, ruta, mensajes });
+  ref.current = { ...ref.current, anio, extraccion, filas, decididas, respuestas, resultado, ruta, mensajes };
 
   useEffect(() => {
     const alCambiar = () => setRuta(leerRuta());
@@ -133,9 +132,6 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setMensajes((x) => x.map((m) => (m.id === id ? { ...m, ...cambios } : m)));
   }, []);
 
-  const porRevisarDe = (f: Fila[], d: Record<string, boolean>) =>
-    f.filter((x) => (x.tratamiento === "revisar" || x.origen_mapeo === "ia") && !(x.id in d));
-
   const estadoChat = useCallback((): EstadoChat => {
     const s = ref.current;
     const r = s.resultado?.liquidacion;
@@ -147,8 +143,9 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       perfil: s.extraccion?.perfil ?? {},
       resumen_exogena: s.extraccion?.resumen_campos ?? {},
       por_revisar: porRevisarDe(s.filas, s.decididas).map((f) => f.detalle),
+      filas: s.filas,
+      topes: s.extraccion?.topes ?? {},
       respuestas: s.respuestas,
-      temas_cubiertos: s.temas,
       resultado: r
         ? {
             anio_gravable: r.anio_gravable,
@@ -161,95 +158,101 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  /** Siguiente pregunta guiada, sin IA (después de subir la exógena o confirmar datos). */
-  const preguntarSiguiente = useCallback(async () => {
-    try {
-      const s = await api.siguiente(estadoChat());
-      if (s.texto) agregar({ rol: "asistente", texto: s.texto });
-      s.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
-      setSugerencias(s.sugerencias);
-    } catch {
-      /* sin conexión: el usuario puede seguir escribiendo */
-    }
-  }, [agregar, estadoChat]);
+  /** Liquida con lo que haya. "silencioso" = recálculo automático: sin la traza de agentes. */
+  const calcular = useCallback(
+    async (opciones?: { silencioso?: boolean }) => {
+      const s = ref.current;
+      setCalculando(true);
+      setErrorCalculo("");
+      setEventosCalculo([]);
+      const idTraza = opciones?.silencioso ? null : agregar({ rol: "asistente", widget: "traza_calculo", eventos: [] });
+      const acumulado: EventoAgente[] = [];
+      await liquidar(
+        {
+          anio_gravable: s.anio,
+          filas: s.filas,
+          topes: s.extraccion?.topes ?? {},
+          ultimos_dos_digitos_nit: s.respuestas.ultimos_dos_digitos_nit ?? s.extraccion?.ultimos_dos_digitos_nit ?? null,
+          respuestas: s.respuestas,
+        },
+        {
+          onAgente: (e) => {
+            acumulado.push(e);
+            setEventosCalculo([...acumulado]);
+            if (idTraza !== null) actualizar(idTraza, { eventos: [...acumulado] });
+          },
+          onResultado: (r) => {
+            setResultado(r);
+            ref.current.resultado = r;
+            agregar({ rol: "asistente", widget: "resultado", resultado: r, aviso: opciones?.silencioso });
+          },
+          onError: (m) => {
+            setErrorCalculo(m);
+            agregar({ rol: "asistente", texto: `No pude calcular: ${m}` });
+          },
+        },
+      );
+      setCalculando(false);
+    },
+    [agregar, actualizar],
+  );
 
-  const calcular = useCallback(async () => {
-    const s = ref.current;
-    setCalculando(true);
-    setErrorCalculo("");
-    setEventosCalculo([]);
-    const idTraza = agregar({ rol: "asistente", widget: "traza_calculo", eventos: [] });
-    const acumulado: EventoAgente[] = [];
-    await liquidar(
-      {
-        anio_gravable: s.anio,
-        filas: s.filas,
-        topes: s.extraccion?.topes ?? {},
-        ultimos_dos_digitos_nit: s.respuestas.ultimos_dos_digitos_nit ?? s.extraccion?.ultimos_dos_digitos_nit ?? null,
-        respuestas: s.respuestas,
-      },
-      {
-        onAgente: (e) => {
-          acumulado.push(e);
-          setEventosCalculo([...acumulado]);
-          actualizar(idTraza, { eventos: [...acumulado] });
-        },
-        onResultado: (r) => {
-          setResultado(r);
-          agregar({ rol: "asistente", widget: "resultado" });
-          setSugerencias(["¿Por qué me sale ese valor?", "¿Qué es el anticipo?", "¿Cómo lo presento en la DIAN?"]);
-        },
-        onError: (m) => {
-          setErrorCalculo(m);
-          agregar({ rol: "asistente", texto: `No pude calcular: ${m}` });
-        },
-      },
-    );
-    setCalculando(false);
-  }, [agregar, actualizar]);
+  /** Si ya había un resultado y cambian los datos, el agente lo actualiza solo. */
+  const recalcularSiHabia = useCallback(
+    (habia: boolean) => {
+      setResultado(null);
+      ref.current.resultado = null;
+      if (habia && tieneDatos(ref.current.extraccion, ref.current.respuestas)) void calcular({ silencioso: true });
+    },
+    [calcular],
+  );
+
+  const ponerAnio = useCallback((a: number) => {
+    setAnio(a);
+    ref.current.anio = a;
+  }, []);
 
   const procesarArchivo = useCallback(
     async (archivo: File) => {
       agregar({ rol: "usuario", texto: `📎 ${archivo.name}` });
       const idTraza = agregar({ rol: "asistente", widget: "traza_documento", eventos: [] });
-      setSugerencias([]);
       const acumulado: EventoAgente[] = [];
-      let ok = false;
       await analizarDocumento(archivo, ref.current.anio, {
         onAgente: (e) => {
           acumulado.push(e);
           actualizar(idTraza, { eventos: [...acumulado] });
         },
         onResultado: (r) => {
-          ok = true;
-          setExtraccion(r.extraccion);
-          setFilas(r.extraccion.filas);
+          const ex = r.extraccion;
+          setExtraccion(ex);
+          setFilas(ex.filas);
           setDecididas({});
           setTrazaDocumento(r.traza);
           setResultado(null);
-          setRespuestas((x) => ({ ...x, ultimos_dos_digitos_nit: x.ultimos_dos_digitos_nit ?? r.extraccion.ultimos_dos_digitos_nit }));
-          setTemas((t) => [...new Set([...t, "exogena"])]);
-          const total = r.extraccion.filas.length;
-          const suma = r.extraccion.filas.filter((f) => f.tratamiento === "suma").length;
-          const rev = r.extraccion.filas.filter((f) => f.tratamiento === "revisar").length;
-          const partes = [`Leí ${total} datos de tu exógena: ubiqué ${suma} en tu declaración${rev ? ` y ${rev} necesitan que los confirmes` : ""}.`];
-          partes.push(`Antes de usar IA quité ${r.extraccion.datos_enmascarados} datos personales.`);
-          if (r.extraccion.anio && r.extraccion.anio !== ref.current.anio) {
-            partes.push(`Ojo: el archivo es del año ${r.extraccion.anio} y tienes elegido el ${ref.current.anio}. Cambia el año arriba si lo necesitas.`);
+          ref.current = { ...ref.current, extraccion: ex, filas: ex.filas, decididas: {}, resultado: null };
+          setRespuestas((x) => ({ ...x, ultimos_dos_digitos_nit: x.ultimos_dos_digitos_nit ?? ex.ultimos_dos_digitos_nit }));
+          const suma = ex.filas.filter((f) => f.tratamiento === "suma").length;
+          const rev = porRevisarDe(ex.filas, {}).length;
+          const partes = [`Leí ${ex.filas.length} datos de tu exógena: ubiqué ${suma} en tu declaración${rev ? ` y ${rev} necesitan tu confirmación` : ""}.`];
+          partes.push(`Antes de usar IA quité ${ex.datos_enmascarados} datos personales.`);
+          const vigentes = anios.filter((a) => a.estado === "vigente").map((a) => a.anio_gravable);
+          if (ex.anio && ex.anio !== ref.current.anio) {
+            if (vigentes.includes(ex.anio)) {
+              ponerAnio(ex.anio);
+              partes.push(`Como es del año ${ex.anio}, cambié a las reglas de ese año.`);
+            } else {
+              partes.push(`Ojo: el archivo es del año ${ex.anio} y no tengo reglas vigentes para ese año; sigo con ${ref.current.anio}.`);
+            }
           }
           agregar({ rol: "asistente", texto: partes.join(" ") });
+          if (rev) agregar({ rol: "asistente", widget: "revisar" });
         },
         onError: (m) => {
           agregar({ rol: "asistente", texto: `No pude leer el archivo: ${m}` });
-          agregar({ rol: "asistente", widget: "subir_exogena" });
         },
       });
-      if (ok) {
-        // esperar a que React aplique el estado nuevo antes de pedir la siguiente pregunta
-        setTimeout(() => void preguntarSiguiente(), 50);
-      }
     },
-    [agregar, actualizar, preguntarSiguiente],
+    [agregar, actualizar, anios, ponerAnio],
   );
 
   const usarEjemplo = useCallback(async () => {
@@ -267,24 +270,24 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       const s = ref.current;
       const historial = s.mensajes.filter((m) => m.texto).slice(-10).map((m) => ({ rol: m.rol, texto: m.texto! }));
       agregar({ rol: "usuario", texto: t });
-      setSugerencias([]);
       setEscribiendo(true);
       try {
-        const antes = { respuestas: s.respuestas, temas: s.temas };
+        const antes = s.respuestas;
+        const habia = !!s.resultado;
         const r = await api.chat(t, historial, estadoChat());
         setRespuestas(r.respuestas);
-        setTemas(r.temas_cubiertos);
+        ref.current.respuestas = r.respuestas;
         if (r.anotaciones.length) agregar({ rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, antes });
         agregar({ rol: "asistente", texto: r.respuesta, fuentes: r.fuentes, conIa: r.con_ia });
-        if (r.cambiar_anio && r.cambiar_anio !== ref.current.anio) cambiarAnioInterno(r.cambiar_anio);
-        // No repetir un widget que ya está a la vista en los últimos mensajes
-        const recientes = new Set(ref.current.mensajes.slice(-6).map((m) => m.widget));
-        r.widgets.filter((w) => !recientes.has(w as Widget)).forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
-        setSugerencias(r.sugerencias);
-        if (r.anotaciones.length && ref.current.resultado) {
+        if (r.cambiar_anio && r.cambiar_anio !== ref.current.anio) ponerAnio(r.cambiar_anio);
+        r.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
+        setEscribiendo(false);
+        if (r.calcular) {
           setResultado(null);
-          agregar({ rol: "asistente", texto: "Como cambiaron tus datos, vuelve a calcular para ver el resultado actualizado.", aviso: true });
-          agregar({ rol: "asistente", widget: "calcular" });
+          ref.current.resultado = null;
+          await calcular();
+        } else if (habia && (r.anotaciones.length || r.cambiar_anio)) {
+          recalcularSiHabia(true);
         }
       } catch (e) {
         agregar({ rol: "asistente", texto: `No pude responder: ${(e as Error).message}` });
@@ -292,19 +295,20 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setEscribiendo(false);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agregar, estadoChat],
+    [agregar, estadoChat, calcular, recalcularSiHabia, ponerAnio],
   );
 
   const deshacer = useCallback(
     (id: number) => {
       const m = ref.current.mensajes.find((x) => x.id === id);
       if (!m?.antes) return;
-      setRespuestas(m.antes.respuestas);
-      setTemas(m.antes.temas);
+      const habia = !!ref.current.resultado;
+      setRespuestas(m.antes);
+      ref.current.respuestas = m.antes;
       actualizar(id, { deshecho: true });
+      if (habia) recalcularSiHabia(true);
     },
-    [actualizar],
+    [actualizar, recalcularSiHabia],
   );
 
   const decidir = useCallback(
@@ -316,31 +320,35 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       const nuevasDecididas = { ...s.decididas, [id]: incluir };
       setFilas(nuevas);
       setDecididas(nuevasDecididas);
-      setResultado(null);
-      if (porRevisarDe(nuevas, nuevasDecididas).length === 0) {
-        ref.current = { ...ref.current, filas: nuevas, decididas: nuevasDecididas };
-        void preguntarSiguiente();
+      ref.current = { ...ref.current, filas: nuevas, decididas: nuevasDecididas };
+      const habia = !!s.resultado;
+      if (habia && porRevisarDe(nuevas, nuevasDecididas).length === 0) recalcularSiHabia(true);
+      else if (habia) {
+        setResultado(null);
+        ref.current.resultado = null;
       }
     },
-    [preguntarSiguiente],
+    [recalcularSiHabia],
   );
 
-  const cambiarAnioInterno = (a: number) => {
-    setAnio(a);
-    setResultado(null);
-    const ex = ref.current.extraccion;
-    agregar({
-      rol: "asistente",
-      aviso: true,
-      texto:
-        `Ahora uso las reglas del año gravable ${a}.` +
-        (ex?.anio && ex.anio !== a ? ` Tu exógena es del ${ex.anio}; para un cálculo correcto sube la del ${a}.` : ""),
-    });
-  };
-  const cambiarAnio = useCallback((a: number) => {
-    if (a !== ref.current.anio) cambiarAnioInterno(a);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /** Cambio desde el selector del encabezado. */
+  const cambiarAnio = useCallback(
+    (a: number) => {
+      if (a === ref.current.anio) return;
+      const habia = !!ref.current.resultado;
+      ponerAnio(a);
+      const ex = ref.current.extraccion;
+      if (ref.current.mensajes.length) {
+        agregar({
+          rol: "asistente",
+          aviso: true,
+          texto: `Ahora uso las reglas del año gravable ${a}.` + (ex?.anio && ex.anio !== a ? ` Tu exógena es del ${ex.anio}; para un cálculo correcto necesitas la del ${a}.` : ""),
+        });
+      }
+      recalcularSiHabia(habia);
+    },
+    [agregar, ponerAnio, recalcularSiHabia],
+  );
 
   const reiniciar = useCallback(() => {
     setExtraccion(null);
@@ -348,19 +356,19 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setDecididas({});
     setTrazaDocumento([]);
     setRespuestas(respuestasIniciales());
-    setTemas([]);
     setResultado(null);
     setEventosCalculo([]);
-    setMensajes([BIENVENIDA]);
-    setSugerencias(SUGERENCIAS_INICIALES);
+    setMensajes([]);
+    ref.current = { ...ref.current, extraccion: null, filas: [], decididas: {}, respuestas: respuestasIniciales(), resultado: null, mensajes: [] };
   }, []);
 
   const porRevisar = useMemo(() => porRevisarDe(filas, decididas), [filas, decididas]);
+  const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, decididas, trazaDocumento, respuestas, temas,
-    resultado, setResultado, eventosCalculo, calculando, errorCalculo, mensajes, sugerencias, escribiendo, enviar, deshacer,
-    procesarArchivo, usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar,
+    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, decididas, trazaDocumento, respuestas,
+    resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
+    procesarArchivo, usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

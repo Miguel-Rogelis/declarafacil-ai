@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { useMemo, useState } from "react";
 import Conversacion from "../components/Conversacion";
 import type { Fila, Respuestas } from "../lib/api";
 import { useSesion } from "../lib/estado";
@@ -82,46 +83,52 @@ function HojaTrabajo({ filas, respuestas }: { filas: Fila[]; respuestas: Respues
   );
 }
 
-function LoQueFalta() {
-  const { extraccion, temas, porRevisar, resultado, respuestas } = useSesion();
-  const sinExogena = !extraccion && temas.includes("exogena");
-  const items = [
-    sinExogena
-      ? { texto: "Tus ingresos", hecho: temas.includes("ingresos") || respuestas.salarios_no_reportados + respuestas.honorarios_no_reportados + respuestas.pensiones_no_reportadas > 0 }
-      : { texto: "Tu exógena", hecho: !!extraccion },
-    ...(extraccion ? [{ texto: "Confirmar datos dudosos", hecho: porRevisar.length === 0 }] : []),
-    { texto: "Personas a cargo", hecho: temas.includes("dependientes") },
-    { texto: "Gastos que bajan el impuesto", hecho: temas.includes("gastos") },
-    { texto: "Otros ingresos y bienes", hecho: temas.includes("otros") },
-    { texto: "Tu historial con la DIAN", hecho: temas.includes("historial") },
-    { texto: "Calcular el borrador", hecho: !!resultado },
-  ];
-  return (
-    <ol className="falta" aria-label="Lo que falta">
-      {items.map((i) => (
-        <li key={i.texto} className={i.hecho ? "hecho" : undefined}>
-          <span className="marca-falta" aria-hidden="true">{i.hecho ? "✓" : ""}</span>
-          {i.texto}
-          <span className="visualmente-oculto">{i.hecho ? " (listo)" : " (pendiente)"}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 export default function Declarar() {
-  const { filas, respuestas, anio } = useSesion();
+  const { filas, respuestas, anio, mensajes, reiniciar, porRevisar } = useSesion();
+  const [abierto, setAbierto] = useState(false);
+  const cantidad = filas.filter((f) => f.campo && f.tratamiento !== "informativo").length + extrasDeRespuestas(respuestas).length;
+  const barra = (
+    <div className="chat-barra">
+      <div className="chat-columna fila-barra">
+        {mensajes.length ? (
+          <button className="boton-texto chico" onClick={() => reiniciar()}>Empezar de nuevo</button>
+        ) : <span />}
+        <button className="boton secundario chico" onClick={() => setAbierto(true)} aria-expanded={abierto} aria-controls="panel-datos">
+          Tus datos{cantidad ? ` (${cantidad})` : ""}{porRevisar.length ? ` · ${porRevisar.length} por confirmar` : ""}
+        </button>
+      </div>
+    </div>
+  );
   return (
-    <div className="contenedor taller">
-      <Conversacion />
-      <aside className="hoja-trabajo" aria-label="Tu declaración en construcción">
-        <header>
-          <h2 className="titular t-21">Tu declaración, año {anio}</h2>
-          <span className="chico suave">No hay un orden obligatorio: pregunta o cuéntame lo que quieras.</span>
-          <LoQueFalta />
-        </header>
-        <HojaTrabajo filas={filas} respuestas={respuestas} />
-      </aside>
+    <div className="pantalla-chat">
+      <Conversacion barra={barra} />
+      <AnimatePresence>
+        {abierto ? (
+          <>
+            <motion.div className="velo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAbierto(false)} />
+            <motion.aside
+              id="panel-datos"
+              className="panel-datos"
+              role="dialog"
+              aria-label="Tus datos"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "tween", duration: 0.22 }}
+              onKeyDown={(e) => e.key === "Escape" && setAbierto(false)}
+            >
+              <header>
+                <div>
+                  <h2 className="titular t-21">Tus datos, año {anio}</h2>
+                  <span className="chico suave">Lo que trae tu exógena y lo que me contaste. Cada cifra muestra de dónde sale.</span>
+                </div>
+                <button className="boton-texto" onClick={() => setAbierto(false)} autoFocus>Cerrar</button>
+              </header>
+              <HojaTrabajo filas={filas} respuestas={respuestas} />
+            </motion.aside>
+          </>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

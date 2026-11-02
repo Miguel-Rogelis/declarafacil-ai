@@ -16,16 +16,27 @@
     "responsabilidad": "Confirma que el documento es un reporte de información exógena y de qué año. Usa reglas primero y solo consulta al modelo si hay duda.",
     "usa_ia": true,
     "activo": true,
-    "modelos": ["nvidia/nemotron-3.5-lightning:free", "google/gemma-4-31b-it:free", "openrouter/free"],
-    "temperatura": 0
+    "modelos": [
+      "nvidia/nemotron-3.5-lightning:free",
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "openrouter/free"
+    ],
+    "temperatura": 0,
+    "razonamiento": "low"
   },
   "interprete": {
     "nombre": "Intérprete",
     "responsabilidad": "Ubica cada concepto reportado en la casilla correcta de la declaración y lo explica en lenguaje simple. Nunca ve ni escribe montos: las cifras las copia el código desde la fila original.",
     "usa_ia": true,
     "activo": true,
-    "modelos": ["google/gemma-4-31b-it:free", "nvidia/nemotron-3-super-120b-a12b:free", "openrouter/free"],
-    "temperatura": 0
+    "modelos": [
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "nvidia/nemotron-3.5-lightning:free",
+      "nvidia/nemotron-3.5-super-vl:free",
+      "openrouter/free"
+    ],
+    "temperatura": 0,
+    "razonamiento": "low"
   },
   "motor": {
     "nombre": "Motor tributario",
@@ -44,15 +55,27 @@
     "responsabilidad": "Escribe el resumen en lenguaje simple usando solo las cifras ya calculadas. Si menciona un número que no existe en el cálculo, su texto se descarta.",
     "usa_ia": true,
     "activo": true,
-    "modelos": ["google/gemma-4-31b-it:free", "thinkingmachines/inkling:free", "openrouter/free"],
-    "temperatura": 0.3
+    "modelos": [
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "nvidia/nemotron-3.5-super-vl:free",
+      "dots-studio/dots-3-note-preview:free",
+      "openrouter/free"
+    ],
+    "temperatura": 0.3,
+    "razonamiento": "low"
   },
   "asistente": {
     "nombre": "Asistente",
-    "responsabilidad": "Responde dudas del usuario apoyándose en la base de conocimiento del proyecto.",
+    "responsabilidad": "Conversa con el usuario: responde sus dudas y, cuando lo pide, anota sus datos, calcula, cambia de año o abre la carga de la exógena. No guía la conversación. La IA propone y el código valida cada dato y cada cifra.",
     "usa_ia": true,
     "activo": true,
-    "modelos": ["google/gemma-4-31b-it:free", "nvidia/nemotron-3.5-lightning:free", "openrouter/free"],
-    "temperatura": 0.4
+    "modelos": [
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "nvidia/nemotron-3.5-lightning:free",
+      "nvidia/nemotron-3.5-super-vl:free",
+      "openrouter/free"
+    ],
+    "temperatura": 0.2,
+    "razonamiento": "low"
   }
 }

@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 
 from app.agents import configuracion
 from app.config import settings
@@ -49,32 +49,56 @@ def disponible() -> bool:
     return settings.modo_llm == "openrouter" and bool(settings.openrouter_api_key)
 
 
+def _limpiar_salida(texto: str | None) -> str:
+    """Quita el razonamiento que algunos modelos dejan dentro del texto (<think>…</think>)."""
+    t = re.sub(r"<think>.*?</think>", "", texto or "", flags=re.DOTALL)
+    return re.sub(r"^.*?</think>", "", t, flags=re.DOTALL).strip()
+
+
 async def completar(agente: str, sistema: str, usuario: str, json_mode: bool = False, max_tokens: int = 1200) -> RespuestaLLM:
+    """Prueba los modelos del agente en orden.
+
+    Los modelos gratuitos casi siempre "piensan" antes de responder y ese razonamiento
+    gasta los tokens de salida; por eso se pide razonamiento corto y oculto
+    (reasoning.effort / exclude). Si un proveedor rechaza esos parámetros o el modo
+    JSON, se reintenta una vez sin ellos con el mismo modelo.
+    """
     if not disponible():
         raise LLMNoDisponible("Modo simulado: sin llamadas a modelos")
     cfg = configuracion.obtener(agente)
     if not cfg.get("activo", True):
         raise LLMNoDisponible(f"El agente {agente} está desactivado")
+    razonamiento = cfg.get("razonamiento")
     errores = []
     for modelo in cfg.get("modelos", []):
-        try:
+        for con_extras in (True, False):
             extra: dict[str, Any] = {}
-            if json_mode:
+            if con_extras and json_mode:
                 extra["response_format"] = {"type": "json_object"}
-            r = await _get_cliente().chat.completions.create(
-                model=modelo,
-                messages=[{"role": "system", "content": sistema}, {"role": "user", "content": usuario}],
-                temperature=cfg.get("temperatura", 0),
-                max_tokens=max_tokens,
-                **extra,
-            )
-            texto = (r.choices[0].message.content or "").strip()
-            if not texto:
-                raise ValueError("respuesta vacía")
-            return RespuestaLLM(texto=texto, modelo=getattr(r, "model", None) or modelo)
-        except Exception as e:  # noqa: BLE001 - cualquier falla pasa al siguiente modelo
-            log.warning("Modelo %s falló para %s: %s", modelo, agente, e)
-            errores.append(f"{modelo}: {type(e).__name__}")
+            if con_extras and razonamiento:
+                extra["extra_body"] = {"reasoning": {"effort": razonamiento, "exclude": True}}
+            if not con_extras and not (json_mode or razonamiento):
+                break
+            try:
+                r = await _get_cliente().chat.completions.create(
+                    model=modelo,
+                    messages=[{"role": "system", "content": sistema}, {"role": "user", "content": usuario}],
+                    temperature=cfg.get("temperatura", 0),
+                    max_tokens=max_tokens,
+                    **extra,
+                )
+                texto = _limpiar_salida(r.choices[0].message.content)
+                if not texto:
+                    raise ValueError("respuesta vacía")
+                return RespuestaLLM(texto=texto, modelo=getattr(r, "model", None) or modelo)
+            except BadRequestError as e:
+                log.warning("Modelo %s rechazó la solicitud de %s: %s", modelo, agente, e)
+                errores.append(f"{modelo}: parámetros")
+                continue  # reintenta sin modo JSON ni razonamiento
+            except Exception as e:  # noqa: BLE001 - cualquier otra falla pasa al siguiente modelo
+                log.warning("Modelo %s falló para %s: %s", modelo, agente, e)
+                errores.append(f"{modelo}: {type(e).__name__}")
+                break
     raise LLMNoDisponible("Ningún modelo respondió (" + "; ".join(errores) + ")")
 
 

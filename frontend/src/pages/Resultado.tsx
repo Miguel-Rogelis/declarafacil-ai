@@ -41,9 +41,8 @@ function LineaFormulario({ linea, fuentes, filas }: { linea: Linea; fuentes: Rec
 }
 
 export default function Resultado() {
-  const { extraccion, filas, respuestas, temas, resultado, trazaDocumento, ir, reiniciar, calcular, calculando, eventosCalculo, errorCalculo } = useSesion();
+  const { filas, resultado, trazaDocumento, ir, reiniciar, calcular, calculando, eventosCalculo, errorCalculo, hayDatos } = useSesion();
   const lanzado = useRef(false);
-  const hayDatos = !!extraccion || temas.length > 1 || respuestas.salarios_no_reportados + respuestas.honorarios_no_reportados + respuestas.pensiones_no_reportadas > 0;
 
   useEffect(() => {
     if (resultado || !hayDatos || calculando || lanzado.current) return;
@@ -55,7 +54,7 @@ export default function Resultado() {
     return (
       <div className="contenedor" style={{ paddingTop: "4rem" }}>
         <h1 className="titular t-48">Todavía no hay nada que calcular.</h1>
-        <p className="lead">Habla con el asistente: sube tu exógena o cuéntale tus ingresos y gastos, y aquí verás tu borrador.</p>
+        <p className="lead">En el chat adjunta tu exógena o cuéntame tus ingresos, y aquí verás tu borrador.</p>
         <div className="acciones-resultado"><button className="boton" onClick={() => ir("declarar")}>Ir al chat</button></div>
       </div>
     );

@@ -75,12 +75,6 @@ async def chat(turno: asistente.TurnoChat) -> asistente.RespuestaChat:
     return await asistente.responder(turno)
 
 
-@router.post("/chat/siguiente")
-def chat_siguiente(estado: asistente.EstadoChat) -> asistente.Siguiente:
-    """Siguiente pregunta de la conversación, sin usar IA (después de subir la exógena, confirmar datos, etc.)."""
-    return asistente.siguiente(estado)
-
-
 # ---------- Reglas por año ----------
 
 

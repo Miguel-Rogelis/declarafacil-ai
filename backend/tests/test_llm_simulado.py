@@ -22,7 +22,7 @@ class _Falso:
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     async def _create(self, model, messages, **kw):
-        self.llamadas.append({"model": model, "messages": messages})
+        self.llamadas.append({"model": model, "messages": messages, **kw})
         if self.fallar_primero and len(self.llamadas) == 1:
             raise RuntimeError("429 rate limit")
         texto = self.respuestas(messages)
@@ -72,12 +72,38 @@ def test_explicador_descarta_texto_con_cifras_inventadas(con_llm):
     assert con_ia and texto == bueno.strip()
 
 
-def test_asistente_usa_la_base_de_conocimiento(con_llm):
-    falso = con_llm(_Falso(lambda m: json.dumps({"respuesta": "Respuesta corta.", "anotar": [], "sugerencias": []})))
+def test_asistente_recibe_toda_la_base_y_responde_directo(con_llm):
+    falso = con_llm(_Falso(lambda m: json.dumps({"respuesta": "Es un pago adelantado del impuesto del año siguiente. ¿Quieres que te explique cómo se calcula?",
+                                                 "anotar": [], "calcular": False, "fuente": "¿Qué es el anticipo de renta?"})))
     r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="¿Qué es el anticipo de renta?")))
-    assert r.respuesta == "Respuesta corta." and r.con_ia
-    assert "anticipo" in r.fuentes[0].lower()
-    assert "BASE DE CONOCIMIENTO" in falso.llamadas[0]["messages"][1]["content"]
+    assert r.con_ia and r.respuesta == "Es un pago adelantado del impuesto del año siguiente."  # sin el ofrecimiento final
+    assert r.fuentes == ["¿Qué es el anticipo de renta?"]
+    llamada = falso.llamadas[0]
+    sistema = llamada["messages"][0]["content"]
+    assert "BASE DE CONOCIMIENTO" in sistema and "¿Puedo ir a la cárcel" in sistema  # toda la base, no solo coincidencias
+    assert "$69.718.600" in sistema  # topes del año elegido
+    assert llamada["extra_body"]["reasoning"]["exclude"] is True  # razonamiento corto y oculto
+
+
+def test_asistente_descarta_cifras_inventadas(con_llm):
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "Te toca pagar $7.777.777.", "anotar": []})))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="¿cuánto impuesto se paga?")))
+    assert not r.con_ia and "7.777.777" not in r.respuesta  # se usó la ruta con reglas
+
+
+def test_asistente_calcula_solo_si_hay_datos(con_llm):
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "Calculo tu borrador con lo que tengo.", "calcular": True})))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="calcula")))
+    assert not r.calcular and "ingresos" in r.respuesta
+    e = asistente.EstadoChat(respuestas={"salarios_no_reportados": 60_000_000})
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="calcula", estado=e)))
+    assert r.calcular
+
+
+def test_asistente_acepta_texto_plano(con_llm):
+    con_llm(_Falso(lambda m: "La DIAN es la entidad que recibe las declaraciones."))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="que es la dian")))
+    assert r.con_ia and r.respuesta.startswith("La DIAN")
 
 
 def test_la_ia_no_puede_anotar_cifras_que_el_usuario_no_dijo(con_llm):
@@ -96,7 +122,6 @@ def test_la_ia_no_puede_anotar_cifras_que_el_usuario_no_dijo(con_llm):
     assert r.respuestas.intereses_vivienda == 0  # la IA lo inventó: rechazado
     assert "Intereses de crédito de vivienda" in r.rechazadas
     assert r.respuestas.dependientes == 2
-    assert {"dependientes"} <= set(r.temas_cubiertos)
 
 
 def test_extraer_json_tolera_texto_extra():

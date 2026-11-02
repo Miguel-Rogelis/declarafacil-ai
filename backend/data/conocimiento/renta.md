@@ -1,103 +1,181 @@
-# Base de conocimiento DeclaraFácil — renta de personas naturales (año gravable 2025)
+# Base de conocimiento DeclaraFácil — renta de personas naturales residentes
+#
+# Cada sección: "## Pregunta", una línea opcional "También:" con otras formas de
+# preguntar lo mismo (separadas por |) y la respuesta. Los valores entre llaves se
+# llenan con las reglas del año gravable elegido (ver asistente._valores_anio).
+
+## ¿Quién está obligado a declarar renta?
+También: tengo que declarar | debo declarar | me toca declarar | estoy obligado | quién declara | topes para declarar | requisitos para declarar | cuánto hay que ganar para declarar
+Por el año gravable {anio} (se declara en {anio_presenta}) tienes que declarar si cumples al menos una condición: patrimonio bruto al 31 de diciembre de {anio} mayor a {tope_patrimonio}; ingresos brutos de {tope_ingresos} o más; consumos con tarjeta de crédito, compras o consignaciones de {tope_ingresos} o más; o ser responsable de IVA.
+
+## ¿Cómo sé si tengo que declarar?
+También: cómo sé si declaro | cómo sé si tengo que declarar | cómo averiguo si declaro | cómo investigo si declaro | cómo reviso si declaro | dónde veo si tengo que declarar | cómo saber si debo declarar
+Compara tus cifras de {anio} con los topes: ingresos brutos del año, consumos con tarjeta de crédito, compras y consignaciones (tope {tope_ingresos} cada uno) y tu patrimonio al 31 de diciembre (tope {tope_patrimonio}). Esas cifras las ves en tu exógena: entra a MUISCA en dian.gov.co, descarga el reporte de información exógena de {anio} y revisa la sección de topes. Si la adjuntas aquí, yo hago la comparación.
 
 ## ¿Qué es la información exógena?
-Es lo que bancos, empleadores, fondos y otras entidades le reportan a la DIAN sobre ti: salarios, saldos, deudas, retenciones, consumos con tarjeta. No reemplaza tu realidad económica: si algo falta o está mal, lo corriges con tus propios soportes.
+También: qué es la exógena | para qué sirve la exógena | qué trae la exógena | información reportada por terceros
+Es el reporte de lo que bancos, empleadores, fondos y otras entidades le contaron a la DIAN sobre ti en el año: salarios, saldos, deudas, retenciones y consumos con tarjeta. Es el punto de partida para declarar, pero no reemplaza tu realidad: si algo falta o está mal, lo corriges con tus propios soportes.
 
 ## ¿Cómo descargo mi exógena?
-Entra a www.dian.gov.co, haz clic en "Usuario registrado" e inicia sesión en MUISCA con tu cédula y contraseña. Busca "Consultar información exógena" (o "Información reportada por terceros"), elige el año gravable 2025 y descarga el reporte en Excel. Ese archivo es el que subes aquí.
-
-## ¿Quién está obligado a declarar renta en 2026?
-Declaras por el año gravable 2025 si cumples al menos una condición: patrimonio bruto a 31 de diciembre de 2025 superior a 4.500 UVT ($224.095.500); ingresos brutos iguales o superiores a 1.400 UVT ($69.718.600); consumos con tarjeta de crédito, compras totales o consignaciones e inversiones iguales o superiores a 1.400 UVT; o ser responsable de IVA.
+También: dónde saco la exógena | cómo bajo la exógena | dónde consigo la exógena | cómo obtengo la exógena | descargar exógena
+Entra a www.dian.gov.co, elige "Usuario registrado" e inicia sesión en MUISCA con tu cédula y contraseña. Busca "Consultar información exógena" (o "Información reportada por terceros"), elige el año gravable {anio} y descarga el reporte en Excel. Ese es el archivo que adjuntas aquí.
 
 ## ¿Qué es la UVT?
-La Unidad de Valor Tributario es la medida que usa la DIAN para fijar topes y tarifas. Para el año gravable 2025 vale $49.799. Para sanciones que se paguen en 2026 se usa la UVT 2026 de $52.374.
+También: cuánto vale la uvt | valor de la uvt | unidad de valor tributario
+La Unidad de Valor Tributario es la medida que usa la DIAN para fijar topes, tarifas y sanciones, y cambia cada año. Para el año gravable {anio} vale {uvt}. Las sanciones se calculan con la UVT del año en que declaras ({uvt_hoy} en {anio_hoy}). Por año: 2021 $36.308; 2022 $38.004; 2023 $42.412; 2024 $47.065; 2025 $49.799; 2026 $52.374.
+
+## ¿Qué valor tuvo la UVT cada año?
+También: uvt por año | uvt 2021 | uvt 2022 | uvt 2023 | uvt 2024 | uvt 2025 | uvt 2026
+La UVT fue de $36.308 en 2021, $38.004 en 2022, $42.412 en 2023, $47.065 en 2024, $49.799 en 2025 y $52.374 en 2026.
 
 ## ¿Cuándo vence mi declaración?
-Depende de los dos últimos dígitos de tu cédula (sin dígito de verificación). Para el año gravable 2025 los plazos fueron del 12 de agosto al 26 de octubre de 2026. Si ya pasó tu fecha, todavía puedes declarar, pero con sanción por extemporaneidad.
+También: hasta cuándo puedo declarar | fecha límite | plazo para declarar | cuándo tengo que declarar | calendario tributario | cuándo me toca declarar | fechas para declarar
+Depende de los dos últimos dígitos de tu cédula, sin el dígito de verificación. Para el año gravable {anio} los plazos fueron del {venc_desde} al {venc_hasta}. Si ya pasó tu fecha, todavía puedes declarar, pero con sanción por extemporaneidad.
 
 ## ¿Cuánto es la sanción si declaro tarde?
-Es el 5 % del impuesto a cargo por cada mes o fracción de mes de retraso, hasta el 100 % del impuesto. Si no tienes impuesto a cargo, se calcula sobre los ingresos brutos (0,5 % por mes). Nunca es menor a 10 UVT ($524.000 en 2026). Puede reducirse al 50 % si no te han sancionado por lo mismo en los últimos dos años (art. 640 ET).
-
-## ¿Qué son las rentas exentas y deducciones?
-Son valores que la ley te deja restar antes de calcular el impuesto: el 25 % de tus ingresos laborales (máximo 790 UVT al año), dependientes, intereses de vivienda, medicina prepagada, aportes voluntarios a pensión o AFC y la mitad del 4x1000. En conjunto no pueden pasar del 40 % de tu ingreso neto ni de 1.340 UVT.
-
-## ¿Quiénes cuentan como dependientes?
-Hijos hasta 18 años; hijos de 18 a 23 que estudien y dependan de ti; hijos mayores con dependencia por discapacidad; cónyuge o compañero con ingresos menores a 260 UVT; padres o hermanos que dependan de ti y tengan ingresos menores a 260 UVT. Por el primero puedes restar el 10 % de tus ingresos de trabajo (máximo 384 UVT) y además 72 UVT por cada dependiente, hasta cuatro.
-
-## ¿Qué es el 1 % de compras con factura electrónica?
-Puedes restar el 1 % de tus compras de bienes y servicios con factura electrónica a tu nombre, pagadas con tarjeta o transferencia, hasta 240 UVT al año. No entra en el límite del 40 %. La exógena trae el monto que la DIAN considera susceptible de este beneficio.
-
-## ¿Qué es el anticipo de renta?
-Es un pago por adelantado del impuesto del próximo año. Es el 25 % del impuesto neto si declaras por primera vez, el 50 % la segunda vez y el 75 % desde la tercera, menos las retenciones del año. Si declaraste antes, puedes usar el promedio de los dos últimos años si te conviene.
-
-## ¿Qué es el saldo a favor?
-Cuando tus retenciones y anticipos superan el impuesto, la DIAN te debe la diferencia. Puedes pedir la devolución o usarlo en la siguiente declaración.
-
-## ¿Cómo se declaran las cesantías?
-Las cesantías e intereses que recibiste o te consignaron son ingreso laboral, pero quedan 100 % exentas si tu salario promedio de los últimos seis meses no pasó de 350 UVT. Por encima de ese valor, la parte exenta baja por tramos.
-
-## ¿Cómo se declaran los dividendos?
-Van en la cédula de dividendos. Los no gravados se suman a la tabla de tarifas del art. 241 junto con tus otras rentas, y tienes un descuento del 19 % sobre lo que pase de 1.090 UVT. Los gravados pagan primero el 35 % y el resto se suma a la tabla.
-
-## ¿Qué son las ganancias ocasionales?
-Ingresos extraordinarios: venta de bienes que tuviste dos años o más, herencias, donaciones, seguros de vida y premios. Pagan 15 % (loterías y premios 20 %). Hay exenciones: por ejemplo, las primeras 5.000 UVT de la utilidad en la venta de tu casa si el dinero va a una AFC o a otra vivienda.
-
-## ¿Qué patrimonio debo declarar?
-Todo lo que tenías a 31 de diciembre: cuentas, inversiones, inmuebles, vehículos, aportes y cuentas por cobrar, y restas tus deudas a esa fecha. Los inmuebles van mínimo por su avalúo catastral. La exógena no trae todo (por ejemplo, vehículos), así que agrégalo tú.
-
-## ¿Cómo presento la declaración?
-En el portal MUISCA de la DIAN, en el formulario 210. Revisas la declaración sugerida, la ajustas con tus datos, la firmas con tu firma electrónica y, si hay saldo a pagar, generas el recibo 490 para pagar en bancos o por PSE.
-
-## ¿DeclaraFácil presenta la declaración por mí?
-No. DeclaraFácil prepara un borrador y te explica cada cifra. La firma y la presentación son tuyas en la DIAN. Para casos complejos (rentas del exterior, negocios, herencias grandes) consulta a un contador.
-
-## ¿Qué pasa con mis datos?
-El archivo se procesa en memoria y no se guarda. Antes de usar IA se quitan tu cédula, tu nombre y tus números de cuenta, y a la IA nunca le llegan tus montos para que los interprete: las cifras las maneja el código.
-
-## ¿Qué es la DIAN?
-Es la Dirección de Impuestos y Aduanas Nacionales: la entidad del Gobierno que recibe las declaraciones, cobra los impuestos nacionales y vigila que se paguen. Su portal para hacer trámites se llama MUISCA.
-
-## ¿Qué es la declaración de renta?
-Es un formulario (el 210 para personas naturales) donde le cuentas a la DIAN cuánto ganaste, cuánto tienes y cuánto debes en un año. Con eso se calcula si te toca pagar impuesto o si te deben devolver plata. Declarar no siempre significa pagar: mucha gente declara y paga cero.
-
-## ¿Si declaro siempre tengo que pagar?
-No. Estar obligado a declarar depende de los topes (ingresos, patrimonio, consumos). Pagar depende de cuánto te quede después de restar aportes, rentas exentas y deducciones. Muchas personas declaran y les sale cero o hasta saldo a favor por las retenciones que ya les hicieron.
-
-## ¿Qué es el año gravable?
-Es el año cuyos ingresos y bienes declaras. En 2026 se declara el año gravable 2025, es decir, lo que pasó entre el 1 de enero y el 31 de diciembre de 2025.
+También: sanción por extemporaneidad | multa por declarar tarde | se me pasó la fecha | qué pasa si declaro tarde | cuánto me cobran por declarar tarde
+Es el 5 % del impuesto a cargo por cada mes o fracción de mes de retraso, hasta el 100 % del impuesto. Si no tienes impuesto a cargo, se calcula sobre los ingresos brutos (0,5 % por mes). Nunca es menor a 10 UVT ({sancion_minima} si declaras en {anio_hoy}). Se reduce al 50 % si no te han sancionado por lo mismo en los últimos dos años (art. 640 ET).
 
 ## ¿Qué pasa si no declaro estando obligado?
-La DIAN puede enviarte un emplazamiento y cobrarte una sanción por no declarar, que es mucho más alta que declarar tarde (puede llegar al 20 % de tus ingresos). Si se te pasó la fecha, lo mejor es declarar cuanto antes: la sanción por extemporaneidad crece cada mes.
+También: qué pasa si no declaro | no declaré | nunca he declarado y debía | me pueden multar | emplazamiento
+La DIAN puede enviarte un emplazamiento y cobrarte la sanción por no declarar, que es mucho más alta que declarar tarde (puede llegar al 20 % de tus ingresos o consignaciones). Si se te pasó la fecha, lo mejor es declarar cuanto antes: la sanción por extemporaneidad crece cada mes.
 
 ## ¿Puedo ir a la cárcel por no declarar renta?
-Por no declarar renta lo normal son sanciones económicas, no cárcel. Hay delitos tributarios para casos graves, como ocultar activos o dar información falsa por montos muy altos. Si estás atrasado, declarar voluntariamente reduce las sanciones.
+También: cárcel | me pueden meter preso | es delito no declarar | me pueden encarcelar
+Por no declarar lo normal son sanciones en plata, no cárcel. Hay delitos tributarios para casos graves, como ocultar activos o dar información falsa por montos muy altos. Si estás atrasado, declarar por tu cuenta reduce las sanciones.
+
+## ¿Si declaro siempre tengo que pagar?
+También: declarar es pagar | declarar significa pagar | si declaro pago | toca pagar si declaro | declarar y pagar es lo mismo
+No. Estar obligado a declarar depende de los topes (ingresos, patrimonio, consumos). Pagar depende de cuánto te quede después de restar aportes, rentas exentas y deducciones. Mucha gente declara y le sale cero, o hasta saldo a favor por las retenciones que ya le hicieron.
+
+## ¿Cuánto impuesto se paga?
+También: cuánto me toca pagar | tarifa de renta | tabla de renta | cuánto cobran de renta | porcentaje de renta | cuánto se paga de renta
+Depende de tu renta líquida gravable, que es lo que queda de tus ingresos después de restar aportes, rentas exentas y deducciones. Hasta 1.090 UVT ({tramo0} en {anio}) la tarifa es 0 %; lo que pase de ahí paga por tramos del 19 %, 28 %, 33 %, 35 %, 37 % y 39 % (tabla del art. 241). Por eso alguien con ingresos de unos pocos millones al mes suele pagar poco o nada.
+
+## ¿Qué es la declaración de renta?
+También: qué es declarar renta | para qué sirve declarar | qué es la renta | en qué consiste la declaración
+Es un formulario (el 210 para personas naturales) donde le cuentas a la DIAN cuánto ganaste, cuánto tenías y cuánto debías en un año. Con eso se calcula si te toca pagar impuesto o si te deben devolver plata.
+
+## ¿Qué es la DIAN?
+También: qué significa dian | quién es la dian | qué hace la dian
+Es la Dirección de Impuestos y Aduanas Nacionales, la entidad del Gobierno que recibe las declaraciones, cobra los impuestos nacionales y vigila que se paguen. Sus trámites en línea se hacen en el portal MUISCA.
+
+## ¿Qué es MUISCA?
+También: portal de la dian | página de la dian | usuario registrado
+Es el sistema en línea de la DIAN (www.dian.gov.co, opción "Usuario registrado"). Ahí descargas la exógena, llenas el formulario 210, lo firmas y lo presentas.
+
+## ¿Qué es el año gravable?
+También: qué año declaro | qué año se declara | año fiscal | por qué año declaro
+Es el año cuyos ingresos y bienes declaras. La declaración del año gravable {anio} se presenta en {anio_presenta} y cubre lo que pasó entre el 1 de enero y el 31 de diciembre de {anio}.
+
+## ¿Qué cuenta como ingreso?
+También: qué ingresos se declaran | qué se considera ingreso | los préstamos son ingreso | qué plata cuenta
+Casi todo el dinero que recibiste en el año: salario, prestaciones y cesantías, honorarios o pagos por servicios, arriendos, intereses de cuentas y CDT, pensiones, dividendos, premios y lo que recibas por vender bienes. No cuentan los préstamos que te hicieron ni la plata que pasaste de una cuenta tuya a otra.
+
+## ¿Qué necesito para declarar?
+También: qué documentos necesito | qué papeles necesito | requisitos | qué tengo que tener listo
+Tu exógena; el certificado de ingresos y retenciones de tu empleador (formulario 220); certificados de bancos, fondos de pensiones y cesantías; soportes de lo que quieras restar (prepagada, intereses de vivienda, dependientes, aportes voluntarios); el RUT actualizado y tu firma electrónica de la DIAN.
+
+## ¿Qué es el certificado de ingresos y retenciones?
+También: formulario 220 | certificado laboral de ingresos | certificado del empleador
+Es el documento (formulario 220) que tu empleador te entrega cada año con tu salario, aportes a salud y pensión y retenciones en la fuente. Lo pides en tu empresa; sus cifras deberían coincidir con tu exógena.
 
 ## ¿Qué es el RUT y lo necesito?
+También: rut | registro único tributario | cómo saco el rut | tengo que tener rut
 El RUT (Registro Único Tributario) es tu inscripción ante la DIAN. Para declarar renta necesitas tenerlo actualizado; si no lo tienes, se saca gratis en el portal de la DIAN o en sus oficinas.
 
 ## ¿Cómo firmo la declaración?
+También: firma electrónica | cómo saco la firma electrónica | no tengo firma electrónica
 En MUISCA, con tu firma electrónica de la DIAN. Si no la tienes, la habilitas en el mismo portal con tu cédula y un código que te llega al correo. DeclaraFácil no firma por ti.
 
+## ¿Cómo presento la declaración?
+También: cómo declaro | dónde declaro | cómo hago la declaración en la dian | pasos para declarar | formulario 210
+En MUISCA, en el formulario 210. Revisas la declaración sugerida, la ajustas con tus datos (aquí te ayudo con el borrador), la firmas con tu firma electrónica y, si hay saldo a pagar, generas el recibo 490.
+
+## ¿Cómo pago la renta?
+También: dónde pago | cómo se paga | recibo 490 | pagar por pse | puedo pagar a cuotas
+Después de presentar, generas en MUISCA el recibo 490 y pagas en bancos autorizados o por PSE. Si no puedes pagar todo, puedes pedirle a la DIAN una facilidad de pago, pero mientras tanto corren intereses de mora.
+
+## ¿Cuánto cuesta declarar?
+También: es gratis declarar | cobran por declarar | cuánto cobra un contador
+Declarar en la DIAN es gratis. Lo que puedes pagar es el impuesto que resulte, y si contratas a un contador, sus honorarios.
+
+## ¿Qué pasa si me equivoco en la declaración?
+También: puedo corregir | corregir la declaración | me equivoqué | declaración de corrección
+Puedes corregirla en MUISCA. Si la corrección baja tu impuesto o sube tu saldo a favor, la DIAN la revisa; si sube el impuesto, pagas una sanción del 10 % de la diferencia si corriges antes de que la DIAN te emplace.
+
 ## ¿Qué es el patrimonio bruto y el líquido?
-El patrimonio bruto es todo lo que tenías a 31 de diciembre: plata en cuentas, inversiones, casa, carro, aportes. El líquido es ese valor menos tus deudas a la misma fecha.
+También: qué es patrimonio | patrimonio líquido | qué es el patrimonio bruto
+El patrimonio bruto es todo lo que tenías al 31 de diciembre: plata en cuentas, inversiones, casa, carro, aportes. El líquido es ese valor menos tus deudas a la misma fecha.
+
+## ¿Qué patrimonio debo declarar?
+También: tengo que declarar el carro | tengo que declarar la casa | qué bienes declaro | cómo declaro mis bienes
+Todo lo que tenías al 31 de diciembre: cuentas, inversiones, inmuebles, vehículos, aportes y cuentas por cobrar, y restas tus deudas a esa fecha. Los inmuebles van mínimo por su avalúo catastral. La exógena no trae todo (por ejemplo, vehículos), así que eso me lo cuentas tú.
 
 ## ¿Qué son las retenciones en la fuente?
-Son pedacitos de impuesto que te descuentan durante el año, por ejemplo en el salario o en los intereses del banco. En la declaración se restan de lo que debes; si te retuvieron más de la cuenta, te queda saldo a favor.
+También: qué es la retención | me hicieron retención | qué es retefuente
+Son pedacitos del impuesto que te descuentan durante el año, por ejemplo en el salario o en los intereses del banco. En la declaración se restan de lo que debes; si te retuvieron de más, te queda saldo a favor.
+
+## ¿Qué es el saldo a favor?
+También: me devuelven plata | devolución | la dian me debe | cómo pido la devolución
+Cuando tus retenciones y anticipos superan el impuesto, la DIAN te debe la diferencia. Puedes pedir la devolución en MUISCA o usarlo en la siguiente declaración.
 
 ## ¿Qué es una deducción y qué es una renta exenta?
-Las dos bajan la parte de tus ingresos que paga impuesto. La renta exenta es una parte del ingreso que la ley dice que no paga (como el 25 % de tu salario). La deducción es un gasto que te dejan restar (como los intereses de vivienda o la medicina prepagada).
+También: diferencia entre deducción y renta exenta | qué se puede restar | qué me baja el impuesto | beneficios tributarios | rentas exentas y deducciones
+Las dos bajan la parte de tus ingresos que paga impuesto. La renta exenta es una parte del ingreso que la ley dice que no paga, como el 25 % de tu salario (hasta {exenta_tope_uvt} UVT al año en {anio}). La deducción es un gasto que te dejan restar: dependientes, intereses de vivienda, medicina prepagada, aportes voluntarios y la mitad del 4x1000. Juntas no pueden pasar del 40 % de tu ingreso neto ni de {limite_uvt} UVT ({limite_pesos}).
+
+## ¿Quiénes cuentan como dependientes?
+También: dependientes | personas a cargo | puedo poner a mis hijos | puedo poner a mi mamá | mi pareja cuenta como dependiente
+Hijos hasta 18 años; hijos de 18 a 23 que estudien y dependan de ti; hijos mayores con dependencia por discapacidad; cónyuge o compañero con ingresos menores a 260 UVT; padres o hermanos que dependan de ti con ingresos menores a 260 UVT. {dependientes_texto}
+
+## ¿Qué es el 1 % de compras con factura electrónica?
+También: factura electrónica | deducción por factura | 1 % de compras
+{factura_texto}
+
+## ¿Qué es el anticipo de renta?
+También: anticipo | por qué me cobran anticipo | qué es el anticipo
+Es un pago por adelantado del impuesto del año siguiente. Es el 25 % del impuesto neto si declaras por primera vez, el 50 % la segunda vez y el 75 % desde la tercera, menos las retenciones del año. Si declaraste antes, puedes usar el promedio de los dos últimos años si te conviene.
+
+## ¿Cómo se declaran las cesantías?
+También: cesantías | las cesantías pagan renta | intereses de cesantías
+Las cesantías e intereses que recibiste o te consignaron son ingreso laboral, pero quedan 100 % exentas si tu salario promedio de los últimos seis meses no pasó de 350 UVT. Por encima de ese valor, la parte exenta baja por tramos.
+
+## ¿Las pensiones pagan renta?
+También: soy pensionado | pensión | los pensionados declaran
+Los pensionados también declaran si superan los topes. La pensión está exenta hasta 1.000 UVT al mes, así que la mayoría de pensiones no paga impuesto, aunque igual se declaran.
+
+## ¿Los independientes declaran?
+También: soy independiente | trabajo por prestación de servicios | contratista | freelance | honorarios
+Sí, con los mismos topes. Declaras tus honorarios o pagos por servicios y puedes restar los costos de tu actividad o, si te conviene más, tomar el 25 % como renta exenta (no las dos cosas). También restas lo que aportaste a salud y pensión.
+
+## ¿Qué pasa si no tengo trabajo o soy estudiante?
+También: estoy desempleado | soy estudiante | no trabajo tengo que declarar | soy ama de casa
+Igual aplican los topes: no depende de tener empleo sino de tus ingresos, patrimonio, consumos y consignaciones del año. Si no llegas a ninguno, no estás obligado.
+
+## ¿Cómo se declaran los dividendos?
+También: dividendos | acciones | utilidades de una empresa
+Van en la cédula de dividendos. {dividendos_texto}
+
+## ¿Qué son las ganancias ocasionales?
+También: ganancia ocasional | vendí mi casa | herencia | me gané la lotería | premio | donación | seguro de vida
+Son ingresos extraordinarios: la venta de bienes que tuviste dos años o más, herencias, donaciones, seguros de vida y premios. En {anio} pagan {go_tarifa} (loterías y premios 20 %), con exenciones: por ejemplo, las primeras {go_casa_uvt} UVT de la utilidad en la venta de tu casa si cumples las condiciones.
 
 ## ¿Puedo declarar años anteriores?
-Sí. Si se te pasó un año, puedes presentarlo tarde con la sanción por extemporaneidad. En DeclaraFácil puedes elegir el año gravable entre 2021 y 2025, y cada uno usa sus propias reglas.
+También: declarar años pasados | no declaré el año pasado | declarar 2023 | declarar 2024 | otro año
+Sí. Si se te pasó un año, puedes presentarlo tarde con la sanción por extemporaneidad. Aquí puedes elegir el año gravable entre 2021 y 2025 y cada uno usa sus propias reglas.
 
 ## ¿Qué cambió con la reforma tributaria de 2022?
-La Ley 2277 de 2022, que aplica desde el año gravable 2023, bajó el límite de deducciones y rentas exentas a 1.340 UVT, limitó el 25 % exento a 790 UVT al año, creó la deducción de 72 UVT por dependiente y la del 1 % de compras con factura electrónica, subió las ganancias ocasionales al 15 % y cambió la forma de pagar impuesto por dividendos.
+También: ley 2277 | reforma tributaria | qué cambió en 2023
+La Ley 2277 de 2022, que aplica desde el año gravable 2023, bajó el límite de deducciones y rentas exentas de 5.040 a 1.340 UVT, limitó el 25 % exento a 790 UVT al año, creó la deducción de 72 UVT por dependiente y la del 1 % de compras con factura electrónica, subió las ganancias ocasionales del 10 % al 15 % y sumó los dividendos a la tabla general.
 
-## ¿Qué es una UVT en pesos para cada año?
-La UVT fue de $36.308 en 2021, $38.004 en 2022, $42.412 en 2023, $47.065 en 2024, $49.799 en 2025 y $52.374 en 2026.
+## ¿Qué es la declaración sugerida?
+También: declaración sugerida | prediligenciada | la dian ya me la llena
+Es un borrador que la DIAN arma con tu exógena dentro del formulario 210. Ayuda, pero no incluye todo (dependientes, deducciones, bienes que no reportan terceros), por eso debes revisarla antes de firmar.
 
-## ¿Qué cuenta como ingreso?
-Casi todo el dinero que recibiste en el año: salario, prestaciones y cesantías, honorarios o pagos por servicios, arriendos, intereses de cuentas y CDT, pensiones, dividendos, premios y lo que recibas por vender bienes. No cuentan los préstamos que te hicieron ni la plata que pasaste de una cuenta tuya a otra.
+## ¿DeclaraFácil presenta la declaración por mí?
+También: ustedes declaran por mí | la app presenta | me hacen la declaración | quién firma
+No. DeclaraFácil prepara un borrador y te explica cada cifra. La firma y la presentación son tuyas en la DIAN. Para casos complejos (rentas del exterior, negocios, herencias grandes) consulta a un contador.
 
-## ¿Qué es la exógena?
-Es el mismo reporte de información exógena: lo que bancos, empleadores y otras entidades le contaron a la DIAN sobre tu plata en el año. Te sirve como punto de partida para declarar, pero tú debes revisar que esté completo y correcto.
+## ¿Qué pasa con mis datos?
+También: es seguro | guardan mis datos | privacidad | quién ve mi información
+El archivo se procesa en memoria y no se guarda. Antes de usar IA se quitan tu cédula, tu nombre y tus números de cuenta, y las cifras las maneja el código, no la IA.

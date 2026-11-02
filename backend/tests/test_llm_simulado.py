@@ -73,11 +73,30 @@ def test_explicador_descarta_texto_con_cifras_inventadas(con_llm):
 
 
 def test_asistente_usa_la_base_de_conocimiento(con_llm):
-    falso = con_llm(_Falso(lambda m: "Respuesta corta."))
-    r = asyncio.run(asistente.responder("¿Qué es el anticipo de renta?", [], None))
-    assert r.respuesta == "Respuesta corta."
+    falso = con_llm(_Falso(lambda m: json.dumps({"respuesta": "Respuesta corta.", "anotar": [], "sugerencias": []})))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="¿Qué es el anticipo de renta?")))
+    assert r.respuesta == "Respuesta corta." and r.con_ia
     assert "anticipo" in r.fuentes[0].lower()
     assert "BASE DE CONOCIMIENTO" in falso.llamadas[0]["messages"][1]["content"]
+
+
+def test_la_ia_no_puede_anotar_cifras_que_el_usuario_no_dijo(con_llm):
+    con_llm(_Falso(lambda m: json.dumps({
+        "respuesta": "Listo, anotado.",
+        "anotar": [
+            {"campo": "medicina_prepagada", "valor": 350000, "periodo": "mensual"},
+            {"campo": "intereses_vivienda", "valor": 9000000, "periodo": "anual"},
+            {"campo": "dependientes", "valor": 2},
+            {"campo": "campo_inventado", "valor": 1},
+        ],
+    })))
+    turno = asistente.TurnoChat(mensaje="pago prepagada de 350 mil al mes y tengo dos hijos")
+    r = asyncio.run(asistente.responder(turno))
+    assert r.respuestas.medicina_prepagada == 4_200_000  # 350.000 × 12, multiplicado por el código
+    assert r.respuestas.intereses_vivienda == 0  # la IA lo inventó: rechazado
+    assert "Intereses de crédito de vivienda" in r.rechazadas
+    assert r.respuestas.dependientes == 2
+    assert {"dependientes"} <= set(r.temas_cubiertos)
 
 
 def test_extraer_json_tolera_texto_extra():

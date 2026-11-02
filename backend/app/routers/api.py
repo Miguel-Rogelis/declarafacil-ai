@@ -67,17 +67,18 @@ async def liquidar(solicitud: orquestador.SolicitudLiquidacion) -> AsyncIterable
         yield _evento(item)
 
 
-class MensajeChat(BaseModel):
-    mensaje: str
-    historial: list[dict[str, str]] = []
-    contexto: str | None = None
+@router.post("/chat")
+async def chat(turno: asistente.TurnoChat) -> asistente.RespuestaChat:
+    if not turno.mensaje.strip():
+        raise HTTPException(status_code=422, detail="Escribe un mensaje")
+    turno.mensaje = turno.mensaje[:1000]
+    return await asistente.responder(turno)
 
 
-@router.post("/asistente")
-async def chat(m: MensajeChat) -> asistente.RespuestaAsistente:
-    if not m.mensaje.strip():
-        raise HTTPException(status_code=422, detail="Escribe una pregunta")
-    return await asistente.responder(m.mensaje[:800], m.historial, m.contexto)
+@router.post("/chat/siguiente")
+def chat_siguiente(estado: asistente.EstadoChat) -> asistente.Siguiente:
+    """Siguiente pregunta de la conversación, sin usar IA (después de subir la exógena, confirmar datos, etc.)."""
+    return asistente.siguiente(estado)
 
 
 # ---------- Reglas por año ----------

@@ -30,6 +30,19 @@ def auditar(datos: DatosDeclaracion, liq: Liquidacion, filas: list[FilaInterpret
             "Confírmalos antes de firmar: " + "; ".join(f.detalle[:60] for f in por_ia[:4]) + ".",
         )
 
+    if "estimado" in datos.fuentes:
+        agregar(
+            "advertencia",
+            "Estimamos tus aportes a salud y pensión",
+            "Como no hay certificado ni exógena, supusimos el 4 % + 4 % de tu salario. Revisa el certificado de ingresos y retenciones de tu empleador.",
+        )
+    if not filas:
+        agregar(
+            "advertencia",
+            "Este cálculo no usa tu exógena",
+            "Se hizo solo con lo que nos contaste. Descarga tu exógena en MUISCA para confirmar que no falten ingresos, bienes o retenciones.",
+        )
+
     # 2. Ingresos declarados vs. lo que reportaron terceros
     reportado = datos.indicadores.ingresos_reportados_exogena
     if reportado and liq.resumen.ingresos_brutos_totales < reportado * 0.97:

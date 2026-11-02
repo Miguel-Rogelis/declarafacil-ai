@@ -105,7 +105,7 @@ def test_archivo_que_no_es_exogena():
 
 
 def test_asistente_responde_desde_la_base():
-    r = TestClient(app).post("/api/asistente", json={"mensaje": "¿Cómo descargo mi exógena?"})
+    r = TestClient(app).post("/api/chat", json={"mensaje": "¿Cómo descargo mi exógena?"})
     assert r.status_code == 200
     assert "MUISCA" in r.json()["respuesta"]
 

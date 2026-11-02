@@ -53,3 +53,51 @@ No. DeclaraFácil prepara un borrador y te explica cada cifra. La firma y la pre
 
 ## ¿Qué pasa con mis datos?
 El archivo se procesa en memoria y no se guarda. Antes de usar IA se quitan tu cédula, tu nombre y tus números de cuenta, y a la IA nunca le llegan tus montos para que los interprete: las cifras las maneja el código.
+
+## ¿Qué es la DIAN?
+Es la Dirección de Impuestos y Aduanas Nacionales: la entidad del Gobierno que recibe las declaraciones, cobra los impuestos nacionales y vigila que se paguen. Su portal para hacer trámites se llama MUISCA.
+
+## ¿Qué es la declaración de renta?
+Es un formulario (el 210 para personas naturales) donde le cuentas a la DIAN cuánto ganaste, cuánto tienes y cuánto debes en un año. Con eso se calcula si te toca pagar impuesto o si te deben devolver plata. Declarar no siempre significa pagar: mucha gente declara y paga cero.
+
+## ¿Si declaro siempre tengo que pagar?
+No. Estar obligado a declarar depende de los topes (ingresos, patrimonio, consumos). Pagar depende de cuánto te quede después de restar aportes, rentas exentas y deducciones. Muchas personas declaran y les sale cero o hasta saldo a favor por las retenciones que ya les hicieron.
+
+## ¿Qué es el año gravable?
+Es el año cuyos ingresos y bienes declaras. En 2026 se declara el año gravable 2025, es decir, lo que pasó entre el 1 de enero y el 31 de diciembre de 2025.
+
+## ¿Qué pasa si no declaro estando obligado?
+La DIAN puede enviarte un emplazamiento y cobrarte una sanción por no declarar, que es mucho más alta que declarar tarde (puede llegar al 20 % de tus ingresos). Si se te pasó la fecha, lo mejor es declarar cuanto antes: la sanción por extemporaneidad crece cada mes.
+
+## ¿Puedo ir a la cárcel por no declarar renta?
+Por no declarar renta lo normal son sanciones económicas, no cárcel. Hay delitos tributarios para casos graves, como ocultar activos o dar información falsa por montos muy altos. Si estás atrasado, declarar voluntariamente reduce las sanciones.
+
+## ¿Qué es el RUT y lo necesito?
+El RUT (Registro Único Tributario) es tu inscripción ante la DIAN. Para declarar renta necesitas tenerlo actualizado; si no lo tienes, se saca gratis en el portal de la DIAN o en sus oficinas.
+
+## ¿Cómo firmo la declaración?
+En MUISCA, con tu firma electrónica de la DIAN. Si no la tienes, la habilitas en el mismo portal con tu cédula y un código que te llega al correo. DeclaraFácil no firma por ti.
+
+## ¿Qué es el patrimonio bruto y el líquido?
+El patrimonio bruto es todo lo que tenías a 31 de diciembre: plata en cuentas, inversiones, casa, carro, aportes. El líquido es ese valor menos tus deudas a la misma fecha.
+
+## ¿Qué son las retenciones en la fuente?
+Son pedacitos de impuesto que te descuentan durante el año, por ejemplo en el salario o en los intereses del banco. En la declaración se restan de lo que debes; si te retuvieron más de la cuenta, te queda saldo a favor.
+
+## ¿Qué es una deducción y qué es una renta exenta?
+Las dos bajan la parte de tus ingresos que paga impuesto. La renta exenta es una parte del ingreso que la ley dice que no paga (como el 25 % de tu salario). La deducción es un gasto que te dejan restar (como los intereses de vivienda o la medicina prepagada).
+
+## ¿Puedo declarar años anteriores?
+Sí. Si se te pasó un año, puedes presentarlo tarde con la sanción por extemporaneidad. En DeclaraFácil puedes elegir el año gravable entre 2021 y 2025, y cada uno usa sus propias reglas.
+
+## ¿Qué cambió con la reforma tributaria de 2022?
+La Ley 2277 de 2022, que aplica desde el año gravable 2023, bajó el límite de deducciones y rentas exentas a 1.340 UVT, limitó el 25 % exento a 790 UVT al año, creó la deducción de 72 UVT por dependiente y la del 1 % de compras con factura electrónica, subió las ganancias ocasionales al 15 % y cambió la forma de pagar impuesto por dividendos.
+
+## ¿Qué es una UVT en pesos para cada año?
+La UVT fue de $36.308 en 2021, $38.004 en 2022, $42.412 en 2023, $47.065 en 2024, $49.799 en 2025 y $52.374 en 2026.
+
+## ¿Qué cuenta como ingreso?
+Casi todo el dinero que recibiste en el año: salario, prestaciones y cesantías, honorarios o pagos por servicios, arriendos, intereses de cuentas y CDT, pensiones, dividendos, premios y lo que recibas por vender bienes. No cuentan los préstamos que te hicieron ni la plata que pasaste de una cuenta tuya a otra.
+
+## ¿Qué es la exógena?
+Es el mismo reporte de información exógena: lo que bancos, empleadores y otras entidades le contaron a la DIAN sobre tu plata en el año. Te sirve como punto de partida para declarar, pero tú debes revisar que esté completo y correcto.

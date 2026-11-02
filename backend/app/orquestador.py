@@ -25,6 +25,9 @@ class Respuestas(BaseModel):
     """Lo que el usuario responde en el chat guiado (lo que la exógena no trae)."""
 
     dependientes: int = 0
+    salarios_no_reportados: float = 0
+    retenciones_no_reportadas: float = 0
+    dividendos_no_reportados: float = 0
     medicina_prepagada: float = 0
     intereses_vivienda: float = 0
     aportes_voluntarios_afc_fpv: float = 0
@@ -134,6 +137,15 @@ def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
     d.anio_gravable = sol.anio_gravable
     r = sol.respuestas
     d.deducciones.dependientes = r.dependientes
+    if r.salarios_no_reportados:
+        d.laboral.salarios_y_pagos_laborales += r.salarios_no_reportados
+        if not (d.laboral.aportes_obligatorios_pension or d.laboral.aportes_obligatorios_salud):
+            # Sin certificado: se estiman los aportes del trabajador (4 % salud + 4 % pensión)
+            d.laboral.aportes_obligatorios_pension = r.salarios_no_reportados * 0.04
+            d.laboral.aportes_obligatorios_salud = r.salarios_no_reportados * 0.04
+            d.fuentes.setdefault("estimado", []).append("aportes 4 % + 4 %")
+    d.pagos.retenciones_renta += r.retenciones_no_reportadas
+    d.dividendos.no_gravados_subcedula1 += r.dividendos_no_reportados
     d.deducciones.medicina_prepagada += r.medicina_prepagada
     d.deducciones.intereses_vivienda += r.intereses_vivienda
     d.deducciones.aportes_voluntarios_afc_fpv += r.aportes_voluntarios_afc_fpv

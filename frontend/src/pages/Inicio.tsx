@@ -70,24 +70,21 @@ const AGENTES = [
   { nombre: "Motor tributario", tarea: "Hace todos los cálculos con las reglas del año.", ia: false },
   { nombre: "Auditor", tarea: "Busca errores, datos faltantes y fechas vencidas.", ia: false },
   { nombre: "Explicador", tarea: "Resume el resultado en palabras simples, sin inventar cifras.", ia: true },
-  { nombre: "Asistente", tarea: "Responde tus dudas mientras avanzas.", ia: true },
+  { nombre: "Asistente", tarea: "Conversa contigo, responde tus dudas y anota los datos que le cuentas.", ia: true },
 ];
 
 export default function Inicio() {
-  const { ir, reiniciar, setArchivoPendiente, anio } = useSesion();
+  const { ir, reiniciar, setArchivoPendiente, anio, extraccion } = useSesion();
   const [cargandoEjemplo, setCargandoEjemplo] = useState(false);
   const [error, setError] = useState("");
 
-  const empezar = () => {
-    reiniciar();
-    ir("declarar");
-  };
+  const empezar = () => ir("declarar");
   const probarEjemplo = async () => {
     setCargandoEjemplo(true);
     setError("");
     try {
       const archivo = await api.exogenaDemo();
-      reiniciar();
+      if (extraccion) reiniciar();
       setArchivoPendiente(archivo);
       ir("declarar");
     } catch (e) {
@@ -103,11 +100,11 @@ export default function Inicio() {
         <div>
           <h1 className="titular t-72">Tu declaración de renta, lista para revisar.</h1>
           <p className="lead">
-            Sube el reporte de información exógena que descargas de la DIAN. Te devolvemos un borrador del año gravable {anio}{" "}
-            con cada cifra explicada y con lo que te falta por revisar antes de firmar.
+            Conversa con un asistente que te explica la renta sin enredos y arma contigo el borrador del año gravable {anio}: sube tu
+            exógena de la DIAN o simplemente cuéntale tus ingresos. Cada cifra queda explicada antes de que firmes.
           </p>
           <div className="acciones">
-            <button className="boton" onClick={empezar}>Empezar con mi exógena</button>
+            <button className="boton" onClick={empezar}>Hablar con el asistente</button>
             <button className="boton secundario" onClick={probarEjemplo} disabled={cargandoEjemplo}>
               {cargandoEjemplo ? "Cargando ejemplo…" : "Probar con un ejemplo ficticio"}
             </button>
@@ -115,7 +112,7 @@ export default function Inicio() {
           {error ? <p className="mensaje-estado error">{error}</p> : null}
           <p className="nota-privacidad">
             <Candado />
-            Tu archivo no se guarda. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y la IA nunca recibe tus montos.
+            Tu archivo no se guarda. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y las cifras las calcula el código, no la IA.
           </p>
         </div>
         <FormularioMuestra />
@@ -124,13 +121,13 @@ export default function Inicio() {
       <ol className="pasos" aria-label="Cómo funciona">
         <li className="paso">
           <span className="n">1</span>
-          <h3>Sube tu exógena</h3>
-          <p>El Excel que la DIAN genera en MUISCA con lo que bancos y empleadores reportaron de ti.</p>
+          <h3>Pregunta lo que quieras</h3>
+          <p>Qué es la DIAN, si te toca declarar, qué pasa si no lo haces. Ninguna pregunta es tonta.</p>
         </li>
         <li className="paso">
           <span className="n">2</span>
-          <h3>Completa lo que falta</h3>
-          <p>Unas pocas preguntas sobre dependientes, gastos deducibles y bienes que la DIAN no conoce.</p>
+          <h3>Cuéntale tus datos</h3>
+          <p>Sube tu exógena o escribe cosas como «gano 4 millones al mes» o «tengo dos hijos». El asistente las anota y te muestra dónde.</p>
         </li>
         <li className="paso">
           <span className="n">3</span>
@@ -143,8 +140,8 @@ export default function Inicio() {
         <div>
           <h2 id="titulo-agentes" className="titular t-36">Ocho agentes, una tarea cada uno.</h2>
           <p className="suave">
-            Los cálculos los hacen reglas del Estatuto Tributario que puedes auditar. La IA solo interpreta conceptos y explica, y cada
-            cifra que escribe se verifica contra el cálculo.
+            Los cálculos los hacen reglas del Estatuto Tributario de cada año, de 2021 a 2025. La IA conversa, interpreta y explica, y cada
+            cifra que escribe o anota se verifica contra lo que dijiste y contra el cálculo.
           </p>
         </div>
         <ul className="lista-agentes">

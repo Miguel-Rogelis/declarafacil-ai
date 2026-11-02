@@ -334,3 +334,32 @@ main { padding-bottom: 6rem; }
   .cuerpo-resultado { grid-template-columns: 1fr; }
 }
 .etiqueta-ia, .etiqueta-reglas { font-style: normal; }
+
+/* ---------- Chat principal ---------- */
+.chat { display: flex; flex-direction: column; height: calc(100vh - 112px); min-height: 520px; border: 2px solid var(--tinta); background: var(--papel); }
+.chat-mensajes { flex: 1; overflow: auto; padding: 1.2rem; display: flex; flex-direction: column; gap: 0.9rem; }
+.chat .sugerencias { padding: 0.5rem 1.2rem 0.7rem; }
+.chat-entrada { display: flex; gap: 0.5rem; padding: 0.7rem; border-top: 2px solid var(--tinta); background: var(--hoja); align-items: flex-end; }
+.chat-entrada textarea { resize: none; min-height: 2.75rem; max-height: 8rem; line-height: 1.4; }
+.chat-entrada .boton { padding-block: 0.6rem; }
+.adjuntar { flex: none; border: 1.5px solid var(--reticula); background: #fff; border-radius: var(--radio-control); width: 2.75rem; height: 2.75rem; display: grid; place-items: center; cursor: pointer; color: var(--tinta); }
+.adjuntar:hover { border-color: var(--sello); color: var(--sello); }
+.chat.compacta { height: auto; flex: 1; min-height: 0; border: 0; }
+.asistente-panel .chat { flex: 1; }
+.burbuja.aviso { border-color: var(--sello); background: var(--sello-claro); }
+.burbuja ol { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+.anotado { margin-top: 0.6rem; border: 1.5px dashed var(--sello); border-radius: 10px; padding: 0.6rem 0.8rem; background: #fff; }
+.anotado ul { margin: 0.3rem 0; padding-left: 1.1rem; }
+.anotado.deshecho ul { text-decoration: line-through; color: var(--tinta-suave); }
+.resultado-corto { display: grid; gap: 0.4rem; margin-top: 0.5rem; justify-items: start; }
+.resultado-corto p { margin: 0; font-size: 0.95rem; }
+.falta { list-style: none; padding: 0; margin: 0.8rem 0 0; display: grid; gap: 0.3rem; font-size: 0.9rem; }
+.falta li { display: flex; gap: 0.55rem; align-items: center; color: var(--tinta-suave); }
+.falta li.hecho { color: var(--tinta); }
+.marca-falta { flex: none; width: 1.15rem; height: 1.15rem; border: 1.5px solid var(--reticula); border-radius: 4px; display: grid; place-items: center; font-size: 0.75rem; color: var(--papel); }
+.falta li.hecho .marca-falta { background: var(--tinta); border-color: var(--tinta); }
+.taller { padding-top: 1.2rem; }
+.taller .hoja-trabajo { top: 76px; max-height: calc(100vh - 112px); }
+@media (max-width: 900px) {
+  .chat { height: 72vh; }
+}

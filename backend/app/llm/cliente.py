@@ -38,7 +38,7 @@ def _get_cliente() -> AsyncOpenAI:
         _cliente = AsyncOpenAI(
             api_key=settings.openrouter_api_key,
             base_url=settings.openrouter_base_url,
-            timeout=45,
+            timeout=30,
             max_retries=0,
             default_headers={"HTTP-Referer": settings.app_url, "X-Title": "DeclaraFacil AI"},
         )

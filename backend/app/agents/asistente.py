@@ -193,6 +193,8 @@ def pendientes(e: EstadoChat) -> list[str]:
 def siguiente(e: EstadoChat) -> Siguiente:
     p = pendientes(e)
     anio = e.anio_gravable
+    if not p and e.resultado:
+        return Siguiente(tema=None, texto="", widgets=[], sugerencias=["¿Por qué me sale ese valor?", "¿Qué es el anticipo?", "¿Cómo lo presento en la DIAN?"])
     if not p:
         return Siguiente(
             tema=None,
@@ -361,12 +363,25 @@ def _sin_ia(t: TurnoChat) -> tuple[str, list[dict[str, Any]], list[str], list[st
     mensual = numeros.es_mensual(msg)
     monto = next((c for c in cifras if c >= 1000), None)
 
+    if e.resultado and re.search(r"por que (me )?(sale|da|toca)|ese valor|tanto|de donde sale|explica(me)? (el )?resultado|cuanto (pago|debo)", msg):
+        res = e.resultado
+        partes = [
+            f"Tus ingresos suman {_pesos(res.get('ingresos_brutos_totales', 0))}. Después de restar aportes, rentas exentas y deducciones, la parte que paga impuesto (renta líquida gravable) quedó en {_pesos(res.get('renta_liquida_gravable', 0))}.",
+            f"Con la tabla de tarifas eso da un impuesto a cargo de {_pesos(res.get('total_impuesto_cargo', 0))}.",
+        ]
+        if res.get("retenciones"):
+            partes.append(f"A eso se le restan {_pesos(res['retenciones'])} que ya te retuvieron durante el año.")
+        if res.get("anticipo_siguiente"):
+            partes.append(f"Se suma un anticipo de {_pesos(res['anticipo_siguiente'])} para el próximo año.")
+        if res.get("sancion"):
+            partes.append(f"Y como la fecha ya pasó, se suma una sanción estimada de {_pesos(res['sancion'])}.")
+        total = res.get("total_a_pagar", 0)
+        partes.append(f"Resultado: {'total a pagar ' + _pesos(total) if total else 'saldo a favor de ' + _pesos(res.get('saldo_favor', 0))}. En «Ver el borrador completo» puedes tocar cada línea para ver de dónde sale.")
+        return " ".join(partes), [], [], [], []
+
     if _PREGUNTA.search(msg):
         kb = buscar(t.mensaje)
         texto = kb[0].texto.strip() if kb else "Esa no la tengo en mi base. Te sugiero consultar el micrositio de renta de la DIAN o a un contador."
-        if e.resultado and re.search(r"pag|debo|saldo|favor|cuanto", msg):
-            res = e.resultado
-            texto = f"Según el cálculo, tu impuesto a cargo es {_pesos(res.get('total_impuesto_cargo', 0))} y el total a pagar {_pesos(res.get('total_a_pagar', 0))}. " + texto
         return texto, [], [], [], [kb[0].titulo] if kb else []
 
     if re.search(r"\b(calcula|calcular|calculalo|listo|dale)\b", msg) and not pendientes(e):
@@ -545,6 +560,7 @@ async def responder(t: TurnoChat) -> RespuestaChat:
         # o se repite la actual si el mensaje fue una duda o no se entendió.
         if sig_nuevo.tema != sig.tema or (not hechas and not cubrir and not mostrar):
             respuesta = (respuesta + " " + sig_nuevo.texto).strip()
+        if sig_nuevo.tema != sig.tema:
             mostrar = list(dict.fromkeys(mostrar + sig_nuevo.widgets))
         sugerencias = sig_nuevo.sugerencias
     elif not sugerencias:

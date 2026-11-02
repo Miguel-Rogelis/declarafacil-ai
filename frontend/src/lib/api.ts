@@ -121,6 +121,9 @@ export interface GananciasOcasionales {
 
 export interface Respuestas {
   dependientes: number;
+  salarios_no_reportados: number;
+  retenciones_no_reportadas: number;
+  dividendos_no_reportados: number;
   medicina_prepagada: number;
   intereses_vivienda: number;
   aportes_voluntarios_afc_fpv: number;
@@ -144,6 +147,9 @@ export interface Respuestas {
 
 export const respuestasIniciales = (): Respuestas => ({
   dependientes: 0,
+  salarios_no_reportados: 0,
+  retenciones_no_reportadas: 0,
+  dividendos_no_reportados: 0,
   medicina_prepagada: 0,
   intereses_vivienda: 0,
   aportes_voluntarios_afc_fpv: 0,
@@ -211,6 +217,47 @@ export interface AgenteConfig {
   temperatura?: number;
 }
 
+export interface EstadoChat {
+  pantalla: string;
+  anio_gravable: number;
+  tiene_exogena: boolean;
+  anio_exogena: number | null;
+  perfil: Partial<Perfil>;
+  resumen_exogena: Record<string, number>;
+  por_revisar: string[];
+  respuestas: Respuestas;
+  temas_cubiertos: string[];
+  resultado: Record<string, unknown> | null;
+}
+
+export interface Anotacion {
+  clave: string;
+  etiqueta: string;
+  valor: string;
+  detalle: string | null;
+}
+
+export interface RespuestaChat {
+  respuesta: string;
+  respuestas: Respuestas;
+  temas_cubiertos: string[];
+  anotaciones: Anotacion[];
+  rechazadas: string[];
+  widgets: string[];
+  cambiar_anio: number | null;
+  sugerencias: string[];
+  fuentes: string[];
+  modelo: string | null;
+  con_ia: boolean;
+}
+
+export interface Siguiente {
+  tema: string | null;
+  texto: string;
+  widgets: string[];
+  sugerencias: string[];
+}
+
 type Manejadores<R> = {
   onAgente: (e: EventoAgente) => void;
   onResultado: (r: R) => void;
@@ -271,7 +318,7 @@ export function analizarDocumento(archivo: File, anio: number, m: Manejadores<Re
 }
 
 export function liquidar(
-  cuerpo: { anio_gravable: number; filas: Fila[]; topes: Record<string, number>; ultimos_dos_digitos_nit: string | null; respuestas: Respuestas },
+  cuerpo: { anio_gravable: number; filas: Fila[]; topes: Record<string, number>; ultimos_dos_digitos_nit: string | null; respuestas: Respuestas; fecha_presentacion?: string },
   m: Manejadores<ResultadoLiquidacion>,
 ) {
   return flujo("/api/declaracion/liquidar", { method: "POST", body: JSON.stringify(cuerpo), headers: { "Content-Type": "application/json" } }, m);
@@ -316,11 +363,17 @@ export const api = {
     }),
   probarAgente: (id: string) => json<{ ok: boolean; modelo?: string; detalle?: string }>(`/api/agentes/${id}/probar`, { method: "POST" }),
   modelosGratis: () => json<{ id: string; nombre: string; contexto: number }[]>("/api/agentes/modelos-gratis"),
-  asistente: (mensaje: string, historial: { rol: string; texto: string }[], contexto: string | null) =>
-    json<{ respuesta: string; fuentes: string[]; modelo: string | null }>("/api/asistente", {
+  chat: (mensaje: string, historial: { rol: string; texto: string }[], estado: EstadoChat) =>
+    json<RespuestaChat>("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mensaje, historial, contexto }),
+      body: JSON.stringify({ mensaje, historial, estado }),
+    }),
+  siguiente: (estado: EstadoChat) =>
+    json<Siguiente>("/api/chat/siguiente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(estado),
     }),
   exogenaDemo: async (): Promise<File> => {
     const r = await fetch("/api/demo/exogena");

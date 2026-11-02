@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "../components/MesaAgentes";
-import { liquidar, type EventoAgente, type Fila, type Linea } from "../lib/api";
+import type { Fila, Linea } from "../lib/api";
 import { useSesion } from "../lib/estado";
 import { fechaLarga, pesos } from "../lib/formato";
 
@@ -41,35 +41,22 @@ function LineaFormulario({ linea, fuentes, filas }: { linea: Linea; fuentes: Rec
 }
 
 export default function Resultado() {
-  const { extraccion, filas, respuestas, anio, resultado, setResultado, trazaDocumento, ir, reiniciar } = useSesion();
-  const [eventos, setEventos] = useState<EventoAgente[]>([]);
-  const [error, setError] = useState("");
+  const { extraccion, filas, respuestas, temas, resultado, trazaDocumento, ir, reiniciar, calcular, calculando, eventosCalculo, errorCalculo } = useSesion();
   const lanzado = useRef(false);
-  const [intento, setIntento] = useState(0);
+  const hayDatos = !!extraccion || temas.length > 1 || respuestas.salarios_no_reportados + respuestas.honorarios_no_reportados + respuestas.pensiones_no_reportadas > 0;
 
   useEffect(() => {
-    if (resultado || !extraccion || lanzado.current) return;
+    if (resultado || !hayDatos || calculando || lanzado.current) return;
     lanzado.current = true;
-    const acumulado: EventoAgente[] = [];
-    void liquidar(
-      { anio_gravable: anio, filas, topes: extraccion.topes, ultimos_dos_digitos_nit: extraccion.ultimos_dos_digitos_nit, respuestas },
-      {
-        onAgente: (e) => {
-          acumulado.push(e);
-          setEventos([...acumulado]);
-        },
-        onResultado: (r) => setTimeout(() => setResultado(r), 650),
-        onError: setError,
-      },
-    );
-  }, [resultado, extraccion, anio, filas, respuestas, setResultado, intento]);
+    void calcular();
+  }, [resultado, hayDatos, calculando, calcular]);
 
-  if (!extraccion) {
+  if (!hayDatos) {
     return (
       <div className="contenedor" style={{ paddingTop: "4rem" }}>
         <h1 className="titular t-48">Todavía no hay nada que calcular.</h1>
-        <p className="lead">Sube tu exógena y responde unas preguntas para ver tu borrador aquí.</p>
-        <div className="acciones-resultado"><button className="boton" onClick={() => ir("declarar")}>Subir mi exógena</button></div>
+        <p className="lead">Habla con el asistente: sube tu exógena o cuéntale tus ingresos y gastos, y aquí verás tu borrador.</p>
+        <div className="acciones-resultado"><button className="boton" onClick={() => ir("declarar")}>Ir al chat</button></div>
       </div>
     );
   }
@@ -80,15 +67,15 @@ export default function Resultado() {
         <div>
           <h1 className="titular t-48">Armando tu borrador.</h1>
           <p className="lead">Cada agente hace una sola tarea y deja su sello cuando termina. Los cálculos no usan IA.</p>
-          {error ? (
+          {errorCalculo ? (
             <div className="alerta critica" style={{ marginTop: "1.5rem" }}>
               <strong>No se pudo calcular.</strong>
-              <p>{error}</p>
-              <button className="boton chico" style={{ marginTop: "0.7rem" }} onClick={() => { lanzado.current = false; setError(""); setEventos([]); setIntento((n) => n + 1); }}>Intentar de nuevo</button>
+              <p>{errorCalculo}</p>
+              <button className="boton chico" style={{ marginTop: "0.7rem" }} onClick={() => void calcular()}>Intentar de nuevo</button>
             </div>
           ) : null}
         </div>
-        <MesaAgentes fases={FASES_CALCULO} eventos={eventos} />
+        <MesaAgentes fases={FASES_CALCULO} eventos={eventosCalculo} />
       </div>
     );
   }
@@ -162,8 +149,8 @@ export default function Resultado() {
 
         <aside>
           <h2 className="titular t-24">Cómo se hizo</h2>
-          <p className="chico suave">Siete agentes trabajaron en tu declaración, cada uno con una sola tarea. La IA no hizo ningún cálculo.</p>
-          <MesaAgentes fases={[...FASES_DOCUMENTO, ...FASES_CALCULO]} eventos={[...trazaDocumento, ...resultado.traza]} compacta />
+          <p className="chico suave">Cada agente hizo una sola tarea. La IA no hizo ningún cálculo.</p>
+          <MesaAgentes fases={[...(trazaDocumento.length ? FASES_DOCUMENTO : []), ...FASES_CALCULO]} eventos={[...trazaDocumento, ...resultado.traza]} compacta />
 
           <h2 className="titular t-24" style={{ marginTop: "2rem" }}>Topes de obligación</h2>
           <table className="tabla" style={{ marginTop: "0.6rem" }}>
@@ -198,7 +185,7 @@ export default function Resultado() {
       <div className="acciones-resultado">
         <a className="boton sello" href="https://www.dian.gov.co" target="_blank" rel="noreferrer">Ir a la DIAN a firmar</a>
         <button className="boton secundario" onClick={() => window.print()}>Descargar en PDF</button>
-        <button className="boton secundario" onClick={() => { setResultado(null); ir("declarar"); }}>Cambiar mis respuestas</button>
+        <button className="boton secundario" onClick={() => ir("declarar")}>Seguir en el chat</button>
         <button className="boton-texto" onClick={() => { reiniciar(); ir("inicio"); }}>Empezar de nuevo</button>
       </div>
     </div>

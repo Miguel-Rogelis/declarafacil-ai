@@ -1,0 +1,206 @@
+{
+  "anio_gravable": 2024,
+  "estado": "vigente",
+  "descripcion": "Año gravable 2024 (se presentó en 2025). Reglas de la Ley 2277 de 2022.",
+  "uvt": 47065,
+  "uvt_anio_presentacion": 49799,
+  "fuentes": [
+    "UVT 2024: Resolución DIAN 000187 de 2023",
+    "Componente inflacionario: Decreto 0771 de 2025",
+    "Calendario 2025: Decreto 2229 de 2023"
+  ],
+  "topes_obligacion_uvt": {
+    "patrimonio_bruto": 4500,
+    "ingresos_brutos": 1400,
+    "consumos_tarjeta_credito": 1400,
+    "compras_consumos": 1400,
+    "consignaciones_depositos_inversiones": 1400
+  },
+  "tabla_renta_art241": [
+    {
+      "desde_uvt": 0,
+      "hasta_uvt": 1090,
+      "tarifa": 0.0,
+      "base_uvt": 1090,
+      "impuesto_fijo_uvt": 0
+    },
+    {
+      "desde_uvt": 1090,
+      "hasta_uvt": 1700,
+      "tarifa": 0.19,
+      "base_uvt": 1090,
+      "impuesto_fijo_uvt": 0
+    },
+    {
+      "desde_uvt": 1700,
+      "hasta_uvt": 4100,
+      "tarifa": 0.28,
+      "base_uvt": 1700,
+      "impuesto_fijo_uvt": 116
+    },
+    {
+      "desde_uvt": 4100,
+      "hasta_uvt": 8670,
+      "tarifa": 0.33,
+      "base_uvt": 4100,
+      "impuesto_fijo_uvt": 788
+    },
+    {
+      "desde_uvt": 8670,
+      "hasta_uvt": 18970,
+      "tarifa": 0.35,
+      "base_uvt": 8670,
+      "impuesto_fijo_uvt": 2296
+    },
+    {
+      "desde_uvt": 18970,
+      "hasta_uvt": 31000,
+      "tarifa": 0.37,
+      "base_uvt": 18970,
+      "impuesto_fijo_uvt": 5901
+    },
+    {
+      "desde_uvt": 31000,
+      "hasta_uvt": null,
+      "tarifa": 0.39,
+      "base_uvt": 31000,
+      "impuesto_fijo_uvt": 10352
+    }
+  ],
+  "cedula_general": {
+    "limite_rentas_exentas_deducciones_pct": 0.4,
+    "limite_rentas_exentas_deducciones_uvt": 1340,
+    "renta_exenta_laboral_pct": 0.25,
+    "renta_exenta_laboral_tope_uvt": 790,
+    "dependiente_art387_pct": 0.1,
+    "dependiente_art387_tope_uvt": 384,
+    "dependiente_adicional_uvt": 72,
+    "dependiente_adicional_max": 4,
+    "medicina_prepagada_tope_uvt": 192,
+    "intereses_vivienda_tope_uvt": 1200,
+    "gmf_deducible_pct": 0.5,
+    "aportes_voluntarios_afc_fpv_pct": 0.3,
+    "aportes_voluntarios_afc_fpv_tope_uvt": 3800,
+    "aportes_voluntarios_rais_pct": 0.25,
+    "aportes_voluntarios_rais_tope_uvt": 2500,
+    "factura_electronica_pct": 0.01,
+    "factura_electronica_tope_uvt": 240,
+    "componente_inflacionario_rendimientos_pct": 0.5088,
+    "cesantias_exencion_por_salario_promedio_uvt": [
+      {
+        "hasta_uvt": 350,
+        "exento_pct": 1.0
+      },
+      {
+        "hasta_uvt": 410,
+        "exento_pct": 0.9
+      },
+      {
+        "hasta_uvt": 470,
+        "exento_pct": 0.8
+      },
+      {
+        "hasta_uvt": 530,
+        "exento_pct": 0.6
+      },
+      {
+        "hasta_uvt": 590,
+        "exento_pct": 0.4
+      },
+      {
+        "hasta_uvt": 650,
+        "exento_pct": 0.2
+      },
+      {
+        "hasta_uvt": null,
+        "exento_pct": 0.0
+      }
+    ]
+  },
+  "cedula_pensiones": {
+    "renta_exenta_mensual_uvt": 1000
+  },
+  "dividendos": {
+    "tarifa_subcedula_gravada": 0.35,
+    "descuento_art254_1_umbral_uvt": 1090,
+    "descuento_art254_1_pct": 0.19
+  },
+  "ganancias_ocasionales": {
+    "tarifa_general": 0.15,
+    "tarifa_loterias": 0.2,
+    "exencion_venta_casa_habitacion_uvt": 5000,
+    "exencion_herencia_vivienda_causante_uvt": 13000,
+    "exencion_herencia_otros_inmuebles_uvt": 6500,
+    "exencion_herencia_porcion_heredero_uvt": 3250,
+    "exencion_donaciones_pct": 0.2,
+    "exencion_donaciones_tope_uvt": 1625,
+    "exencion_seguros_vida_uvt": 3250
+  },
+  "anticipo": {
+    "pct_primera_declaracion": 0.25,
+    "pct_segunda_declaracion": 0.5,
+    "pct_siguientes": 0.75
+  },
+  "sanciones": {
+    "extemporaneidad_pct_mes_impuesto": 0.05,
+    "extemporaneidad_tope_pct_impuesto": 1.0,
+    "extemporaneidad_pct_mes_ingresos_sin_impuesto": 0.005,
+    "extemporaneidad_tope_pct_ingresos": 0.05,
+    "extemporaneidad_tope_uvt_sin_saldo_favor": 2500,
+    "sancion_minima_uvt": 10,
+    "reduccion_art640_pct": 0.5
+  },
+  "redondeo_pesos": 1000,
+  "vencimientos": {
+    "01-02": "2025-08-12",
+    "03-04": "2025-08-13",
+    "05-06": "2025-08-14",
+    "07-08": "2025-08-15",
+    "09-10": "2025-08-19",
+    "11-12": "2025-08-20",
+    "13-14": "2025-08-21",
+    "15-16": "2025-08-22",
+    "17-18": "2025-08-25",
+    "19-20": "2025-08-26",
+    "21-22": "2025-08-27",
+    "23-24": "2025-08-28",
+    "25-26": "2025-08-29",
+    "27-28": "2025-09-01",
+    "29-30": "2025-09-02",
+    "31-32": "2025-09-03",
+    "33-34": "2025-09-04",
+    "35-36": "2025-09-05",
+    "37-38": "2025-09-08",
+    "39-40": "2025-09-09",
+    "41-42": "2025-09-10",
+    "43-44": "2025-09-11",
+    "45-46": "2025-09-12",
+    "47-48": "2025-09-15",
+    "49-50": "2025-09-16",
+    "51-52": "2025-09-17",
+    "53-54": "2025-09-18",
+    "55-56": "2025-09-19",
+    "57-58": "2025-09-22",
+    "59-60": "2025-09-23",
+    "61-62": "2025-09-24",
+    "63-64": "2025-09-25",
+    "65-66": "2025-09-26",
+    "67-68": "2025-10-01",
+    "69-70": "2025-10-02",
+    "71-72": "2025-10-03",
+    "73-74": "2025-10-06",
+    "75-76": "2025-10-07",
+    "77-78": "2025-10-08",
+    "79-80": "2025-10-09",
+    "81-82": "2025-10-10",
+    "83-84": "2025-10-14",
+    "85-86": "2025-10-15",
+    "87-88": "2025-10-16",
+    "89-90": "2025-10-17",
+    "91-92": "2025-10-20",
+    "93-94": "2025-10-21",
+    "95-96": "2025-10-22",
+    "97-98": "2025-10-23",
+    "99-00": "2025-10-24"
+  }
+}

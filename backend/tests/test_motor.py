@@ -155,3 +155,60 @@ def test_sancion_se_descuenta_del_saldo_a_favor():
     assert liq.resumen.sancion == 524_000
     assert liq.resumen.saldo_favor == pytest.approx(favor_sin_sancion - 524_000, abs=1000)
     assert liq.resumen.total_a_pagar == 0
+
+
+# ---------- Años anteriores ----------
+
+
+def test_hay_reglas_para_los_ultimos_cinco_anios():
+    vigentes = {a["anio_gravable"] for a in reglas.anios_disponibles() if a["estado"] == "vigente"}
+    assert {2021, 2022, 2023, 2024, 2025} <= vigentes
+
+
+def test_ag2021_usa_limites_anteriores_a_la_ley_2277():
+    r21 = reglas.cargar(2021)
+    uvt = 36308
+    d = DatosDeclaracion(anio_gravable=2021, laboral={"salarios_y_pagos_laborales": 300_000_000}, deducciones={"dependientes": 1})
+    liq = liquidar(d, r21)
+    assert linea(liq, "dep_387") == pytest.approx(384 * uvt, abs=1000)
+    assert not any(ln.clave == "dep_72" for s in liq.secciones for ln in s.lineas)  # no existía
+    # 25 % sin el tope de 790 UVT: (300 M - 13,94 M) x 25 % = 71,5 M < 2.880 UVT
+    assert linea(liq, "exenta_25") == pytest.approx((300_000_000 - 384 * uvt) * 0.25, abs=1000)
+    # límite global: 40 % = 120 M, pero 5.040 UVT = 183 M → manda el 40 %
+    assert linea(liq, "aceptadas") == pytest.approx(min(300_000_000 * 0.4, 5040 * uvt, 384 * uvt + (300_000_000 - 384 * uvt) * 0.25), abs=1000)
+
+
+def test_ag2022_dividendos_con_tabla_propia():
+    d = DatosDeclaracion(anio_gravable=2022, dividendos={"no_gravados_subcedula1": 100_000_000})
+    liq = liquidar(d, reglas.cargar(2022))
+    esperado = (100_000_000 / 38004 - 300) * 0.10 * 38004
+    assert liq.resumen.impuesto_neto_renta == pytest.approx(esperado, abs=1000)
+
+
+def test_ag2021_ganancia_ocasional_al_10():
+    d = DatosDeclaracion(anio_gravable=2021, ganancias_ocasionales={"utilidad_venta_otros_activos": 50_000_000, "loterias_premios": 10_000_000})
+    liq = liquidar(d, reglas.cargar(2021))
+    assert liq.resumen.impuesto_ganancias_ocasionales == pytest.approx(5_000_000 + 2_000_000, abs=1000)
+
+
+def test_ag2023_y_2024_con_su_uvt():
+    for anio, uvt in ((2023, 42412), (2024, 47065)):
+        r = reglas.cargar(anio)
+        assert r["uvt"] == uvt
+        d = DatosDeclaracion(anio_gravable=anio, laboral={"salarios_y_pagos_laborales": 2000 * uvt})
+        liq = liquidar(d, r)
+        assert liq.uvt == uvt and liq.obligacion.obligado
+
+
+def test_ag2021_declarado_hoy_sancion_tope_100_y_minima_con_uvt_2026():
+    d = DatosDeclaracion(
+        anio_gravable=2021,
+        laboral={"salarios_y_pagos_laborales": 200_000_000},
+        pagos={"declaraciones_previas": 3},
+        control={"ultimos_dos_digitos_nit": "10", "fecha_presentacion": date(2026, 11, 1), "sin_sanciones_ultimos_2_anios": False},
+    )
+    liq = liquidar(d, reglas.cargar(2021))
+    assert liq.vencimiento.fecha == date(2022, 8, 16)
+    assert liq.resumen.sancion == pytest.approx(liq.resumen.total_impuesto_cargo, abs=1000)  # tope del 100 %
+    pequeno = DatosDeclaracion(anio_gravable=2021, control={"ultimos_dos_digitos_nit": "10", "fecha_presentacion": date(2026, 11, 1)})
+    assert liquidar(pequeno, reglas.cargar(2021)).resumen.sancion == 524_000  # 10 UVT de 2026

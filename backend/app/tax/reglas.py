@@ -34,7 +34,7 @@ def _ruta(anio: int) -> Path:
 
 def anios_disponibles() -> list[dict[str, Any]]:
     salida = []
-    for archivo in sorted(settings.reglas_dir.glob("ag*.json")):
+    for archivo in sorted(settings.reglas_dir.glob("ag*.json"), reverse=True):
         datos = json.loads(archivo.read_text(encoding="utf-8"))
         salida.append(
             {
@@ -45,6 +45,15 @@ def anios_disponibles() -> list[dict[str, Any]]:
             }
         )
     return salida
+
+
+def uvt_del_anio(anio: int) -> float | None:
+    """UVT vigente en un año calendario (sirve para sanciones del año en que se declara)."""
+    ruta = settings.data_dir / "uvt.json"
+    if not ruta.exists():
+        return None
+    valor = json.loads(ruta.read_text(encoding="utf-8")).get("valores", {}).get(str(anio))
+    return float(valor) if valor else None
 
 
 def cargar(anio: int) -> dict[str, Any]:

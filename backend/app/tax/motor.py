@@ -226,6 +226,8 @@ class _Calculo:
         sub1, sub2 = dv.no_gravados_subcedula1, dv.gravados_subcedula2
         if sub1 + sub2 <= 0:
             return {"ingresos": 0, "base_241": 0, "impuesto_sub2": 0, "descuento": 0}
+        if rd.get("regimen") == "tabla_propia":
+            return self._dividendos_tabla_propia(sub1, sub2, rd)
         impuesto_sub2 = sub2 * rd["tarifa_subcedula_gravada"]
         base_241 = sub1 + (sub2 - impuesto_sub2)
         descuento = max(base_241 / self.uvt - rd["descuento_art254_1_umbral_uvt"], 0) * rd["descuento_art254_1_pct"] * self.uvt
@@ -243,6 +245,30 @@ class _Calculo:
             )
         )
         return {"ingresos": sub1 + sub2, "base_241": base_241, "impuesto_sub2": impuesto_sub2, "descuento": descuento}
+
+    def _dividendos_tabla_propia(self, sub1: float, sub2: float, rd: dict[str, Any]) -> dict[str, float]:
+        """Antes de la Ley 2277 (AG 2021-2022): los dividendos tributan aparte con su propia tabla."""
+        impuesto_sub2 = sub2 * rd["tarifa_subcedula_gravada"]
+        base = sub1 + (sub2 - impuesto_sub2)
+        base_uvt = base / self.uvt
+        impuesto_tabla = 0.0
+        for tramo in rd["tabla_dividendos"]:
+            hasta = tramo["hasta_uvt"] if tramo["hasta_uvt"] is not None else float("inf")
+            if base_uvt > tramo["desde_uvt"]:
+                impuesto_tabla += (min(base_uvt, hasta) - tramo["desde_uvt"]) * tramo["tarifa"] * self.uvt
+        self.secciones.append(
+            Seccion(
+                id="cedula_dividendos",
+                titulo="Cédula de dividendos y participaciones",
+                lineas=[
+                    Linea(clave="div_sub1", concepto="Dividendos no gravados (subcédula 1)", valor=sub1, norma="Art. 242 ET (Ley 2010 de 2019)", campos=["dividendos.no_gravados_subcedula1"]),
+                    Linea(clave="div_sub2", concepto="Dividendos gravados (subcédula 2)", valor=sub2, campos=["dividendos.gravados_subcedula2"]),
+                    Linea(clave="imp_sub2", concepto=f"Impuesto del {rd['tarifa_subcedula_gravada']:.0%} sobre dividendos gravados", valor=impuesto_sub2, norma="Art. 240 ET"),
+                    Linea(clave="imp_div_tabla", concepto="Impuesto de dividendos (10 % sobre lo que pase de 300 UVT)", valor=impuesto_tabla, norma="Art. 242 ET"),
+                ],
+            )
+        )
+        return {"ingresos": sub1 + sub2, "base_241": 0, "impuesto_sub2": impuesto_sub2 + impuesto_tabla, "descuento": 0}
 
     # ---------- Ganancias ocasionales ----------
     def ganancias_ocasionales(self) -> dict[str, float]:
@@ -423,7 +449,7 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
     sancion = 0.0
     rs = r["sanciones"]
     if venc and venc.extemporanea:
-        uvt_pres = float(r.get("uvt_anio_presentacion") or uvt)
+        uvt_pres = repo_reglas.uvt_del_anio(venc.fecha_presentacion.year) or float(r.get("uvt_anio_presentacion") or uvt)
         if total_cargo > 0:
             plena = min(total_cargo * rs["extemporaneidad_pct_mes_impuesto"] * venc.meses_retraso, total_cargo * rs["extemporaneidad_tope_pct_impuesto"])
         else:

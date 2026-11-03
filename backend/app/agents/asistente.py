@@ -30,7 +30,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from app.agents import diagnostico, numeros
+from app.agents import diagnostico, interprete, numeros
 from app.agents.base import FilaInterpretada
 from app.agents.conocimiento import (
     SeccionKB,
@@ -124,6 +124,14 @@ class MensajeHistorial(BaseModel):
     texto: str
 
 
+class ParteDePregunta(BaseModel):
+    """Una de las preguntas de un turno, con respuestas cortas para tocar (como un cuadro de preguntas)."""
+
+    tema: str
+    texto: str
+    opciones: list[str] = []
+
+
 class PreguntaPendiente(BaseModel):
     """Lo que el agente preguntó y qué hará cuando le respondan."""
 
@@ -135,6 +143,8 @@ class PreguntaPendiente(BaseModel):
     concepto: str | None = None  # bien o deuda cuyo valor falta
     simular: list[dict[str, Any]] = []
     rondas: int = 0  # rondas de preguntas hechas antes de calcular (máximo MAX_RONDAS)
+    intro: str = ""  # frase que encabeza el cuadro de preguntas
+    partes: list[ParteDePregunta] = []  # una por dato; el front las muestra arriba de la barra del chat
 
 
 class Simulacion(BaseModel):
@@ -187,6 +197,8 @@ class RespuestaChat(BaseModel):
     calcular: bool = False
     simulacion: Simulacion | None = None
     pregunta: PreguntaPendiente | None = None
+    pregunta_nueva: bool = False  # la pregunta se hizo en este turno (no es una pendiente de antes)
+    texto_visible: str = ""  # la respuesta sin la pregunta, que va en su propio cuadro
     ya_preguntado: list[str] = []
     fuentes: list[str] = []
     modelo: str | None = None
@@ -426,6 +438,47 @@ def explicar_resultado(res: dict[str, Any]) -> str:
 class Faltante:
     tema: str
     pregunta: str
+
+
+_OPCIONES: dict[str, list[str]] = {
+    "periodo": ["Al mes", "En todo el año"],
+    "dependientes": ["No, nadie", "Sí, 1 persona", "Sí, 2 personas", "Sí, 3 personas"],
+    "deducciones": ["No pago nada de eso", "Sí"],
+    "retenciones": ["No me retuvieron", "No sé"],
+    "costos": ["No tuve costos", "No sé"],
+    "bienes": ["No tengo", "Sí"],
+    "patrimonio": ["No tenía nada", "Sí"],
+    "historial": ["Es la primera vez", "Es la segunda", "Ya llevo más de dos"],
+    "otros_ingresos": ["No", "Sí"],
+    "ganancias": ["No", "Sí"],
+    "sanciones": ["No", "Sí"],
+    "anterior": ["No sé"],
+    "consignaciones": ["Fue un préstamo", "Pasé plata entre mis cuentas", "Vendí algo"],
+    "concepto": ["Salario", "Honorarios", "Arriendo", "Una deuda"],
+    "valor": ["No sé"],
+}
+
+
+def _opciones(tema: str, texto: str) -> list[str]:
+    if tema == "dependientes" and texto.startswith("¿Cuántas"):
+        return ["1", "2", "3", "4"]
+    if tema == "historial" and "segunda" in texto:
+        return ["Es la segunda", "Ya llevo más de dos"]
+    if texto in _SEGUIMIENTO.values():
+        return []  # preguntas de seguimiento ("¿De cuánto?"): se responden escribiendo
+    return list(_OPCIONES.get(tema, []))
+
+
+def _parte(tema: str, texto: str) -> ParteDePregunta:
+    return ParteDePregunta(tema=tema, texto=texto, opciones=_opciones(tema, texto))
+
+
+def _completar_partes(p: PreguntaPendiente) -> PreguntaPendiente:
+    """Toda pregunta lleva al menos una parte con sus respuestas cortas."""
+    if not p.partes:
+        tema = "periodo" if "periodo" in p.temas else (p.temas[0] if len(p.temas) == 1 else "dato")
+        p.partes = [_parte(tema, p.texto)]
+    return p
 
 
 MAX_RONDAS = 2  # antes de calcular pregunta como máximo dos veces (hasta dos datos cada vez)
@@ -892,6 +945,37 @@ def _datos_anio_texto(anio: int) -> str:
     )
 
 
+_USO = {"suma": "se suma", "informativo": "solo informativo", "revisar": "por confirmar"}
+
+
+def _celda(t: str) -> str:
+    return re.sub(r"\s+", " ", t.replace("|", "/")).strip()
+
+
+def _tabla_exogena(e: EstadoChat) -> str:
+    """La exógena ya procesada, en una tabla markdown: los modelos la leen mejor que una lista de campos."""
+    if not e.filas:
+        return "EXÓGENA (totales por campo):\n" + "\n".join(f"- {k}: {pesos(v)}" for k, v in list(e.resumen_exogena.items())[:20])
+    lineas = ["EXÓGENA (cada dato reportado, ya procesado por el sistema; las cifras son exactas):",
+              "| Entidad | Concepto | Valor | Va en | Uso |", "|---|---|---|---|---|"]
+    for f in e.filas[:45]:
+        concepto = re.sub(r"\((concepto|titular|formato)[^)]*\)", "", f.detalle, flags=re.I)
+        destino = interprete.CAMPOS.get(f.campo or "", "—")
+        lineas.append(f"| {_celda(f.informante or '—')[:45]} | {_celda(concepto)[:70]} | {pesos(f.valor)} | {destino} | {_USO.get(f.tratamiento, f.tratamiento)} |")
+    if e.topes:
+        lineas.append("Topes que reporta la DIAN: " + "; ".join(f"{k}: {pesos(v)}" for k, v in e.topes.items()))
+    return "\n".join(lineas)
+
+
+def _datos_chat(notados: dict[str, Any]) -> str:
+    if not notados:
+        return "DATOS QUE CONTÓ EN EL CHAT: ninguno."
+    etiquetas = {v[0]: v[2] for v in CAMPOS.values()}
+    def valor(v: Any) -> str:
+        return pesos(v) if isinstance(v, float) and v >= 1000 else str(v)
+    return "DATOS QUE CONTÓ EN EL CHAT:\n" + "\n".join(f"- {etiquetas.get(k, k)}: {valor(v)}" for k, v in notados.items())
+
+
 def _estado_texto(e: EstadoChat, vp: Liquidacion | None) -> str:
     r = e.respuestas
     notados = {k: v for k, v in r.model_dump(exclude={"ganancias_ocasionales", "bienes_adicionales", "deudas_adicionales"}).items() if v not in (0, None, False, "", [])}
@@ -899,10 +983,10 @@ def _estado_texto(e: EstadoChat, vp: Liquidacion | None) -> str:
     go = {k: v for k, v in r.ganancias_ocasionales.model_dump().items() if v and not isinstance(v, bool)}
     partes = [f"Pantalla: {e.pantalla}.", f"Exógena: {'sí, del año ' + str(e.anio_exogena) if e.tiene_exogena else 'no ha subido'}."]
     if e.resumen_exogena:
-        partes.append("Datos de la exógena: " + "; ".join(f"{k}: {pesos(v)}" for k, v in list(e.resumen_exogena.items())[:14]))
+        partes.append(_tabla_exogena(e))
     if e.por_revisar:
         partes.append(f"Datos de la exógena por confirmar ({len(e.por_revisar)}): " + "; ".join(e.por_revisar[:5]))
-    partes.append("Datos que contó en el chat: " + (json.dumps(notados, ensure_ascii=False) if notados else "ninguno"))
+    partes.append(_datos_chat(notados))
     if go:
         partes.append("Ganancias ocasionales que contó: " + json.dumps(go, ensure_ascii=False))
     if r.bienes_adicionales or r.deudas_adicionales:
@@ -1100,16 +1184,20 @@ def diagnosticar(e: EstadoChat) -> RespuestaChat:
         top = _ronda(fs)
         intro = "Algo no me cuadra." if top[0].tema == "consignaciones" else "Lo que la exógena no me dice:"
         preguntas = " ".join(re.sub(r" Lo de .* ya viene en tu exógena\.", "", f.pregunta) for f in top)
-        pregunta = PreguntaPendiente(texto=f"{intro} {preguntas}", temas=[f.tema for f in top], intencion="calcular", rondas=1)
+        pregunta = PreguntaPendiente(texto=f"{intro} {preguntas}", temas=[f.tema for f in top], intencion="calcular", rondas=1,
+                                     intro=intro, partes=[_parte(f.tema, re.sub(r" Lo de .* ya viene en tu exógena\.", "", f.pregunta)) for f in top])
         partes.append(pregunta.texto)
         ya = list(dict.fromkeys([*ya, *pregunta.temas]))
     elif vp:
         partes.append("Con esto ya puedo calcular tu borrador cuando me digas.")
+    texto = _ordenar_texto("\n".join(x for x in partes if x)) or "Leí tu exógena."
     return RespuestaChat(
-        respuesta=_ordenar_texto("\n".join(x for x in partes if x)) or "Leí tu exógena.",
+        respuesta=texto,
+        texto_visible=_ordenar_texto(texto.replace(pregunta.texto, "")) if pregunta else texto,
         respuestas=r,
         widgets=["revisar"] if e.por_revisar else [],
         pregunta=pregunta,
+        pregunta_nueva=bool(pregunta),
         ya_preguntado=ya,
     )
 
@@ -1269,6 +1357,7 @@ async def responder(t: TurnoChat) -> RespuestaChat:
             pregunta = PreguntaPendiente(
                 texto=f"{intro} {' '.join(f.pregunta for f in top)} Si no lo sabes, escribe «calcula así».",
                 temas=[f.tema for f in top], intencion="calcular", rondas=rondas,
+                intro=intro, partes=[_parte(f.tema, f.pregunta) for f in top],
             )
             partes = [x for x in partes if "calcul" not in norm(x)]
         elif calcular and not any("calcul" in norm(x) for x in partes):
@@ -1278,20 +1367,25 @@ async def responder(t: TurnoChat) -> RespuestaChat:
             plan.mostrar.append("revisar")
 
     # 8. La pregunta va al final de la respuesta y no se vuelve a hacer
+    nueva = bool(pregunta)
     if pregunta:
+        _completar_partes(pregunta)
         if pregunta.texto and pregunta.texto not in " ".join(partes):
             partes.append(pregunta.texto)
         ya = list(dict.fromkeys([*ya, *pregunta.temas]))
     elif p and not respondio and not (calcular or simulacion or hechas):
-        pregunta = p  # siguió preguntando otra cosa: lo pendiente se conserva
+        pregunta = _completar_partes(p)  # siguió preguntando otra cosa: lo pendiente se conserva
 
     mostrar = [w for w in dict.fromkeys(plan.mostrar) if w in WIDGETS]
     if "revisar" in mostrar and not e.por_revisar:
         mostrar.remove("revisar")
 
     texto_final = _ordenar_texto(" ".join(x for x in partes if x)) or "Entendido."
+    visible = _ordenar_texto(texto_final.replace(pregunta.texto, "")) if (pregunta and nueva and pregunta.texto) else texto_final
     return RespuestaChat(
         respuesta=texto_final,
+        texto_visible=visible,
+        pregunta_nueva=nueva,
         respuestas=r,
         anotaciones=hechas,
         quitadas=quitadas,

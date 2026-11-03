@@ -252,6 +252,14 @@ export interface PreguntaPendiente {
   concepto?: string | null;
   simular: Record<string, unknown>[];
   rondas?: number;
+  intro?: string;
+  partes?: ParteDePregunta[];
+}
+
+export interface ParteDePregunta {
+  tema: string;
+  texto: string;
+  opciones: string[];
 }
 
 export interface Simulacion {
@@ -282,6 +290,8 @@ export interface RespuestaChat {
   calcular: boolean;
   simulacion: Simulacion | null;
   pregunta: PreguntaPendiente | null;
+  pregunta_nueva?: boolean;
+  texto_visible?: string;
   ya_preguntado: string[];
   fuentes: string[];
   modelo: string | null;

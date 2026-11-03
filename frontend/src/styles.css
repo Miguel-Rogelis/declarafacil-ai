@@ -381,3 +381,23 @@ main { padding-bottom: 6rem; }
 @media (max-width: 640px) {
   .revision-opciones { flex-direction: column; align-items: stretch; }
 }
+
+/* ---------- Cuadro de preguntas (arriba de la barra del chat) ---------- */
+.cuadro-pregunta { border: 2px solid var(--tinta); border-radius: 14px; background: var(--hoja); padding: 0.85rem 1rem 0.8rem; margin-bottom: 0.7rem; display: grid; gap: 0.5rem; box-shadow: 0 -6px 22px rgb(18 59 51 / 0.08); max-height: 52vh; overflow-y: auto; }
+.cuadro-cabeza { display: flex; align-items: center; gap: 0.6rem; }
+.cuadro-titulo { font-weight: 700; font-size: 0.86rem; color: var(--sello); min-width: 0; }
+.cuadro-paso { white-space: nowrap; flex: none; }
+.cuadro-cerrar { margin-left: auto; background: none; border: 0; font-size: 1.35rem; line-height: 1; cursor: pointer; color: var(--tinta-suave); padding: 0 0.2rem; }
+.cuadro-cerrar:hover { color: var(--tinta); }
+.cuadro-texto { margin: 0; font-weight: 600; font-size: 1rem; line-height: 1.45; }
+.cuadro-ayuda { margin: 0; }
+.cuadro-opciones { display: grid; gap: 0.4rem; }
+.opcion { display: flex; gap: 0.65rem; align-items: center; text-align: left; width: 100%; border: 1.5px solid var(--reticula); background: #fff; border-radius: 10px; padding: 0.55rem 0.75rem; cursor: pointer; font: inherit; color: var(--tinta); transition: border-color 0.12s, background-color 0.12s; }
+.opcion:hover:not(:disabled), .opcion:focus-visible { border-color: var(--sello); background: var(--sello-claro); }
+.opcion:disabled { opacity: 0.55; cursor: default; }
+.opcion .num { flex: none; width: 1.45rem; height: 1.45rem; border-radius: 6px; background: var(--papel-hondo); display: grid; place-items: center; font-size: 0.8rem; font-weight: 700; color: var(--tinta-suave); }
+.opcion.recomendada { border-color: var(--sello); }
+.sello-chico { margin-left: auto; font-size: 0.75rem; font-weight: 700; color: var(--sello); background: var(--sello-claro); border-radius: 99px; padding: 0.1rem 0.5rem; white-space: nowrap; }
+.cuadro-otra { display: flex; gap: 0.5rem; }
+.cuadro-otra .entrada { flex: 1; min-width: 0; }
+.cuadro-saltar { justify-self: start; }

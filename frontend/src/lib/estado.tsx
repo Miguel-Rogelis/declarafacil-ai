@@ -30,6 +30,10 @@ export interface Mensaje {
   antes?: Respuestas;
   /** El agente pidió un dato que le falta. */
   pregunta?: boolean;
+  /** Texto completo para el historial que va al agente (incluye la pregunta que se muestra en el cuadro). */
+  historial?: string;
+  /** Solo va en el historial; no se dibuja (la pregunta ya está en el cuadro). */
+  oculto?: boolean;
   simulacion?: Simulacion;
   deshecho?: boolean;
   eventos?: EventoAgente[];
@@ -49,8 +53,11 @@ interface Sesion {
   modoLlm: string;
   extraccion: Extraccion | null;
   filas: Fila[];
-  decidir: (id: string, incluir: boolean, campo?: string | null) => void;
+  decidir: (id: string, incluir: boolean, campo?: string | null, texto?: string) => void;
   cambiarDecision: (id: string) => void;
+  elecciones: Record<string, string>;
+  pregunta: PreguntaPendiente | null;
+  cerrarPregunta: () => void;
   decididas: Record<string, boolean>;
   trazaDocumento: EventoAgente[];
   respuestas: Respuestas;
@@ -107,6 +114,13 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [archivoPendiente, setArchivoPendiente] = useState<File | null>(null);
   const contador = useRef(1);
   const conversacion = useRef<{ pregunta: PreguntaPendiente | null; ya: string[] }>({ pregunta: null, ya: [] });
+  const [pregunta, setPregunta] = useState<PreguntaPendiente | null>(null);
+  const [elecciones, setElecciones] = useState<Record<string, string>>({});
+  const ponerPregunta = useCallback((p: PreguntaPendiente | null, ya: string[]) => {
+    conversacion.current = { pregunta: p, ya };
+    setPregunta(p?.partes?.length ? p : null);
+  }, []);
+  const cerrarPregunta = useCallback(() => setPregunta(null), []);
 
   // Estado más reciente para los callbacks asíncronos. Se actualiza a mano cuando una
   // acción depende de un cambio que React todavía no ha aplicado (p. ej. cambiar de año y calcular).
@@ -269,8 +283,9 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       setEscribiendo(true);
       try {
         const d = await api.diagnostico(estadoChat());
-        conversacion.current = { pregunta: d.pregunta, ya: d.ya_preguntado };
-        agregar({ rol: "asistente", texto: d.respuesta, pregunta: !!d.pregunta });
+        ponerPregunta(d.pregunta, d.ya_preguntado);
+        const visible = d.texto_visible ?? d.respuesta;
+        agregar({ rol: "asistente", texto: visible || undefined, historial: d.respuesta, oculto: !visible });
         d.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
       } catch {
         if (porRevisarDe(ref.current.filas, {}).length) agregar({ rol: "asistente", widget: "revisar" });
@@ -278,7 +293,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setEscribiendo(false);
       }
     },
-    [agregar, actualizar, anios, ponerAnio, estadoChat],
+    [agregar, actualizar, anios, ponerAnio, estadoChat, ponerPregunta],
   );
 
   const usarEjemplo = useCallback(async () => {
@@ -294,7 +309,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       const t = texto.trim();
       if (!t) return;
       const s = ref.current;
-      const historial = s.mensajes.filter((m) => m.texto).slice(-10).map((m) => ({ rol: m.rol, texto: m.texto! }));
+      const historial = s.mensajes.filter((m) => m.historial || m.texto).slice(-10).map((m) => ({ rol: m.rol, texto: (m.historial ?? m.texto)! }));
       agregar({ rol: "usuario", texto: t });
       setEscribiendo(true);
       try {
@@ -303,12 +318,12 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         const r = await api.chat(t, historial, estadoChat());
         setRespuestas(r.respuestas);
         ref.current.respuestas = r.respuestas;
-        conversacion.current = { pregunta: r.pregunta, ya: r.ya_preguntado };
+        ponerPregunta(r.pregunta, r.ya_preguntado);
         const cambiaron = r.anotaciones.length > 0 || r.quitadas.length > 0;
         if (cambiaron) agregar({ rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, quitadas: r.quitadas, antes });
-        // Solo se marca como pregunta si el agente preguntó en este turno (no si sigue pendiente de antes)
-        const pregunto = !!r.pregunta && !!r.pregunta.texto && r.respuesta.includes(r.pregunta.texto.slice(0, 40));
-        agregar({ rol: "asistente", texto: r.respuesta, fuentes: r.fuentes, conIa: r.con_ia, pregunta: pregunto });
+        // La pregunta va en su propio cuadro arriba de la barra; en el hilo queda el resto de la respuesta
+        const visible = r.texto_visible ?? r.respuesta;
+        agregar({ rol: "asistente", texto: visible || undefined, historial: r.respuesta, oculto: !visible, fuentes: r.fuentes, conIa: r.con_ia });
         if (r.simulacion) agregar({ rol: "asistente", widget: "simulacion", simulacion: r.simulacion });
         if (r.cambiar_anio && r.cambiar_anio !== ref.current.anio) ponerAnio(r.cambiar_anio);
         r.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
@@ -326,7 +341,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setEscribiendo(false);
       }
     },
-    [agregar, estadoChat, calcular, recalcularSiHabia, ponerAnio],
+    [agregar, estadoChat, calcular, recalcularSiHabia, ponerAnio, ponerPregunta],
   );
 
   const deshacer = useCallback(
@@ -343,8 +358,9 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   );
 
   const decidir = useCallback(
-    (id: string, incluir: boolean, campo?: string | null) => {
+    (id: string, incluir: boolean, campo?: string | null, texto?: string) => {
       const s = ref.current;
+      if (texto) setElecciones((x) => ({ ...x, [id]: texto }));
       const nuevas = s.filas.map((f) =>
         f.id === id ? { ...f, campo: incluir ? (campo ?? f.campo) : f.campo, tratamiento: incluir ? ("suma" as const) : ("informativo" as const) } : f,
       );
@@ -411,6 +427,8 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setEventosCalculo([]);
     setMensajes([]);
     conversacion.current = { pregunta: null, ya: [] };
+    setPregunta(null);
+    setElecciones({});
     ref.current = { ...ref.current, extraccion: null, filas: [], decididas: {}, respuestas: respuestasIniciales(), resultado: null, mensajes: [] };
   }, []);
 
@@ -418,7 +436,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, decididas, trazaDocumento, respuestas,
+    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
     procesarArchivo, usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };

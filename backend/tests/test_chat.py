@@ -316,3 +316,57 @@ def test_venta_calcula_la_ganancia():
     j = ch("en 40 millones")
     assert ch.estado["respuestas"]["ganancias_ocasionales"]["utilidad_venta_otros_activos"] == 10_000_000
     assert "ganancia de la venta es $10.000.000" in j["respuesta"]
+
+
+# ---------- Respuestas rápidas del cuadro de preguntas ----------
+
+
+def _con_pregunta(temas, texto, **estado):
+    from app.agents.asistente import PreguntaPendiente, _completar_partes
+    p = _completar_partes(PreguntaPendiente(texto=texto, temas=temas, intencion="calcular", rondas=1))
+    return Charla(pregunta_pendiente=p.model_dump(), ya_preguntado=temas, respuestas={"salarios_no_reportados": 144_000_000}, **estado)
+
+
+@pytest.mark.parametrize(
+    ("tema", "texto", "opcion", "campo", "esperado"),
+    [
+        ("dependientes", "¿Alguien depende económicamente de ti?", "No, nadie", "dependientes", 0),
+        ("dependientes", "¿Alguien depende económicamente de ti?", "Sí, 2 personas", "dependientes", 2),
+        ("dependientes", "¿Cuántas personas dependen de ti?", "3", "dependientes", 3),
+        ("historial", "¿Es la primera vez que declaras renta?", "Es la primera vez", "declaraciones_previas", 0),
+        ("historial", "¿Es la primera vez que declaras renta?", "Es la segunda", "declaraciones_previas", 1),
+        ("historial", "¿Es la primera vez que declaras renta?", "Ya llevo más de dos", "declaraciones_previas", 2),
+        ("sanciones", "¿La DIAN te ha sancionado por declarar tarde en los últimos dos años?", "No", "sin_sanciones_ultimos_2_anios", True),
+        ("sanciones", "¿La DIAN te ha sancionado por declarar tarde en los últimos dos años?", "Sí", "sin_sanciones_ultimos_2_anios", False),
+    ],
+)
+def test_cada_respuesta_rapida_se_entiende(tema, texto, opcion, campo, esperado):
+    ch = _con_pregunta([tema], texto)
+    assert opcion in ch.estado["pregunta_pendiente"]["partes"][0]["opciones"]
+    ch(opcion)
+    assert ch.estado["respuestas"][campo] == esperado
+
+
+def test_respuestas_rapidas_de_periodo_concepto_y_consignaciones():
+    ch = Charla()
+    j = ch("me pagan 4 millones")
+    assert j["pregunta"]["partes"][0]["opciones"] == ["Al mes", "En todo el año"] and j["texto_visible"] == ""
+    ch("En todo el año")
+    assert ch.estado["respuestas"]["salarios_no_reportados"] == 4_000_000
+    ch = Charla()
+    j = ch("2 millones")
+    assert "Salario" in j["pregunta"]["partes"][0]["opciones"]
+    j = ch("Arriendo")
+    assert j["pregunta"]["partes"][0]["opciones"] == ["Al mes", "En todo el año"]  # sigue con el periodo
+    ch = _con_pregunta(["consignaciones"], "¿De dónde salió la diferencia?")
+    assert "no es ingreso" in ch("Pasé plata entre mis cuentas")["respuesta"]
+
+
+def test_ronda_antes_de_calcular_trae_una_parte_por_dato():
+    ch = Charla(respuestas={"salarios_no_reportados": 144_000_000})
+    j = ch("calcula")
+    partes = j["pregunta"]["partes"]
+    assert len(partes) == 2 and all(p["texto"].endswith("?") or p["texto"].endswith(".") for p in partes)
+    assert j["pregunta"]["intro"].startswith("Antes de calcular") and "calcula así" not in j["texto_visible"]
+    j = ch(". ".join(p["opciones"][0] for p in partes))  # el cuadro manda las respuestas juntas
+    assert j["anotaciones"] or j["pregunta"] or j["calcular"]

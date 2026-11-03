@@ -229,6 +229,27 @@ export interface EstadoChat {
   topes: Record<string, number>;
   respuestas: Respuestas;
   resultado: Record<string, unknown> | null;
+  pregunta_pendiente: PreguntaPendiente | null;
+  ya_preguntado: string[];
+}
+
+export interface PreguntaPendiente {
+  texto: string;
+  temas: string[];
+  intencion: "calcular" | "obligacion" | "vencimiento" | "simular" | null;
+  campo: string | null;
+  valor: number | null;
+  simular: Record<string, unknown>[];
+}
+
+export interface Simulacion {
+  cambios: string[];
+  impuesto_antes: number;
+  impuesto_despues: number;
+  total_antes: number;
+  total_despues: number;
+  favor_antes: number;
+  favor_despues: number;
 }
 
 export interface Anotacion {
@@ -242,10 +263,14 @@ export interface RespuestaChat {
   respuesta: string;
   respuestas: Respuestas;
   anotaciones: Anotacion[];
+  quitadas: string[];
   rechazadas: string[];
   widgets: string[];
   cambiar_anio: number | null;
   calcular: boolean;
+  simulacion: Simulacion | null;
+  pregunta: PreguntaPendiente | null;
+  ya_preguntado: string[];
   fuentes: string[];
   modelo: string | null;
   con_ia: boolean;

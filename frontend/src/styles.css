@@ -276,6 +276,15 @@ main { padding-bottom: 6rem; }
 .mensaje-estado { padding: 0.6rem 0.9rem; border-radius: 8px; background: var(--sello-claro); color: var(--sello); font-weight: 600; margin-top: 1rem; }
 .mensaje-estado.error { background: var(--lacre-claro); color: var(--lacre); }
 
+.burbuja.pregunta { border-left: 4px solid var(--sello); }
+.etiqueta-pregunta { display: inline-block; font-size: 0.75rem; font-weight: 700; color: var(--sello); background: var(--sello-claro); border-radius: 99px; padding: 0.1rem 0.55rem; margin-bottom: 0.4rem; }
+.simulacion { display: grid; gap: 0.5rem; }
+.simulacion table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+.simulacion th, .simulacion td { text-align: right; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--reticula-suave); }
+.simulacion th[scope="row"], .simulacion thead th:first-child { text-align: left; font-weight: 500; color: var(--tinta-suave); }
+.simulacion thead th { font-size: 0.82rem; color: var(--tinta-suave); font-weight: 600; }
+.simulacion td.baja { color: var(--sello); font-weight: 700; }
+.simulacion td.sube { color: var(--lacre); font-weight: 700; }
 .fuentes { font-size: 0.78rem; color: var(--tinta-suave); margin-top: 0.4rem; }
 
 .pie { border-top: 1px solid var(--reticula); margin-top: 4rem; padding: 1.4rem 0 2rem; font-size: 0.88rem; color: var(--tinta-suave); }

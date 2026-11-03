@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { ResultadoLiquidacion } from "../lib/api";
+import type { Respuestas, ResultadoLiquidacion, Simulacion } from "../lib/api";
 import { useSesion, type Mensaje } from "../lib/estado";
 import { NOMBRES_CAMPO, pesos } from "../lib/formato";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "./MesaAgentes";
@@ -12,11 +12,12 @@ function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
   if (m.rol === "usuario") return <div className="burbuja usuario">{m.texto}</div>;
   return (
     <motion.div
-      className={`burbuja bot${m.aviso ? " aviso" : ""}${m.widget ? " con-widget" : ""}`}
+      className={`burbuja bot${m.aviso ? " aviso" : ""}${m.widget ? " con-widget" : ""}${m.pregunta ? " pregunta" : ""}`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
     >
+      {m.pregunta ? <span className="etiqueta-pregunta">Necesito un dato</span> : null}
       {m.texto ? m.texto.split(/\n+/).map((p, i) => <p key={i}>{p}</p>) : null}
       {children}
       {m.fuentes?.length ? <div className="fuentes">Fuente: {m.fuentes.join("; ")}</div> : null}
@@ -117,22 +118,70 @@ function Anotado({ m }: { m: Mensaje }) {
   const { deshacer } = useSesion();
   return (
     <div className={`anotado${m.deshecho ? " deshecho" : ""}`}>
-      <span className="chico suave">{m.deshecho ? "Deshice estos datos:" : "Anoté:"}</span>
-      <ul>
-        {m.anotaciones!.map((a) => (
-          <li key={a.clave + a.etiqueta}>
-            {a.etiqueta}: <strong>{a.valor}</strong>
-            {a.detalle ? <span className="chico suave"> ({a.detalle})</span> : null}
-          </li>
-        ))}
-      </ul>
+      {m.anotaciones?.length ? (
+        <>
+          <span className="chico suave">{m.deshecho ? "Deshice estos datos:" : "Anoté:"}</span>
+          <ul>
+            {m.anotaciones.map((a) => (
+              <li key={a.clave + a.etiqueta}>
+                {a.etiqueta}: <strong>{a.valor}</strong>
+                {a.detalle ? <span className="chico suave"> ({a.detalle})</span> : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {m.quitadas?.length ? (
+        <>
+          <span className="chico suave">{m.deshecho ? "Volví a poner:" : "Quité:"}</span>
+          <ul>{m.quitadas.map((q) => <li key={q}>{q}</li>)}</ul>
+        </>
+      ) : null}
       {!m.deshecho ? <button className="boton-texto chico" onClick={() => deshacer(m.id)}>Deshacer</button> : null}
     </div>
   );
 }
 
+function TarjetaSimulacion({ s }: { s: Simulacion }) {
+  const filas: [string, number, number][] = [
+    ["Impuesto a cargo", s.impuesto_antes, s.impuesto_despues],
+    ["Total a pagar", s.total_antes, s.total_despues],
+    ["Saldo a favor", s.favor_antes, s.favor_despues],
+  ];
+  return (
+    <div className="simulacion">
+      <span className="chico suave">Simulación con: {s.cambios.join("; ")}</span>
+      <table>
+        <thead>
+          <tr><th scope="col"></th><th scope="col">Hoy</th><th scope="col">Con el cambio</th></tr>
+        </thead>
+        <tbody>
+          {filas.filter(([, a, b]) => a || b).map(([nombre, a, b]) => (
+            <tr key={nombre}>
+              <th scope="row">{nombre}</th>
+              <td>{pesos(a)}</td>
+              <td className={b < a ? "baja" : b > a ? "sube" : undefined}>{pesos(b)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function supuestos(r: Respuestas, conExogena: boolean): string[] {
+  const s: string[] = [];
+  if (!conExogena && !r.retenciones_no_reportadas) s.push("sin retenciones");
+  if (!r.dependientes) s.push("sin personas a cargo");
+  if (!r.medicina_prepagada && !r.intereses_vivienda && !r.aportes_voluntarios_afc_fpv) s.push("sin deducciones");
+  if (r.declaraciones_previas === null) s.push("primera declaración");
+  if (!r.ultimos_dos_digitos_nit) s.push("sin fecha límite (falta tu cédula)");
+  return s;
+}
+
 function ResultadoCorto({ r, actual, recalculo }: { r: ResultadoLiquidacion; actual: boolean; recalculo?: boolean }) {
-  const { ir } = useSesion();
+  const { ir, respuestas, extraccion } = useSesion();
+  const sup = actual ? supuestos(respuestas, !!extraccion) : [];
   const res = r.liquidacion.resumen;
   const pagar = res.total_a_pagar > 0;
   return (
@@ -145,6 +194,7 @@ function ResultadoCorto({ r, actual, recalculo }: { r: ResultadoLiquidacion; act
         {pagar ? `Te toca pagar ${pesos(res.total_a_pagar)}` : res.saldo_favor > 0 ? `Te queda saldo a favor de ${pesos(res.saldo_favor)}` : "No tienes saldo a pagar"}
       </strong>
       <p>{r.explicacion.split(/\n+/)[0]}</p>
+      {sup.length ? <span className="chico suave">Calculé {sup.join(", ")}. Si algo no aplica, dímelo y lo actualizo.</span> : null}
       {actual ? <button className="boton sello chico" onClick={() => ir("resultado")}>Ver el borrador completo</button> : <span className="chico suave">Este cálculo ya fue reemplazado.</span>}
     </div>
   );
@@ -165,6 +215,8 @@ function Widget({ m }: { m: Mensaje }) {
       return m.resultado ? <ResultadoCorto r={m.resultado} actual={m.resultado === resultado} recalculo={m.aviso} /> : null;
     case "anotado":
       return <Anotado m={m} />;
+    case "simulacion":
+      return m.simulacion ? <TarjetaSimulacion s={m.simulacion} /> : null;
     default:
       return null;
   }

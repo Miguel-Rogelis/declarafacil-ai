@@ -1,242 +1,57 @@
 """Agente Asistente: la conversación con el usuario.
 
-Responsabilidad única: entender lo que el usuario escribe, contestarle y decidir qué
-acción pide (anotar un dato, calcular, cambiar de año, abrir la carga de la exógena).
-No guía la conversación: responde a lo que el usuario dice, de inicio a fin.
+Responsabilidad única: entender lo que el usuario escribe y decidir qué hacer en ese
+turno: responder, anotar o corregir un dato, simular un cambio, calcular, cambiar de
+año, abrir la carga de la exógena, o preguntar cuando le falta información.
+
+Cuándo pregunta (lo decide el código, no solo el modelo):
+- Una cifra ambigua ("gano 5 millones": ¿al mes o en el año?) o sin concepto.
+- Antes de calcular, si falta un dato que cambia el resultado y aún no lo ha preguntado
+  (retenciones, dependientes, deducciones, cédula, historial, patrimonio). Pregunta una
+  sola vez; con «calcula así» calcula con lo que hay.
+- Cuando le preguntan por su caso ("¿tengo que declarar?", "¿cuándo vence?") y no tiene el
+  dato. Cuando el usuario responde, retoma lo pendiente: calcula, le dice si está obligado,
+  le da su fecha o corre la simulación.
 
 El código valida todo lo que propone la IA antes de aplicarlo:
 - Solo se anotan campos de una lista cerrada, con rangos y tipos fijos.
-- Una cifra en pesos solo se anota si aparece en el mensaje del usuario (o es su
-  valor mensual × 12). Así la IA no puede inventar montos.
-- Si la respuesta de la IA trae una cifra que no está en sus datos de entrada, se
-  descarta y se responde con reglas.
-Sin modelo disponible, responde con reglas y la base de conocimiento.
+- Una cifra en pesos solo se anota si la escribió el usuario (en este mensaje o en los
+  anteriores), o es su valor mensual × 12. La IA no puede inventar montos.
+- Si la respuesta de la IA trae una cifra que no está en sus datos de entrada, se descarta.
+Sin modelo disponible, todo esto funciona con reglas.
 """
 
 import json
 import logging
-import math
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from functools import lru_cache
 from typing import Any, Literal
 
 from pydantic import BaseModel
 
 from app.agents import numeros
 from app.agents.base import FilaInterpretada
-from app.config import settings
+from app.agents.conocimiento import (
+    SeccionKB,
+    anios_vigentes,
+    base_del_anio,
+    buscar,
+    fecha_limite,
+    fecha_texto,
+    norm,
+    pesos,
+    puntajes,
+    valores_anio,
+)
 from app.llm import cliente
 from app.orquestador import Respuestas, SolicitudLiquidacion, construir_declaracion
-from app.tax import reglas as repo_reglas
-from app.tax.modelos import ItemPatrimonio, Obligacion
+from app.tax.modelos import ItemPatrimonio, Liquidacion, Obligacion
 from app.tax.motor import liquidar
 
+__all__ = ["CAMPOS", "EstadoChat", "RespuestaChat", "SeccionKB", "TurnoChat", "aplicar", "buscar", "responder"]
+
 log = logging.getLogger(__name__)
-
-_MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-
-
-def _pesos(v: float) -> str:
-    return "$" + f"{v:,.0f}".replace(",", ".")
-
-
-def _miles(n: float) -> str:
-    return f"{n:,.0f}".replace(",", ".")
-
-
-def _fecha(d: date) -> str:
-    return f"{d.day} de {_MESES[d.month - 1]} de {d.year}"
-
-
-def _norm(texto: str) -> str:
-    """Minúsculas sin tildes y con las abreviaturas del chat expandidas (q → que)."""
-    s = numeros.normalizar(texto)
-    reemplazos = {r"\bq\b": "que", r"\b(xq|pq|xk)\b": "porque", r"\b(tb|tmb)\b": "tambien", r"\bdnd\b": "donde", r"\bk\b(?<!\d k)": "que", r"\bpa\b": "para"}
-    for patron, nuevo in reemplazos.items():
-        s = re.sub(patron, nuevo, s)
-    return re.sub(r"\s+", " ", s).strip()
-
-
-# ---------- Datos del año gravable ----------
-
-
-def _vencimientos(r: dict[str, Any]) -> list[date]:
-    return sorted(date.fromisoformat(v) for v in (r.get("vencimientos") or {}).values())
-
-
-def _fecha_limite(anio: int, digitos: str) -> date | None:
-    calendario = repo_reglas.cargar(anio).get("vencimientos") or {}
-    n = int(digitos) or 100
-    for clave, fecha in calendario.items():
-        desde, hasta = int(clave[:2]), int(clave[3:]) or 100
-        if desde <= n <= hasta:
-            return date.fromisoformat(fecha)
-    return None
-
-
-def _valores_anio(anio: int) -> dict[str, str]:
-    """Valores que llenan la base de conocimiento para el año gravable elegido."""
-    r = repo_reglas.cargar(anio)
-    uvt = float(r["uvt"])
-    cg, t, go, div = r["cedula_general"], r["topes_obligacion_uvt"], r["ganancias_ocasionales"], r["dividendos"]
-    hoy = date.today().year
-    uvt_hoy = repo_reglas.uvt_del_anio(hoy) or float(r.get("uvt_anio_presentacion") or uvt)
-    venc = _vencimientos(r)
-    if cg.get("dependiente_adicional_uvt"):
-        dependientes = (
-            f"Por el primero puedes restar el 10 % de tus ingresos de trabajo (máximo {_miles(cg['dependiente_art387_tope_uvt'])} UVT al año) "
-            f"y además {_miles(cg['dependiente_adicional_uvt'])} UVT por cada dependiente, hasta {cg.get('dependiente_adicional_max', 4)}."
-        )
-    else:
-        dependientes = (
-            f"Puedes restar el 10 % de tus ingresos de trabajo (máximo {_miles(cg['dependiente_art387_tope_uvt'])} UVT al año). "
-            f"La deducción adicional de 72 UVT por dependiente empezó en el año gravable 2023, así que en {anio} no aplica."
-        )
-    if cg.get("factura_electronica_pct"):
-        factura = (
-            f"Puedes restar el 1 % de tus compras de bienes y servicios con factura electrónica a tu nombre, pagadas con tarjeta o transferencia, "
-            f"hasta {_miles(cg['factura_electronica_tope_uvt'])} UVT al año ({_pesos(cg['factura_electronica_tope_uvt'] * uvt)} en {anio}). "
-            "No entra en el límite del 40 %. La exógena trae el monto que la DIAN considera para este beneficio."
-        )
-    else:
-        factura = f"Es un beneficio que existe desde el año gravable 2023 (Ley 2277 de 2022). Para el año gravable {anio} todavía no aplicaba."
-    if div.get("regimen") == "tabla_propia":
-        dividendos = (
-            f"En {anio} tenían su propia tabla: los no gravados hasta 300 UVT no pagaban y lo que pasara de ahí pagaba el 10 %. "
-            f"Los gravados pagaban primero el {div['tarifa_subcedula_gravada'] * 100:.0f} %."
-        )
-    else:
-        dividendos = (
-            "Los no gravados se suman a la tabla de tarifas del art. 241 junto con tus otras rentas, y tienes un descuento del 19 % "
-            f"sobre lo que pase de 1.090 UVT. Los gravados pagan primero el {div['tarifa_subcedula_gravada'] * 100:.0f} % y el resto se suma a la tabla."
-        )
-    return {
-        "anio": str(anio),
-        "anio_presenta": str(anio + 1),
-        "anio_hoy": str(hoy),
-        "uvt": _pesos(uvt),
-        "uvt_hoy": _pesos(uvt_hoy),
-        "tope_patrimonio": _pesos(t["patrimonio_bruto"] * uvt),
-        "tope_ingresos": _pesos(t["ingresos_brutos"] * uvt),
-        "venc_desde": _fecha(venc[0]) if venc else "agosto",
-        "venc_hasta": _fecha(venc[-1]) if venc else "octubre",
-        "sancion_minima": _pesos(round(10 * uvt_hoy, -3)),
-        "tramo0": _pesos(1090 * uvt),
-        "exenta_tope_uvt": _miles(cg["renta_exenta_laboral_tope_uvt"]),
-        "limite_uvt": _miles(cg["limite_rentas_exentas_deducciones_uvt"]),
-        "limite_pesos": _pesos(cg["limite_rentas_exentas_deducciones_uvt"] * uvt),
-        "dependientes_texto": dependientes,
-        "factura_texto": factura,
-        "dividendos_texto": dividendos,
-        "go_tarifa": f"{go['tarifa_general'] * 100:.0f} %",
-        "go_casa_uvt": _miles(go["exencion_venta_casa_habitacion_uvt"]),
-    }
-
-
-def anios_vigentes() -> list[int]:
-    return sorted(a["anio_gravable"] for a in repo_reglas.anios_disponibles() if a["estado"] == "vigente")
-
-
-# ---------- Base de conocimiento ----------
-
-_VACIAS = set(
-    "de la el los las un una y o a en que por para con del al se mi mis tu tus es como cual cuanto cuando donde si no lo le me te su sus hay "
-    "eso esto esa este hola buenas pues porfa favor quiero saber necesito ayuda oye bueno entonces mas muy ya estoy esta son ser fue era "
-    "algo alguien cosa cosas tipo osea cuentame dime explicame puedes puedo puede ayudar ayudame ayuda hago hacer hace digame sabes".split()
-)
-
-
-@dataclass(frozen=True)
-class _Seccion:
-    titulo: str
-    alias: tuple[str, ...]
-    texto: str
-
-
-class SeccionKB(BaseModel):
-    titulo: str
-    texto: str
-
-
-def _raiz(t: str) -> str:
-    if t.isdigit():
-        return t
-    for suf in ("aciones", "acion", "iones", "ion", "iendo", "ando", "aron", "ieron", "amos", "emos", "imos", "ados", "adas", "idos", "idas", "ado", "ada", "ido", "ida", "ar", "er", "ir", "as", "es", "os", "a", "e", "o", "s"):
-        if t.endswith(suf) and len(t) - len(suf) >= 3:
-            t = t[: -len(suf)]
-            break
-    return t[:6]
-
-
-def _raices(texto: str) -> set[str]:
-    return {_raiz(t) for t in re.findall(r"[a-z0-9]+", _norm(texto)) if t not in _VACIAS and len(t) >= 3}
-
-
-@lru_cache(maxsize=1)
-def _crudas() -> tuple[_Seccion, ...]:
-    secciones: list[_Seccion] = []
-    for archivo in sorted((settings.data_dir / "conocimiento").glob("*.md")):
-        titulo, alias, texto = None, (), ""
-        for linea in archivo.read_text(encoding="utf-8").splitlines():
-            if linea.startswith("## "):
-                if titulo:
-                    secciones.append(_Seccion(titulo, alias, texto.strip()))
-                titulo, alias, texto = linea[3:].strip(), (), ""
-            elif titulo and linea.startswith("También:"):
-                alias = tuple(a.strip() for a in linea[8:].split("|") if a.strip())
-            elif titulo and linea.strip() and not linea.startswith("#"):
-                texto += linea.strip() + " "
-        if titulo:
-            secciones.append(_Seccion(titulo, alias, texto.strip()))
-    return tuple(secciones)
-
-
-@lru_cache(maxsize=1)
-def _indice() -> tuple[dict[str, float], list[tuple[set[str], set[str], tuple[str, ...]]]]:
-    docs = []
-    df: dict[str, int] = {}
-    for s in _crudas():
-        cabeza = _raices(s.titulo + " " + " ".join(s.alias))
-        cuerpo = _raices(s.texto)
-        for t in cabeza | cuerpo:
-            df[t] = df.get(t, 0) + 1
-        docs.append((cabeza, cuerpo, tuple(_norm(a) for a in (s.titulo.strip("¿?"), *s.alias))))
-    n = len(docs)
-    idf = {t: math.log(1 + n / c) for t, c in df.items()}
-    return idf, docs
-
-
-def _rellenar(texto: str, valores: dict[str, str]) -> str:
-    return re.sub(r"\{(\w+)\}", lambda m: valores.get(m.group(1), m.group(0)), texto)
-
-
-def base_del_anio(anio: int) -> list[SeccionKB]:
-    v = _valores_anio(anio)
-    return [SeccionKB(titulo=_rellenar(s.titulo, v), texto=_rellenar(s.texto, v)) for s in _crudas()]
-
-
-def _puntajes(pregunta: str) -> list[tuple[float, int]]:
-    idf, docs = _indice()
-    q = _raices(pregunta)
-    frase = _norm(pregunta)
-    salida = []
-    for i, (cabeza, cuerpo, frases) in enumerate(docs):
-        p = sum(idf.get(t, 0) * (2.5 if t in cabeza else 1.0 if t in cuerpo else 0) for t in q)
-        if any(f and re.search(r"\b" + re.escape(f) + r"\b", frase) for f in frases):
-            p += 6
-        elif not (q & cabeza):
-            p *= 0.5  # solo coincide con palabras sueltas del texto: coincidencia débil
-        if p:
-            salida.append((p, i))
-    return sorted(salida, reverse=True)
-
-
-def buscar(pregunta: str, anio: int = 2025, k: int = 3, minimo: float = 0.0) -> list[SeccionKB]:
-    base = base_del_anio(anio)
-    return [base[i] for p, i in _puntajes(pregunta)[:k] if p >= minimo]
-
 
 # ---------- Campos que el chat puede anotar ----------
 
@@ -276,15 +91,59 @@ CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
     "deuda": ("deudas_adicionales", "item", "Deuda", 1, 5e10),
 }
 
+# Cifras que la gente suele decir por mes: si no dice el periodo, el agente pregunta.
+_MENSUALES = {"salarios", "pension", "arriendos", "medicina_prepagada", "honorarios", "aportes_voluntarios", "intereses_vivienda"}
+
+# Tema de cada campo (para no volver a preguntar lo mismo)
+_TEMA = {
+    "salarios": "ingresos", "honorarios": "ingresos", "pension": "ingresos", "arriendos": "ingresos", "otros_ingresos": "ingresos",
+    "dividendos": "ingresos", "retenciones": "retenciones", "dependientes": "dependientes", "medicina_prepagada": "deducciones",
+    "intereses_vivienda": "deducciones", "aportes_voluntarios": "deducciones", "gmf": "deducciones", "declaraciones_previas": "historial",
+    "ultimos_dos_digitos_cedula": "cedula", "bien": "patrimonio", "deuda": "patrimonio",
+}
+
+_PREGUNTAS = {
+    "ingresos": "¿Cuánto recibiste en {anio}? Por ejemplo, tu salario mensual o lo que te pagaron por honorarios en el año.",
+    "retenciones": "¿Te hicieron retención en la fuente en {anio}? Si sí, ¿de cuánto fue en total? Sale en tu certificado de ingresos y retenciones.",
+    "dependientes": "¿Alguien depende económicamente de ti, como hijos, pareja o papás?",
+    "deducciones": "¿Pagas medicina prepagada, intereses de un crédito de vivienda o aportes voluntarios a pensión o AFC?",
+    "cedula": "¿En qué dos números termina tu cédula? Con eso sé tu fecha límite y si hay sanción.",
+    "historial": "¿Es la primera vez que declaras renta? Eso cambia el anticipo.",
+    "patrimonio": "¿Qué tenías al 31 de diciembre de {anio} (plata en cuentas, casa, carro) y cuánto debías?",
+}
+
 WIDGETS = {"subir_exogena", "revisar"}
 
-
 # ---------- Modelos de la API ----------
+
+Intencion = Literal["calcular", "obligacion", "vencimiento", "simular"]
 
 
 class MensajeHistorial(BaseModel):
     rol: Literal["usuario", "asistente"]
     texto: str
+
+
+class PreguntaPendiente(BaseModel):
+    """Lo que el agente preguntó y qué hará cuando le respondan."""
+
+    texto: str = ""
+    temas: list[str] = []
+    intencion: Intencion | None = None
+    campo: str | None = None  # campo de una cifra ambigua (falta el periodo o el concepto)
+    valor: float | None = None
+    concepto: str | None = None  # bien o deuda cuyo valor falta
+    simular: list[dict[str, Any]] = []
+
+
+class Simulacion(BaseModel):
+    cambios: list[str]
+    impuesto_antes: float
+    impuesto_despues: float
+    total_antes: float
+    total_despues: float
+    favor_antes: float
+    favor_despues: float
 
 
 class EstadoChat(BaseModel):
@@ -299,6 +158,8 @@ class EstadoChat(BaseModel):
     topes: dict[str, float] = {}
     respuestas: Respuestas = Respuestas()
     resultado: dict[str, Any] | None = None
+    pregunta_pendiente: PreguntaPendiente | None = None
+    ya_preguntado: list[str] = []
 
 
 class TurnoChat(BaseModel):
@@ -318,10 +179,14 @@ class RespuestaChat(BaseModel):
     respuesta: str
     respuestas: Respuestas
     anotaciones: list[Anotacion] = []
+    quitadas: list[str] = []
     rechazadas: list[str] = []
     widgets: list[str] = []
     cambiar_anio: int | None = None
     calcular: bool = False
+    simulacion: Simulacion | None = None
+    pregunta: PreguntaPendiente | None = None
+    ya_preguntado: list[str] = []
     fuentes: list[str] = []
     modelo: str | None = None
     con_ia: bool = False
@@ -329,17 +194,22 @@ class RespuestaChat(BaseModel):
 
 @dataclass
 class _Plan:
-    """Lo que el agente decide hacer en un turno (antes de validar)."""
+    """Lo que el agente decide hacer en un turno, antes de validarlo."""
 
     respuesta: str = ""
     anotar: list[dict[str, Any]] = field(default_factory=list)
+    quitar: list[dict[str, Any]] = field(default_factory=list)
+    simular: list[dict[str, Any]] = field(default_factory=list)
     calcular: bool = False
+    insiste: bool = False  # "calcula así": no preguntar antes de calcular
     cambiar_anio: int | None = None
     mostrar: list[str] = field(default_factory=list)
     fuentes: list[str] = field(default_factory=list)
+    pregunta: PreguntaPendiente | None = None
+    caso: Literal["obligacion", "vencimiento"] | None = None  # preguntó por su propio caso
 
 
-# ---------- Aplicar anotaciones con validación ----------
+# ---------- Aplicar, quitar y leer datos ----------
 
 
 def _poner(r: Respuestas, ruta: str, valor: Any) -> None:
@@ -348,6 +218,13 @@ def _poner(r: Respuestas, ruta: str, valor: Any) -> None:
         setattr(getattr(r, sub), campo, valor)
     else:
         setattr(r, ruta, valor)
+
+
+def _leer(r: Respuestas, ruta: str) -> Any:
+    if "." in ruta:
+        sub, campo = ruta.split(".", 1)
+        return getattr(getattr(r, sub), campo)
+    return getattr(r, ruta)
 
 
 def _a_float(v: Any) -> float | None:
@@ -362,9 +239,13 @@ def _a_float(v: Any) -> float | None:
 
 
 def aplicar(
-    respuestas: Respuestas, anotar: list[dict[str, Any]], mensaje_usuario: str, verificar_cifras: bool = True
+    respuestas: Respuestas, anotar: list[dict[str, Any]], texto_usuario: str, verificar_cifras: bool = True
 ) -> tuple[Respuestas, list[Anotacion], list[str]]:
-    """Valida y aplica lo que se quiere anotar. Devuelve (respuestas, anotadas, rechazadas)."""
+    """Valida y aplica lo que se quiere anotar. Devuelve (respuestas, anotadas, rechazadas).
+
+    texto_usuario: lo que escribió el usuario (este mensaje y los anteriores); toda cifra
+    en pesos debe salir de ahí.
+    """
     r = respuestas.model_copy(deep=True)
     hechas: list[Anotacion] = []
     rechazadas: list[str] = []
@@ -377,8 +258,8 @@ def aplicar(
             v = _a_float(item.get("valor"))
             if v is None:
                 continue
-            mensual = str(item.get("periodo", "")).lower().startswith("mens")
-            if verificar_cifras and v and not numeros.aparece(v, mensaje_usuario):
+            mensual = str(item.get("periodo") or "").lower().startswith("mens")
+            if verificar_cifras and v and not numeros.aparece(v, texto_usuario):
                 rechazadas.append(etiqueta)
                 continue
             anual = v * 12 if mensual else v
@@ -386,7 +267,7 @@ def aplicar(
                 rechazadas.append(etiqueta)
                 continue
             _poner(r, ruta, anual)
-            hechas.append(Anotacion(clave=clave, etiqueta=etiqueta, valor=_pesos(anual), detalle=f"{_pesos(v)} × 12 meses" if mensual else None))
+            hechas.append(Anotacion(clave=clave, etiqueta=etiqueta, valor=pesos(anual), detalle=f"{pesos(v)} × 12 meses" if mensual else None))
         elif tipo == "entero":
             v = _a_float(item.get("valor"))
             if v is None or not (minimo <= v <= maximo):
@@ -398,7 +279,7 @@ def aplicar(
             m = re.search(r"(\d{2})\D*$", str(item.get("valor", "")))
             if not m:
                 continue
-            if verificar_cifras and m.group(1) not in re.sub(r"\D", "", mensaje_usuario):
+            if verificar_cifras and m.group(1) not in re.sub(r"\D", "", texto_usuario):
                 rechazadas.append(etiqueta)
                 continue
             _poner(r, ruta, m.group(1))
@@ -413,17 +294,46 @@ def aplicar(
             v = _a_float(item.get("valor"))
             if not concepto or v is None:
                 continue
-            if verificar_cifras and not numeros.aparece(v, mensaje_usuario):
+            if verificar_cifras and not numeros.aparece(v, texto_usuario):
                 rechazadas.append(f"{etiqueta}: {concepto}")
                 continue
             if not (minimo <= v <= maximo):
                 continue
-            getattr(r, ruta).append(ItemPatrimonio(concepto=concepto, valor=v, fuente="chat"))
-            hechas.append(Anotacion(clave=clave, etiqueta=f"{etiqueta}: {concepto}", valor=_pesos(v)))
+            lista = getattr(r, ruta)
+            if any(norm(b.concepto) == norm(concepto) and b.valor == v for b in lista):
+                continue  # ya estaba anotado
+            lista.append(ItemPatrimonio(concepto=concepto, valor=v, fuente="chat"))
+            hechas.append(Anotacion(clave=clave, etiqueta=f"{etiqueta}: {concepto}", valor=pesos(v)))
     return r, hechas, rechazadas
 
 
-# ---------- Hechos que se calculan con reglas (sin IA) ----------
+def quitar(respuestas: Respuestas, items: list[dict[str, Any]]) -> tuple[Respuestas, list[str]]:
+    """Borra datos que el usuario pidió quitar o corregir. Devuelve (respuestas, etiquetas quitadas)."""
+    r = respuestas.model_copy(deep=True)
+    quitadas: list[str] = []
+    for item in items[:6]:
+        clave = str(item.get("campo", ""))
+        if clave not in CAMPOS:
+            continue
+        ruta, tipo, etiqueta, *_ = CAMPOS[clave]
+        if tipo == "item":
+            concepto = norm(str(item.get("concepto") or ""))
+            lista = getattr(r, ruta)
+            quedan = [b for b in lista if concepto and concepto not in norm(b.concepto)] if concepto else []
+            for b in lista:
+                if b not in quedan:
+                    quitadas.append(f"{etiqueta}: {b.concepto}")
+            setattr(r, ruta, quedan)
+        elif tipo == "pesos" and _leer(r, ruta):
+            _poner(r, ruta, 0.0)
+            quitadas.append(etiqueta)
+        elif tipo == "entero" and _leer(r, ruta):
+            _poner(r, ruta, None if clave == "declaraciones_previas" else 0)
+            quitadas.append(etiqueta)
+        elif tipo == "digitos" and _leer(r, ruta):
+            _poner(r, ruta, None)
+            quitadas.append(etiqueta)
+    return r, quitadas
 
 
 def _hay_ingresos(r: Respuestas) -> bool:
@@ -435,17 +345,34 @@ def _hay_datos(e: EstadoChat, r: Respuestas) -> bool:
     return e.tiene_exogena or bool(e.filas) or _hay_ingresos(r) or bool(r.bienes_adicionales)
 
 
-def obligacion_actual(e: EstadoChat, r: Respuestas | None = None) -> Obligacion | None:
-    """Con los datos que hay (exógena + chat), ¿está obligado? Lo decide el motor, no la IA."""
+def periodo_de(texto: str) -> str | None:
+    t = norm(texto)
+    if numeros.es_mensual(t) or re.search(r"\b(mensuales?|mes)\b", t):
+        return "mensual"
+    if re.search(r"\b(al ano|anual\w*|en el ano|todo el ano|por ano|en 20\d\d|del ano|ano completo)\b", t):
+        return "anual"
+    return None
+
+
+# ---------- Hechos que calcula el motor (sin IA) ----------
+
+
+def vista_previa(e: EstadoChat, r: Respuestas | None = None) -> Liquidacion | None:
+    """Liquidación con los datos actuales; sirve para saber qué falta y para responder con su caso."""
     r = r or e.respuestas
     if not _hay_datos(e, r):
         return None
     try:
         sol = SolicitudLiquidacion(anio_gravable=e.anio_gravable, filas=e.filas, topes=e.topes, ultimos_dos_digitos_nit=r.ultimos_dos_digitos_nit, respuestas=r)
-        return liquidar(construir_declaracion(sol)).obligacion
-    except Exception:  # noqa: BLE001 - si algo falla, se responde con la base de conocimiento
-        log.exception("No se pudo evaluar la obligación")
+        return liquidar(construir_declaracion(sol))
+    except Exception:  # noqa: BLE001 - sin vista previa el agente sigue respondiendo
+        log.exception("No se pudo calcular la vista previa")
         return None
+
+
+def obligacion_actual(e: EstadoChat, r: Respuestas | None = None) -> Obligacion | None:
+    vp = vista_previa(e, r)
+    return vp.obligacion if vp else None
 
 
 def texto_obligacion(e: EstadoChat, ob: Obligacion) -> str:
@@ -457,7 +384,7 @@ def texto_obligacion(e: EstadoChat, ob: Obligacion) -> str:
     pat = t.get("Patrimonio bruto a 31 de diciembre")
     texto = f"Con los datos que tengo, no estás obligado a declarar por el año gravable {anio}"
     if ing and pat:
-        texto += f": tus ingresos ({_pesos(ing.valor)}) no llegan a {_pesos(ing.limite)} y tu patrimonio ({_pesos(pat.valor)}) no supera {_pesos(pat.limite)}"
+        texto += f": tus ingresos ({pesos(ing.valor)}) no llegan a {pesos(ing.limite)} y tu patrimonio ({pesos(pat.valor)}) no supera {pesos(pat.limite)}"
     texto += "."
     if not e.tiene_exogena:
         texto += " Ojo: también cuentan los consumos con tarjeta de crédito, las compras y las consignaciones del año, que vienen en tu exógena."
@@ -465,35 +392,87 @@ def texto_obligacion(e: EstadoChat, ob: Obligacion) -> str:
 
 
 def texto_vencimiento(anio: int, digitos: str) -> str | None:
-    fecha = _fecha_limite(anio, digitos)
+    fecha = fecha_limite(anio, digitos)
     if not fecha:
         return None
     hoy = date.today()
     if fecha < hoy:
-        return (f"Para tu cédula terminada en {digitos}, el plazo del año gravable {anio} fue el {_fecha(fecha)}. "
+        return (f"Para tu cédula terminada en {digitos}, el plazo del año gravable {anio} fue el {fecha_texto(fecha)}. "
                 "Ya pasó: todavía puedes declarar, pero con sanción por extemporaneidad.")
     dias = (fecha - hoy).days
-    return f"Para tu cédula terminada en {digitos}, el año gravable {anio} vence el {_fecha(fecha)}" + (f" (faltan {dias} días)." if dias else " (es hoy).")
+    return f"Para tu cédula terminada en {digitos}, el año gravable {anio} vence el {fecha_texto(fecha)}" + (f" (faltan {dias} días)." if dias else " (es hoy).")
 
 
 def explicar_resultado(res: dict[str, Any]) -> str:
     partes = [
-        f"Tus ingresos suman {_pesos(res.get('ingresos_brutos_totales', 0))}. Después de restar aportes, rentas exentas y deducciones, "
-        f"la parte que paga impuesto (renta líquida gravable) quedó en {_pesos(res.get('renta_liquida_gravable', 0))}.",
-        f"Con la tabla de tarifas eso da un impuesto a cargo de {_pesos(res.get('total_impuesto_cargo', 0))}.",
+        f"Tus ingresos suman {pesos(res.get('ingresos_brutos_totales', 0))}. Después de restar aportes, rentas exentas y deducciones, "
+        f"la parte que paga impuesto (renta líquida gravable) quedó en {pesos(res.get('renta_liquida_gravable', 0))}.",
+        f"Con la tabla de tarifas eso da un impuesto a cargo de {pesos(res.get('total_impuesto_cargo', 0))}.",
     ]
     if res.get("retenciones"):
-        partes.append(f"A eso se le restan {_pesos(res['retenciones'])} que ya te retuvieron durante el año.")
+        partes.append(f"A eso se le restan {pesos(res['retenciones'])} que ya te retuvieron durante el año.")
     if res.get("anticipo_siguiente"):
-        partes.append(f"Se suma un anticipo de {_pesos(res['anticipo_siguiente'])} para el año siguiente.")
+        partes.append(f"Se suma un anticipo de {pesos(res['anticipo_siguiente'])} para el año siguiente.")
     if res.get("sancion"):
-        partes.append(f"Como la fecha ya pasó, se suma una sanción estimada de {_pesos(res['sancion'])}.")
+        partes.append(f"Como la fecha ya pasó, se suma una sanción estimada de {pesos(res['sancion'])}.")
     total, favor = res.get("total_a_pagar", 0), res.get("saldo_favor", 0)
-    partes.append(f"Resultado: total a pagar {_pesos(total)}." if total else f"Resultado: saldo a favor de {_pesos(favor)}." if favor else "Resultado: no te queda saldo a pagar ni a favor.")
+    partes.append(f"Resultado: total a pagar {pesos(total)}." if total else f"Resultado: saldo a favor de {pesos(favor)}." if favor else "Resultado: no te queda saldo a pagar ni a favor.")
     return " ".join(partes)
 
 
-# ---------- Ruta sin IA ----------
+@dataclass
+class Faltante:
+    tema: str
+    pregunta: str
+
+
+def faltantes(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Faltante]:
+    """Datos que cambian el resultado y que todavía no se han preguntado, en orden de importancia."""
+    anio = e.anio_gravable
+    if not _hay_datos(e, r):
+        return [Faltante("ingresos", _PREGUNTAS["ingresos"].format(anio=anio))]
+    hecho = set(e.ya_preguntado)
+    impuesto = vp.resumen.impuesto_neto_renta if vp else 0
+    sin_exogena = not e.tiene_exogena
+    candidatos = [
+        ("retenciones", sin_exogena and not r.retenciones_no_reportadas and (r.salarios_no_reportados + r.honorarios_no_reportados) > 0),
+        ("dependientes", impuesto > 0 and not r.dependientes),
+        ("deducciones", impuesto > 0 and not (r.medicina_prepagada or r.intereses_vivienda or r.aportes_voluntarios_afc_fpv)),
+        ("cedula", not r.ultimos_dos_digitos_nit),
+        ("historial", impuesto > 0 and r.declaraciones_previas is None),
+        ("patrimonio", sin_exogena and not (r.bienes_adicionales or r.deudas_adicionales)),
+    ]
+    return [Faltante(t, _PREGUNTAS[t].format(anio=anio)) for t, cond in candidatos if cond and t not in hecho]
+
+
+def simular(e: EstadoChat, r: Respuestas, cambios: list[dict[str, Any]], texto_usuario: str) -> tuple[Simulacion | None, str]:
+    """¿Qué pasaría si…? Compara la liquidación actual con la del escenario. No cambia los datos."""
+    base = vista_previa(e, r)
+    r2, hechas, _ = aplicar(r, cambios, texto_usuario)
+    esc = vista_previa(e, r2) if hechas else None
+    if not base or not esc:
+        return None, ""
+    a, b = base.resumen, esc.resumen
+    sim = Simulacion(
+        cambios=[f"{h.etiqueta}: {h.valor}" for h in hechas],
+        impuesto_antes=a.total_impuesto_cargo, impuesto_despues=b.total_impuesto_cargo,
+        total_antes=a.total_a_pagar, total_despues=b.total_a_pagar,
+        favor_antes=a.saldo_favor, favor_despues=b.saldo_favor,
+    )
+    dif = a.total_impuesto_cargo - b.total_impuesto_cargo
+    if dif > 0:
+        texto = f"Con ese cambio tu impuesto a cargo bajaría de {pesos(a.total_impuesto_cargo)} a {pesos(b.total_impuesto_cargo)}: te ahorrarías {pesos(dif)}."
+    elif dif < 0:
+        texto = f"Con ese cambio tu impuesto a cargo subiría de {pesos(a.total_impuesto_cargo)} a {pesos(b.total_impuesto_cargo)}."
+    elif a.total_impuesto_cargo == 0:
+        texto = "Con ese cambio tu impuesto no cambia: con tus datos actuales no pagas impuesto de renta."
+    else:
+        texto = "Con ese cambio tu impuesto no cambia: ya llegaste al límite de rentas exentas y deducciones, o ese gasto ya está en su tope."
+    sin_cambio = (a.total_impuesto_cargo, a.total_a_pagar, a.saldo_favor) == (b.total_impuesto_cargo, b.total_a_pagar, b.saldo_favor)
+    return (None if sin_cambio else sim), texto + " Es solo una simulación: no cambié tus datos."
+
+
+# ---------- Entender el mensaje sin IA ----------
 
 _RE_ANIO = re.compile(r"\b(20(?:2[0-9]))\b")
 _RE_PIDE_ANIO = re.compile(
@@ -505,6 +484,7 @@ _RE_CALCULAR = re.compile(
     r"\b(calcul\w*|liquid\w*|recalcul\w*)\b|haz(me)? (la|mi) (declaracion|liquidacion)|cuanto (me toca|tengo que|debo|voy a) pagar|cuanto pago\b"
     r"|(mi|el) borrador|(ver|muestrame) (el|mi) resultado|cuanto me (sale|da|queda)"
 )
+_RE_INSISTE = re.compile(r"\b(asi|igual|de una|sin eso|con lo que (tengas|hay|tienes)|no importa|calcula ya|ya calcula|hazlo ya)\b")
 _RE_SUBIR = re.compile(r"\b(subir|subo|adjunt\w*|cargar|cargo|enviar|envio|mandar|mando|te paso|aqui esta)\b.{0,25}(exogena|archivo|excel|reporte|documento)|^(ya )?(la|lo) tengo\b")
 _RE_SIN_EXOGENA = re.compile(r"no (la |lo )?tengo.{0,20}(exogena|archivo|reporte)|no tengo (la )?exogena|sin (la )?exogena")
 _RE_POR_QUE = re.compile(r"por que (me )?(sale|da|toca|queda)|ese valor|de donde sale|explica\w* (el |mi )?resultado|como (se )?(calculo|salio)|por que (tanto|tan poco)")
@@ -513,11 +493,19 @@ _RE_OBLIGACION = re.compile(
     r"|obligad\w* a declarar|como (se|saber|averiguo|investigo|reviso|verifico|confirmo)\b.{0,30}\bdeclar|quien(es)? (debe|deben|tiene que|tienen que|declara)"
     r"|\bsi (yo )?(declaro|debo declarar)\b|topes? (para|de) declar"
 )
+_RE_COMO_SE = re.compile(r"\bcomo (se|saber|averiguo|investigo|reviso|verifico|confirmo)\b|donde (veo|reviso|miro)")
 _RE_VENCE = re.compile(r"(cuando|hasta cuando|fecha|plazo|limite|vence|vencio|calendario)\b.{0,40}\b(declar\w*|vence|vencio|present\w*|plazo|renta)|cuando me toca")
+_RE_SIMULAR = re.compile(
+    r"\b(que pasa si|que pasaria si|y si|si (yo )?(pagara|pagaba|aportara|tuviera|tuviese|metiera|agregara|pusiera|ahorrara|declarara))\b"
+    r"|cuanto (me )?(ahorr\w*|bajari\w*|pagari\w*|cambiari\w*|me baja)"
+)
+_RE_QUITAR = re.compile(r"\b(quita\w*|borra\w*|elimina\w*|saca\w*|ya no tengo|me equivoque|no era|no son|no es)\b")
 _RE_PREGUNTA = re.compile(r"\?|^(que|como|cual|cuales|cuanto|cuanta|cuantos|por que|porque|donde|quien|quienes|para que|cuando|debo|puedo|tengo que|es obligatorio|me toca|sirve|se puede|hay)\b")
 _RE_SALUDO = re.compile(r"(hola|ola|buenas|buenos dias|buenas tardes|buenas noches|hey|holi|que mas|saludos|buen dia)( \w+)?[!. ]*")
 _RE_GRACIAS = re.compile(r"(muchas )?gracias|listo gracias|muy amable|perfecto gracias|ok gracias|vale gracias")
-_RE_NEGATIVO = re.compile(r"(no|nop|nada|ninguno|ninguna|nadie|tampoco|no tengo|no aplica|nada mas|eso es todo)[!. ]*")
+_RE_NEGATIVO = re.compile(r"^(no|nop|nada|ninguno|ninguna|nadie|tampoco|no se|ni idea|no tengo|no me|no pago|no aplica|nada mas|eso es todo|cero)\b")
+_RE_AFIRMATIVO = re.compile(r"^(si|sip|claro|asi es|correcto|exacto|obvio|afirmativo)\b")
+_RE_NO_SE = re.compile(r"^(no se|ni idea|no tengo idea|no me acuerdo|no recuerdo|no estoy segur\w*)\b")
 
 _CONCEPTOS: list[tuple[str, str]] = [
     (r"voluntari|\bafc\b|\bavc\b", "aportes_voluntarios"),
@@ -547,46 +535,50 @@ def _anio_pedido(msg: str) -> int | None:
     if "reforma" in msg or "uvt" in msg:
         return None
     m = _RE_PIDE_ANIO.search(msg)
-    if not m:
-        return None
-    anio = int(_RE_ANIO.findall(m.group(0))[-1])
-    return anio
+    return int(_RE_ANIO.findall(m.group(0))[-1]) if m else None
+
+
+def _concepto_de(clausula: str) -> dict[str, Any] | None:
+    """Concepto de una frase sin la cifra: campo (y concepto si es un bien o una deuda)."""
+    if _RE_DEUDA.search(clausula) and not re.search(r"interes", clausula):
+        m = _RE_BIEN.search(clausula)
+        return {"campo": "deuda", "concepto": f"Crédito del {m.group(1)}" if m and m.group(1) in ("carro", "moto", "casa", "apartamento") else "Deuda"}
+    campo = next((cp for patron, cp in _CONCEPTOS if re.search(patron, clausula)), None)
+    if campo:
+        return {"campo": campo}
+    m = _RE_BIEN.search(clausula)
+    if m:
+        return {"campo": "bien", "concepto": _BIENES[m.group(1)]}
+    return None
 
 
 def _extraer_datos(mensaje: str) -> list[dict[str, Any]]:
-    """Datos de la declaración que el usuario escribió, con reglas (modo sin IA)."""
-    msg = _norm(mensaje)
+    """Datos de la declaración que el usuario escribió, con reglas. El periodo queda vacío si no lo dijo."""
+    msg = norm(mensaje)
     anotar: list[dict[str, Any]] = []
-    mensual_global = numeros.es_mensual(msg)
-    clausulas = [c.strip() for c in re.split(r"[,;]|\.\s| y (?=[a-z])| ademas | tambien | pero ", msg) if c.strip()]
+    periodo_global = periodo_de(msg)
+    clausulas = [c.strip() for c in re.split(r"[,;]|\.\s| y (?!medio\b)(?=[a-z])| ademas | tambien | pero ", msg) if c.strip()]
     con_monto = [c for c in clausulas if any(x >= 1000 for x in numeros.cantidades(c))]
     for c in clausulas:
         montos = [x for x in numeros.cantidades(c) if x >= 1000]
         if not montos:
             continue
-        monto = montos[0]
-        periodo = "mensual" if numeros.es_mensual(c) or (mensual_global and len(con_monto) == 1) else "anual"
-        if _RE_DEUDA.search(c) and not re.search(r"interes", c):
-            m = _RE_BIEN.search(c)
-            anotar.append({"campo": "deuda", "concepto": f"Crédito del {m.group(1)}" if m and m.group(1) in ("carro", "moto", "casa", "apartamento") else "Deuda", "valor": monto})
+        concepto = _concepto_de(c)
+        if not concepto:
             continue
-        campo = next((cp for patron, cp in _CONCEPTOS if re.search(patron, c)), None)
-        if campo:
-            anotar.append({"campo": campo, "valor": monto, "periodo": periodo})
-            continue
-        m = _RE_BIEN.search(c)
-        if m:
-            anotar.append({"campo": "bien", "concepto": _BIENES[m.group(1)], "valor": monto})
-    # Personas a cargo
+        item = {**concepto, "valor": montos[0]}
+        if CAMPOS[item["campo"]][1] == "pesos":
+            item["periodo"] = periodo_de(c) or (periodo_global if len(con_monto) == 1 else None)
+        anotar.append(item)
     if re.search(r"no tengo (hijos|dependientes|personas a cargo)|sin (hijos|dependientes)|nadie depende|ningun dependiente|nadie a cargo", msg):
         anotar.append({"campo": "dependientes", "valor": 0})
     else:
         m = re.search(r"\b(\d+|un|una|dos|tres|cuatro|cinco)\s+(hij[oa]s?|dependientes?|personas? a (mi )?cargo|nin[oa]s?)\b", msg)
         if m:
-            anotar.append({"campo": "dependientes", "valor": numeros.cantidades(m.group(1))[0] if numeros.cantidades(m.group(1)) else 1})
+            n = numeros.cantidades(m.group(1))
+            anotar.append({"campo": "dependientes", "valor": n[0] if n else 1})
         elif re.search(r"\b(mama|papa|madre|padre|esposa|esposo|pareja|hermano|hermana|abuel\w*) depende", msg):
             anotar.append({"campo": "dependientes", "valor": 1})
-    # Historial con la DIAN
     if re.search(r"primera vez|nunca (he|habia) declarado|nunca declare", msg):
         anotar.append({"campo": "declaraciones_previas", "valor": 0})
     elif re.search(r"(he declarado|declare|declaro)\b.{0,20}(una vez|el ano pasado)", msg):
@@ -603,114 +595,224 @@ def _extraer_datos(mensaje: str) -> list[dict[str, Any]]:
     return anotar
 
 
+def _respuesta_a_pendiente(mensaje: str, p: PreguntaPendiente, ya: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Lee respuestas cortas ("2", "al mes", "no", "termina en 21") según lo que el agente preguntó."""
+    msg = norm(mensaje)
+    campos_ya = {a["campo"] for a in ya}
+    salida: list[dict[str, Any]] = []
+    montos = [x for x in numeros.cantidades(msg) if x >= 1000]
+    if p.valor is not None and p.campo and "periodo" in p.temas:
+        per = periodo_de(msg) or ("mensual" if re.search(r"\bmes", msg) else "anual" if re.search(r"\bano\b|\banual|\btotal\b", msg) else None)
+        if per:
+            salida.append({"campo": p.campo, "valor": p.valor, "periodo": per, **({"concepto": "Bien"} if CAMPOS[p.campo][1] == "item" else {})})
+    if p.valor is not None and "concepto" in p.temas and not campos_ya:
+        concepto = _concepto_de(msg)
+        if concepto:
+            item = {**concepto, "valor": p.valor}
+            if CAMPOS[concepto["campo"]][1] == "pesos":
+                item["periodo"] = periodo_de(msg)
+            salida.append(item)
+    if _RE_NO_SE.search(msg):
+        return salida
+    if "valor" in p.temas and p.campo in CAMPOS and montos and not campos_ya:
+        item: dict[str, Any] = {"campo": p.campo, "valor": montos[0]}
+        if CAMPOS[p.campo][1] == "item":
+            item["concepto"] = p.concepto or CAMPOS[p.campo][2]
+        else:
+            item["periodo"] = periodo_de(msg)
+        salida.append(item)
+    if "dependientes" in p.temas and "dependientes" not in campos_ya:
+        if _RE_NEGATIVO.search(msg):
+            salida.append({"campo": "dependientes", "valor": 0})
+        else:
+            n = [x for x in numeros.cantidades(msg) if 0 < x <= 10]
+            if n:
+                salida.append({"campo": "dependientes", "valor": n[0]})
+    if "cedula" in p.temas and "ultimos_dos_digitos_cedula" not in campos_ya:
+        m = re.search(r"\b(\d{6,11})\b", msg) or re.search(r"\b(\d{2})\b", msg)
+        if m:
+            salida.append({"campo": "ultimos_dos_digitos_cedula", "valor": m.group(1)})
+    if "retenciones" in p.temas and "retenciones" not in campos_ya and montos and not _concepto_de(msg):
+        salida.append({"campo": "retenciones", "valor": montos[0], "periodo": "anual"})
+    if "historial" in p.temas and "declaraciones_previas" not in campos_ya:
+        if re.search(r"primera|nunca", msg) or (_RE_AFIRMATIVO.search(msg) and not re.search(r"\b(ya|antes)\b", msg)):
+            salida.append({"campo": "declaraciones_previas", "valor": 0})
+        elif re.search(r"varias|muchas|siempre|todos|cada ano|\b[2-9]\b|dos|tres", msg):
+            salida.append({"campo": "declaraciones_previas", "valor": 2})
+        elif re.search(r"una vez|el ano pasado|^no\b|\bya\b", msg):
+            salida.append({"campo": "declaraciones_previas", "valor": 1})
+    if "ingresos" in p.temas and montos and not (campos_ya & {"salarios", "honorarios", "pension", "arriendos", "otros_ingresos"}) and not salida:
+        salida.append({"campo": "salarios", "valor": montos[0], "periodo": periodo_de(msg)})
+    return salida
+
+
+_RE_AFIRMA_TENER = re.compile(r"\b(tengo|tenia|pago|pague|pagamos|recibo|recibi|recibia|gano|ganaba|me pagan|me pagaban|compre|debo|debia|vendi|me gane|cobre)\b")
+
+
+def _falta_valor(msg: str) -> PreguntaPendiente | None:
+    """"Tengo un carro", "pago prepagada": hay un dato pero sin cifra; se pregunta cuánto."""
+    if any(x >= 1000 for x in numeros.cantidades(msg)) or not _RE_AFIRMA_TENER.search(msg) or re.match(r"(no|tampoco|ya no)\b", msg):
+        return None
+    concepto = _concepto_de(msg)
+    if not concepto or concepto["campo"] in ("dependientes", "declaraciones_previas"):
+        return None
+    campo = concepto["campo"]
+    if campo == "bien":
+        texto = f"¿Cuánto vale más o menos {'tu' if concepto['concepto'] != 'Cuentas bancarias' else 'lo que tenías en'} {concepto['concepto'].lower()}? Para tu patrimonio cuenta el valor al 31 de diciembre."
+    elif campo == "deuda":
+        texto = "¿Cuánto debías al 31 de diciembre?"
+    elif campo in _MENSUALES:
+        texto = f"¿De cuánto es lo de {_CORTA.get(campo, CAMPOS[campo][2].lower())}? Dime si es al mes o en todo el año."
+    else:
+        texto = f"¿De cuánto fue lo de {CAMPOS[campo][2].lower()} en el año?"
+    return PreguntaPendiente(texto=texto, temas=["valor"], campo=campo, concepto=concepto.get("concepto"))
+
+
+def _extraer_quitar(msg: str) -> list[dict[str, Any]]:
+    if not _RE_QUITAR.search(msg):
+        return []
+    salida: list[dict[str, Any]] = []
+    m = _RE_BIEN.search(msg)
+    if m and not _RE_DEUDA.search(msg):
+        salida.append({"campo": "bien", "concepto": _BIENES[m.group(1)]})
+    elif _RE_DEUDA.search(msg):
+        salida.append({"campo": "deuda", "concepto": m.group(1) if m else ""})
+    elif re.search(r"hij|dependiente", msg):
+        salida.append({"campo": "dependientes"})
+    else:
+        concepto = _concepto_de(msg)
+        if concepto and CAMPOS[concepto["campo"]][1] == "pesos" and not numeros.cantidades(msg):
+            salida.append({"campo": concepto["campo"]})
+    return salida
+
+
 def _sin_ia(t: TurnoChat) -> _Plan:
     e = t.estado
-    msg = _norm(t.mensaje)
+    msg = norm(t.mensaje)
     plan = _Plan()
-    anio = e.anio_gravable
+    p = e.pregunta_pendiente
 
     if e.resultado and _RE_POR_QUE.search(msg):
         plan.respuesta = explicar_resultado(e.resultado)
         return plan
 
     plan.cambiar_anio = _anio_pedido(msg)
-    if plan.cambiar_anio:
-        anio = plan.cambiar_anio
-    plan.anotar = _extraer_datos(t.mensaje)
+    anio = plan.cambiar_anio or e.anio_gravable
+    plan.quitar = _extraer_quitar(msg)
+    datos = [] if plan.quitar and not numeros.cantidades(msg) else _extraer_datos(t.mensaje)
+    if p:
+        datos = _respuesta_a_pendiente(t.mensaje, p, datos) + datos
+    if _RE_SIMULAR.search(msg) and datos and not p:
+        plan.simular = datos
+    else:
+        plan.anotar = datos
+    plan.insiste = bool(_RE_INSISTE.search(msg))
+    es_pregunta = bool(_RE_PREGUNTA.search(msg))
     partes: list[str] = []
     if plan.cambiar_anio and plan.cambiar_anio != e.anio_gravable:
         partes.append(f"Listo, ahora uso las reglas del año gravable {plan.cambiar_anio}.")
-    if plan.anotar:
-        partes.append("Listo, lo anoté.")
 
-    es_pregunta = bool(_RE_PREGUNTA.search(msg))
-    e_anio = e.model_copy(update={"anio_gravable": anio})
     if _RE_SUBIR.search(msg):
         plan.mostrar.append("subir_exogena")
         partes.append("Adjúntala aquí abajo con el clip o arrastrándola.")
-    elif _RE_SIN_EXOGENA.search(msg) and not _RE_PREGUNTA.search(msg):
+    elif _RE_SIN_EXOGENA.search(msg) and not es_pregunta:
         partes.append("No hay problema: trabajo con lo que me cuentes de tus ingresos y bienes del año.")
-    elif _RE_OBLIGACION.search(msg):
-        nuevas = aplicar(e.respuestas, plan.anotar, t.mensaje)[0]
-        ob = obligacion_actual(e_anio, nuevas)
-        if ob:
-            partes.append(texto_obligacion(e_anio, ob))
-        else:
-            como = bool(re.search(r"\bcomo (se|saber|averiguo|investigo|reviso|verifico|confirmo)\b|donde (veo|reviso|miro)", msg))
-            sec = base_del_anio(anio)[1 if como else 0]
+    elif _RE_OBLIGACION.search(msg) and not plan.simular:
+        if _RE_COMO_SE.search(msg):
+            sec = next(s for s in base_del_anio(anio) if s.titulo.startswith("¿Cómo sé"))
             partes.append(sec.texto)
             plan.fuentes.append(sec.titulo)
-    elif _RE_VENCE.search(msg) and (e.respuestas.ultimos_dos_digitos_nit or any(a["campo"] == "ultimos_dos_digitos_cedula" for a in plan.anotar)):
-        dig = next((str(a["valor"])[-2:] for a in plan.anotar if a["campo"] == "ultimos_dos_digitos_cedula"), e.respuestas.ultimos_dos_digitos_nit)
-        partes.append(texto_vencimiento(anio, dig or "") or "")
-    elif es_pregunta or not (plan.anotar or plan.cambiar_anio):
-        mejores = _puntajes(t.mensaje)
-        if mejores and mejores[0][0] >= 3.0 and not (plan.anotar and not es_pregunta):
+        else:
+            plan.caso = "obligacion"
+    elif _RE_VENCE.search(msg):
+        plan.caso = "vencimiento"
+    elif _RE_NEGATIVO.search(msg) and not es_pregunta and not datos:
+        if not p:
+            partes.append("Entendido.")
+    elif re.search(r"\b(calcul|recalcul|liquid)", msg) and not plan.simular:
+        pass  # pidió calcular: no hace falta explicar nada antes
+    elif not (datos or es_pregunta or p) and (falta := _falta_valor(msg)):
+        plan.pregunta = falta
+    elif (re.search(r"\btengo (unos |unas |varios |varias )?(hij[oa]s|dependientes|personas a (mi )?cargo)\b", msg)
+          and not any(a["campo"] == "dependientes" for a in datos) and not es_pregunta):
+        plan.pregunta = PreguntaPendiente(texto="¿Cuántas personas dependen económicamente de ti?", temas=["dependientes"], intencion=p.intencion if p else None)
+    elif (es_pregunta or not (datos or plan.cambiar_anio or plan.quitar)) and not plan.simular:
+        mejores = puntajes(t.mensaje)
+        if mejores and mejores[0][0] >= 3.0:
             sec = base_del_anio(anio)[mejores[0][1]]
             partes.append(sec.texto)
             plan.fuentes.append(sec.titulo)
 
-    if _RE_CALCULAR.search(msg):
+    if _RE_CALCULAR.search(msg) and not plan.simular:
         explicito = bool(re.search(r"\b(calcul|recalcul|liquid)", msg))
-        hay = _hay_datos(e, aplicar(e.respuestas, plan.anotar, t.mensaje)[0])
-        if hay and (explicito or not plan.fuentes):
+        if explicito or not plan.fuentes:
             plan.calcular = True
-            partes.append("Calculo tu borrador con lo que tengo.")
-        elif explicito and not hay:
-            partes.append(f"Para calcular necesito al menos tus ingresos de {anio}: cuéntamelos o adjunta tu exógena.")
-    if not partes:
+
+    if p and "dependientes" in p.temas and _RE_AFIRMATIVO.search(msg) and not any(a["campo"] == "dependientes" for a in plan.anotar):
+        plan.pregunta = PreguntaPendiente(texto="¿Cuántas personas dependen de ti?", temas=["dependientes"], intencion=p.intencion)
+    nada = not (partes or plan.anotar or plan.simular or plan.quitar or plan.calcular or plan.caso or plan.cambiar_anio or plan.pregunta)
+    if nada and not (p and (_RE_NEGATIVO.search(msg) or _RE_AFIRMATIVO.search(msg))):
+        montos = [x for x in numeros.cantidades(msg) if x >= 1000]
         if _RE_SALUDO.fullmatch(msg):
             partes.append("Hola. ¿En qué te ayudo con tu declaración de renta?")
         elif _RE_GRACIAS.search(msg) and len(msg) < 40:
             partes.append("Con gusto.")
-        elif _RE_NEGATIVO.fullmatch(msg):
+        elif _RE_NEGATIVO.search(msg):
             partes.append("Entendido.")
-        elif any(x >= 1000 for x in numeros.cantidades(msg)):
-            partes.append("¿A qué corresponde ese valor: salario, honorarios, arriendo, un bien o una deuda?")
+        elif montos:
+            plan.pregunta = PreguntaPendiente(temas=["concepto"], valor=montos[0], texto=f"¿A qué corresponde {pesos(montos[0])}: salario, honorarios, arriendo, un bien o una deuda?")
         else:
             partes.append("No tengo una respuesta segura para eso. Solo te ayudo con la declaración de renta; si es sobre eso, escríbelo con otras palabras.")
-    plan.respuesta = " ".join(p for p in partes if p)
+    plan.respuesta = " ".join(partes)
     return plan
 
 
 # ---------- Ruta con IA ----------
 
-SISTEMA = """Eres el agente de DeclaraFácil. Ayudas a personas en Colombia con la declaración de renta de personas naturales residentes (formulario 210): resuelves sus dudas y, cuando ellas quieran, armas su borrador con lo que te cuentan o con su exógena. Hoy es {hoy}.
+SISTEMA = """Eres el agente de DeclaraFácil. Ayudas a personas en Colombia con la declaración de renta de personas naturales residentes (formulario 210): resuelves sus dudas y armas su borrador con lo que te cuentan o con su exógena. Hoy es {hoy}.
 
 CÓMO RESPONDES
 - Responde exactamente lo que te preguntaron, desde la primera frase. Sin rodeos, sin introducciones y sin temas que no pidieron.
 - Corto: de 1 a 4 frases, máximo 80 palabras. Solo te extiendes si la persona pide detalle o una explicación.
 - Español de Colombia, sencillo, tuteando. Si usas un término técnico, explícalo en pocas palabras. Sin markdown, sin listas, sin emojis.
-- Ninguna pregunta es tonta: responde lo básico con naturalidad, sin decir que es buena pregunta.
-- La persona lleva la conversación. NO le pidas datos por tu cuenta, NO le preguntes qué quiere hacer después, NO termines con ofrecimientos ("¿Quieres que…?", "Si quieres…", "¿Algo más?"). Solo pregunta algo cuando sea indispensable para hacer lo que pidió.
-- Si la pregunta es sobre su caso y el ESTADO ya tiene el dato (sus ingresos, su obligación, su fecha límite, su resultado), contéstale con su caso concreto.
-- Usa solo la BASE DE CONOCIMIENTO, los DATOS DEL AÑO y el ESTADO. No inventes normas, cifras ni fechas, y no hagas cálculos tú: las cifras las calcula el sistema. Si no lo sabes, dilo en una frase y remite a la DIAN o a un contador.
+- Ninguna pregunta es tonta: responde lo básico con naturalidad.
+- La persona lleva la conversación: nada de preguntas de relleno ni ofrecimientos ("¿Quieres que…?", "Si quieres…", "¿Algo más?").
+- PERO pregunta cuando te falte información para hacer bien lo que la persona quiere: una cifra que no sabes si es mensual o anual, una cifra sin concepto, o un dato de su caso que necesitas para contestarle (por ejemplo, pregunta si tiene que declarar y no sabes sus ingresos). Una sola pregunta concreta (máximo dos datos), di para qué la necesitas y descríbela en "pregunta". No repitas lo que está en YA PREGUNTASTE.
+- Si hay una PREGUNTA PENDIENTE y el mensaje la responde (aunque sea corto: "2", "al mes", "no", "termina en 21"), interprétalo en ese contexto y anótalo.
+- Si la pregunta es sobre su caso y el ESTADO ya tiene el dato (su obligación, su fecha límite, la vista previa, su resultado), contéstale con su caso concreto.
+- Usa solo la BASE DE CONOCIMIENTO, los DATOS DEL AÑO y el ESTADO. No inventes normas, cifras ni fechas, y no hagas cálculos: las cifras las calcula el sistema. Si no lo sabes, dilo en una frase y remite a la DIAN o a un contador.
 - Si el mensaje no tiene que ver con impuestos ni con la app, di en una frase que solo ayudas con la declaración de renta.
 
 ACCIONES (las ejecuta el sistema después de validar)
-- "anotar": cuando la persona te cuenta un dato suyo para la declaración. Usa SOLO las claves de CAMPOS. En "valor" copia la cifra tal como la escribió ("4 millones", "350000"); pon "periodo": "mensual" si dijo que es por mes. No sumes ni conviertas. Si dice que no tiene algo ("no tengo hijos"), anota 0. Para "bien" y "deuda" agrega "concepto".
-- "calcular": true si pide calcular, liquidar, ver cuánto paga o ver su borrador, y en ESTADO dice que se puede calcular.
+- "anotar": cuando la persona te da un dato suyo. Usa SOLO las claves de CAMPOS. En "valor" copia la cifra como la escribió ("4 millones", "350000"). "periodo": "mensual" o "anual" solo si lo dijo; si no está claro, NO lo anotes: pregunta. Si dice que no tiene algo ("no tengo hijos"), anota 0. Para "bien" y "deuda" agrega "concepto".
+- "quitar": [{{"campo": "...", "concepto": "..."}}] si pide borrar o corregir un dato que ya no aplica. Para corregir una cifra basta con anotar la nueva.
+- "simular": igual que anotar, cuando pregunta qué pasaría ("¿y si pago prepagada?", "¿cuánto me ahorro si aporto a AFC?"). No se anota: el sistema calcula la diferencia y la agrega a tu respuesta, así que solo di algo como "Mira la diferencia:".
+- "calcular": true si pide calcular, liquidar, ver cuánto paga o ver su borrador. El sistema puede preguntar antes lo que falte.
 - "cambiar_anio": el año gravable (2021 a 2025) si pide cambiar de año o quiere declarar otro año.
 - "mostrar": ["subir_exogena"] si quiere subir o adjuntar su exógena; ["revisar"] si quiere confirmar los datos dudosos de su exógena.
+- "pregunta": si tu respuesta pide un dato, {{"campos": [claves de CAMPOS que esperas], "intencion": "calcular" | "obligacion" | "vencimiento" | null}}. Si no preguntas nada, null.
 - "fuente": el título exacto de la sección de la BASE DE CONOCIMIENTO que usaste, o null.
-Cuando anotes algo, basta con decir "Listo, lo anoté." (el sistema le muestra qué quedó anotado).
 
 Responde SOLO con un objeto JSON, sin texto antes ni después:
-{{"respuesta": "...", "anotar": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "fuente": null}}
+{{"respuesta": "...", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
 
 EJEMPLOS
 Usuario: que es la dian
-{{"respuesta": "Es la Dirección de Impuestos y Aduanas Nacionales, la entidad del Gobierno que recibe las declaraciones y cobra los impuestos nacionales. Sus trámites en línea se hacen en el portal MUISCA.", "anotar": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "fuente": "¿Qué es la DIAN?"}}
+{{"respuesta": "Es la Dirección de Impuestos y Aduanas Nacionales, la entidad del Gobierno que recibe las declaraciones y cobra los impuestos nacionales. Sus trámites en línea se hacen en el portal MUISCA.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": "¿Qué es la DIAN?"}}
 Usuario: gano 4 millones al mes y tengo un hijo
-{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "salarios", "valor": "4 millones", "periodo": "mensual"}}, {{"campo": "dependientes", "valor": 1}}], "calcular": false, "cambiar_anio": null, "mostrar": [], "fuente": null}}
-Usuario: calcula cuánto me toca pagar
-{{"respuesta": "Calculo tu borrador con lo que tengo.", "anotar": [], "calcular": true, "cambiar_anio": null, "mostrar": [], "fuente": null}}
-Usuario: hazlo con las reglas del 2023
-{{"respuesta": "Listo, ahora uso las reglas del año gravable 2023.", "anotar": [], "calcular": false, "cambiar_anio": 2023, "mostrar": [], "fuente": null}}"""
+{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "salarios", "valor": "4 millones", "periodo": "mensual"}}, {{"campo": "dependientes", "valor": 1}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+Usuario: me pagan 3 millones
+{{"respuesta": "¿Esos 3 millones son tu salario al mes o lo que recibiste en todo el año? Lo necesito para sumar bien tus ingresos.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": {{"campos": ["salarios"], "intencion": null}}, "fuente": null}}
+Usuario: y si pago prepagada de 300 mil al mes, cuánto me ahorro?
+{{"respuesta": "Mira la diferencia:", "anotar": [], "quitar": [], "simular": [{{"campo": "medicina_prepagada", "valor": "300 mil", "periodo": "mensual"}}], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+Usuario: quita el carro, ya lo vendí
+{{"respuesta": "Listo, lo quité.", "anotar": [], "quitar": [{{"campo": "bien", "concepto": "carro"}}], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+Usuario: calcula
+{{"respuesta": "Calculo tu borrador con lo que tengo.", "anotar": [], "quitar": [], "simular": [], "calcular": true, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}"""
 
 
 def _datos_anio_texto(anio: int) -> str:
-    v = _valores_anio(anio)
+    v = valores_anio(anio)
     return (
         f"Año gravable elegido: {anio} (se declara en {v['anio_presenta']}). Años disponibles: {', '.join(map(str, anios_vigentes()))}.\n"
         f"UVT {anio}: {v['uvt']}. UVT para sanciones si declara en {v['anio_hoy']}: {v['uvt_hoy']}.\n"
@@ -720,27 +822,40 @@ def _datos_anio_texto(anio: int) -> str:
     )
 
 
-def _estado_texto(e: EstadoChat) -> str:
+def _estado_texto(e: EstadoChat, vp: Liquidacion | None) -> str:
     r = e.respuestas
     notados = {k: v for k, v in r.model_dump(exclude={"ganancias_ocasionales", "bienes_adicionales", "deudas_adicionales"}).items() if v not in (0, None, False, "", [])}
     notados.pop("sin_sanciones_ultimos_2_anios", None)
     go = {k: v for k, v in r.ganancias_ocasionales.model_dump().items() if v and not isinstance(v, bool)}
     partes = [f"Pantalla: {e.pantalla}.", f"Exógena: {'sí, del año ' + str(e.anio_exogena) if e.tiene_exogena else 'no ha subido'}."]
     if e.resumen_exogena:
-        partes.append("Datos de la exógena: " + "; ".join(f"{k}: {_pesos(v)}" for k, v in list(e.resumen_exogena.items())[:14]))
+        partes.append("Datos de la exógena: " + "; ".join(f"{k}: {pesos(v)}" for k, v in list(e.resumen_exogena.items())[:14]))
     if e.por_revisar:
         partes.append(f"Datos de la exógena por confirmar ({len(e.por_revisar)}): " + "; ".join(e.por_revisar[:5]))
     partes.append("Datos que contó en el chat: " + (json.dumps(notados, ensure_ascii=False) if notados else "ninguno"))
     if go:
         partes.append("Ganancias ocasionales que contó: " + json.dumps(go, ensure_ascii=False))
     if r.bienes_adicionales or r.deudas_adicionales:
-        partes.append("Bienes y deudas que contó: " + "; ".join(f"{b.concepto} {_pesos(b.valor)}" for b in r.bienes_adicionales + r.deudas_adicionales))
-    partes.append("Se puede calcular: " + ("sí" if _hay_datos(e, r) else "no, faltan sus ingresos o su exógena"))
-    ob = obligacion_actual(e)
-    if ob:
-        partes.append("Obligación con los datos actuales (calculada por el sistema): " + texto_obligacion(e, ob))
+        partes.append("Bienes y deudas que contó: " + "; ".join(f"{b.concepto} {pesos(b.valor)}" for b in r.bienes_adicionales + r.deudas_adicionales))
+    if vp:
+        s = vp.resumen
+        partes.append(
+            "VISTA PREVIA con los datos actuales (calculada por el sistema; es un estimado, no el resultado final): "
+            f"ingresos {pesos(s.ingresos_brutos_totales)}; renta líquida gravable {pesos(s.renta_liquida_gravable)}; impuesto a cargo {pesos(s.total_impuesto_cargo)}; "
+            f"retenciones {pesos(s.retenciones)}; sanción {pesos(s.sancion)}; "
+            + (f"total a pagar {pesos(s.total_a_pagar)}." if s.total_a_pagar else f"saldo a favor {pesos(s.saldo_favor)}.")
+        )
+        partes.append("Obligación (calculada por el sistema): " + texto_obligacion(e, vp.obligacion))
+    else:
+        partes.append("Vista previa: no hay datos todavía (ni ingresos ni exógena).")
     if r.ultimos_dos_digitos_nit:
-        partes.append("Fecha límite de esta persona (calculada por el sistema): " + (texto_vencimiento(e.anio_gravable, r.ultimos_dos_digitos_nit) or "sin dato"))
+        partes.append("Fecha límite (calculada por el sistema): " + (texto_vencimiento(e.anio_gravable, r.ultimos_dos_digitos_nit) or "sin dato"))
+    fs = faltantes(e, r, vp)
+    partes.append("Faltan para un cálculo completo: " + (", ".join(f.tema for f in fs) if fs else "nada importante"))
+    if e.ya_preguntado:
+        partes.append("YA PREGUNTASTE (no lo repitas): " + ", ".join(e.ya_preguntado))
+    if e.pregunta_pendiente and e.pregunta_pendiente.texto:
+        partes.append(f"PREGUNTA PENDIENTE (lo último que preguntaste): {e.pregunta_pendiente.texto}")
     if e.resultado:
         partes.append("Resultado ya calculado: " + json.dumps(e.resultado, ensure_ascii=False)[:900])
     return "\n".join(partes)
@@ -772,18 +887,27 @@ def _cifras_validas(respuesta: str, permitidas: list[float]) -> bool:
     return True
 
 
-async def _con_ia(t: TurnoChat) -> tuple[_Plan, str]:
+def _texto_usuario(t: TurnoChat) -> str:
+    """Lo que escribió el usuario en esta conversación (las cifras solo pueden salir de aquí)."""
+    previos = [m.texto for m in t.historial[-10:] if m.rol == "usuario"]
+    return "\n".join([*previos, t.mensaje])
+
+
+def _lista_dict(v: Any) -> list[dict[str, Any]]:
+    return [x for x in (v or []) if isinstance(x, dict)] if isinstance(v, list) else []
+
+
+async def _con_ia(t: TurnoChat, vp: Liquidacion | None) -> tuple[_Plan, str]:
     e = t.estado
     base = base_del_anio(e.anio_gravable)
     sistema = (
-        SISTEMA.format(hoy=_fecha(date.today()))
-        + "\n\nCAMPOS (claves para anotar):\n" + "\n".join(f"- {k}: {v[2]}" for k, v in CAMPOS.items())
+        SISTEMA.format(hoy=fecha_texto(date.today()))
+        + "\n\nCAMPOS (claves para anotar, quitar o simular):\n" + "\n".join(f"- {k}: {v[2]}" for k, v in CAMPOS.items())
         + "\n\nDATOS DEL AÑO:\n" + _datos_anio_texto(e.anio_gravable)
         + "\n\nBASE DE CONOCIMIENTO:\n" + "\n".join(f"### {s.titulo}\n{s.texto}" for s in base)
     )
-    estado = _estado_texto(e)
     historial = "\n".join(f"{'Usuario' if m.rol == 'usuario' else 'Tú'}: {m.texto[:500]}" for m in t.historial[-10:])
-    usuario = f"ESTADO:\n{estado}\n\nCONVERSACIÓN RECIENTE:\n{historial or '(es el primer mensaje)'}\n\nMENSAJE DEL USUARIO: {t.mensaje}"
+    usuario = f"ESTADO:\n{_estado_texto(e, vp)}\n\nCONVERSACIÓN RECIENTE:\n{historial or '(es el primer mensaje)'}\n\nMENSAJE DEL USUARIO: {t.mensaje}"
 
     r = await cliente.completar("asistente", sistema, usuario, json_mode=True, max_tokens=1800)
     try:
@@ -797,8 +921,7 @@ async def _con_ia(t: TurnoChat) -> tuple[_Plan, str]:
     respuesta = _limpiar(str(j.get("respuesta") or ""))
     if not respuesta:
         raise ValueError("respuesta vacía")
-    permitidas = numeros.cantidades(sistema + "\n" + usuario)
-    permitidas += [c * 12 for c in numeros.cantidades(t.mensaje)]
+    permitidas = numeros.cantidades(sistema + "\n" + usuario) + [c * 12 for c in numeros.cantidades(_texto_usuario(t))]
     if not _cifras_validas(respuesta, permitidas):
         raise ValueError("la respuesta trae cifras que no están en los datos")
     titulos = {s.titulo for s in base}
@@ -808,63 +931,216 @@ async def _con_ia(t: TurnoChat) -> tuple[_Plan, str]:
         cambiar = int(cambiar) if cambiar not in (None, "", False) else None
     except (TypeError, ValueError):
         cambiar = None
+    pregunta = None
+    jp = j.get("pregunta")
+    if isinstance(jp, dict) and respuesta.rstrip().endswith("?"):
+        campos = [c for c in (jp.get("campos") or []) if isinstance(c, str) and c in CAMPOS]
+        intencion = jp.get("intencion") if jp.get("intencion") in ("calcular", "obligacion", "vencimiento", "simular") else None
+        temas = sorted({_TEMA.get(c, c) for c in campos})
+        pregunta = PreguntaPendiente(texto=respuesta, temas=temas, intencion=intencion)
+        montos = [x for x in numeros.cantidades(t.mensaje) if x >= 1000]
+        if len(campos) == 1 and CAMPOS[campos[0]][1] == "pesos" and len(montos) == 1:
+            pregunta.campo, pregunta.valor = campos[0], montos[0]
+            pregunta.temas = sorted({*temas, "periodo"})
     plan = _Plan(
         respuesta=respuesta,
-        anotar=[x for x in (j.get("anotar") or []) if isinstance(x, dict)],
+        anotar=_lista_dict(j.get("anotar")),
+        quitar=_lista_dict(j.get("quitar")),
+        simular=_lista_dict(j.get("simular")),
         calcular=j.get("calcular") is True or str(j.get("calcular")).lower() == "true",
+        insiste=bool(_RE_INSISTE.search(norm(t.mensaje))),
         cambiar_anio=cambiar,
         mostrar=[str(x) for x in (j.get("mostrar") or []) if isinstance(x, str)],
         fuentes=[fuente] if isinstance(fuente, str) and fuente in titulos else [],
+        pregunta=pregunta,
     )
+    # Respuestas cortas a la pregunta pendiente que el modelo no anotó
+    if e.pregunta_pendiente:
+        extra = _respuesta_a_pendiente(t.mensaje, e.pregunta_pendiente, plan.anotar)
+        if e.pregunta_pendiente.intencion == "simular":
+            plan.simular = plan.simular or extra
+        else:
+            plan.anotar += [x for x in extra if x["campo"] not in {a.get("campo") for a in plan.anotar}]
     return plan, r.modelo
 
 
 # ---------- Turno completo ----------
 
 
+_CORTA = {"salarios": "salario", "pension": "pensión", "arriendos": "arriendo", "medicina_prepagada": "medicina prepagada",
+          "honorarios": "honorarios", "aportes_voluntarios": "aportes voluntarios", "intereses_vivienda": "intereses de vivienda"}
+
+
+def _pregunta_periodo(item: dict[str, Any], intencion: Intencion | None) -> PreguntaPendiente:
+    v = _a_float(item.get("valor")) or 0
+    etiqueta = _CORTA.get(item["campo"], CAMPOS[item["campo"]][2].lower())
+    return PreguntaPendiente(
+        texto=f"¿Los {pesos(v)} de {etiqueta} son al mes o en todo el año? Lo necesito para sumarlo bien.",
+        temas=["periodo"], campo=item["campo"], valor=v, intencion=intencion,
+        simular=[item] if intencion == "simular" else [],
+    )
+
+
 async def responder(t: TurnoChat) -> RespuestaChat:
     e = t.estado
+    p = e.pregunta_pendiente
+    vp_inicial = vista_previa(e)
     plan: _Plan | None = None
     modelo, con_ia = None, False
     if cliente.disponible():
         try:
-            plan, modelo = await _con_ia(t)
+            plan, modelo = await _con_ia(t, vp_inicial)
             con_ia = True
         except Exception as ex:  # noqa: BLE001 - si el modelo falla, responde la ruta sin IA
             log.warning("Asistente sin IA en este turno: %s", ex)
     if plan is None:
         plan = _sin_ia(t)
 
-    nuevas, hechas, rechazadas = aplicar(e.respuestas, plan.anotar, t.mensaje)
-    respuesta = plan.respuesta
-    if rechazadas:
-        respuesta += f" No anoté {', '.join(rechazadas)} porque no encontré esa cifra en tu mensaje; escríbela con números."
+    msg = norm(t.mensaje)
+    texto_usuario = _texto_usuario(t)
+    if p and p.intencion == "simular" and p.simular and not plan.simular:
+        # Se respondió el periodo de una simulación pendiente
+        plan.simular = [x for x in plan.anotar if x.get("campo") == p.campo]
+        plan.anotar = [x for x in plan.anotar if x.get("campo") != p.campo]
 
+    # 1. Cifras ambiguas: no se anotan, se pregunta
+    pregunta_codigo: PreguntaPendiente | None = None
+    for lista, intencion in ((plan.simular, "simular"), (plan.anotar, None)):
+        for item in list(lista):
+            if item.get("campo") in _MENSUALES and str(item.get("periodo") or "") not in ("mensual", "anual"):
+                per = periodo_de(t.mensaje)
+                if per and len([x for x in numeros.cantidades(msg) if x >= 1000]) <= 1:
+                    item["periodo"] = per
+                elif pregunta_codigo is None:
+                    pregunta_codigo = _pregunta_periodo(item, intencion or (p.intencion if p else None))  # type: ignore[arg-type]
+                    lista.remove(item)
+                else:
+                    lista.remove(item)
+
+    # 2. Quitar y anotar
+    r = e.respuestas
+    r, quitadas = quitar(r, plan.quitar)
+    r, hechas, rechazadas = aplicar(r, plan.anotar, texto_usuario)
+    partes: list[str] = []
+    respuesta = plan.respuesta
+    if not con_ia:
+        if quitadas:
+            partes.append("Listo, quité " + ", ".join(quitadas) + ".")
+        elif plan.quitar:
+            partes.append("No tenía eso anotado.")
+        if hechas and not respuesta.startswith("Listo"):
+            partes.append("Listo, lo anoté.")
+    if pregunta_codigo and con_ia:
+        respuesta = ("Anoté lo demás." if hechas else "")  # la pregunta del código reemplaza lo que dijo el modelo
+    partes.append(respuesta)
+    if rechazadas:
+        partes.append(f"No anoté {', '.join(rechazadas)} porque no encontré esa cifra en lo que escribiste; escríbela con números.")
+
+    # 3. Año
     cambiar = plan.cambiar_anio if plan.cambiar_anio in anios_vigentes() and plan.cambiar_anio != e.anio_gravable else None
     anio = cambiar or e.anio_gravable
     if cambiar and e.tiene_exogena and e.anio_exogena and e.anio_exogena != cambiar:
-        respuesta += f" Ojo: tu exógena es del {e.anio_exogena}; para {cambiar} necesitas la de ese año."
+        partes.append(f"Ojo: tu exógena es del {e.anio_exogena}; para {cambiar} necesitas la de ese año.")
+    e2 = e.model_copy(update={"anio_gravable": anio, "respuestas": r})
+    vp = vista_previa(e2, r)
+
+    ya = list(dict.fromkeys(e.ya_preguntado))
+    pregunta: PreguntaPendiente | None = pregunta_codigo or plan.pregunta
+    calcular = plan.calcular and not pregunta
+    insiste = plan.insiste
+    simulacion: Simulacion | None = None
+
+    # 4. Retomar lo que quedó pendiente cuando el usuario respondió
+    respondio = bool(hechas or quitadas or _RE_NEGATIVO.search(msg) or _RE_AFIRMATIVO.search(msg) or _RE_NO_SE.search(msg) or insiste)
+    if p and p.intencion and respondio and not pregunta:
+        if p.intencion == "calcular":
+            calcular = True
+            insiste = insiste or "ingresos" not in p.temas  # ya hubo una ronda de preguntas: calcula
+        elif p.intencion == "obligacion" and vp and "obligad" not in norm(" ".join(partes)):
+            partes.append(texto_obligacion(e2, vp.obligacion))
+        elif p.intencion == "vencimiento" and r.ultimos_dos_digitos_nit and "terminada en" not in " ".join(partes):
+            partes.append(texto_vencimiento(anio, r.ultimos_dos_digitos_nit) or "")
+
+    # 5. Preguntas sobre su propio caso (ruta sin IA)
+    if plan.caso == "obligacion":
+        if vp:
+            partes.append(texto_obligacion(e2, vp.obligacion))
+        else:
+            sec = base_del_anio(anio)[0]
+            partes.append(sec.texto)
+            plan.fuentes.append(sec.titulo)
+            if not pregunta and "ingresos" not in ya:
+                pregunta = PreguntaPendiente(texto=f"¿Cuánto recibiste en {anio} y qué tenías al 31 de diciembre (cuentas, casa, carro)? Con eso te digo si te toca.",
+                                             temas=["ingresos", "patrimonio"], intencion="obligacion")
+    elif plan.caso == "vencimiento":
+        if r.ultimos_dos_digitos_nit:
+            partes.append(texto_vencimiento(anio, r.ultimos_dos_digitos_nit) or "")
+        else:
+            sec = next(s for s in base_del_anio(anio) if s.titulo.startswith("¿Cuándo vence"))
+            partes.append(sec.texto)
+            plan.fuentes.append(sec.titulo)
+            if not pregunta and "cedula" not in ya:
+                pregunta = PreguntaPendiente(texto="¿En qué dos números termina tu cédula? Te digo tu fecha exacta.", temas=["cedula"], intencion="vencimiento")
+
+    # 6. Simular
+    if plan.simular and not pregunta:
+        if not _hay_datos(e2, r):
+            pregunta = PreguntaPendiente(texto=f"Para simularlo necesito tus ingresos. {_PREGUNTAS['ingresos'].format(anio=anio)}", temas=["ingresos"], intencion="simular", simular=plan.simular)
+        else:
+            simulacion, texto = simular(e2, r, plan.simular, texto_usuario)
+            partes.append(texto or "No pude simular ese cambio con los datos que tengo.")
+    elif p and p.intencion == "simular" and p.simular and respondio and _hay_datos(e2, r) and not pregunta:
+        simulacion, texto = simular(e2, r, p.simular, texto_usuario)
+        if texto:
+            partes.append(texto)
+
+    # 7. Antes de calcular: preguntar lo que cambia el resultado (una sola vez)
+    if calcular and not pregunta:
+        fs = faltantes(e2.model_copy(update={"ya_preguntado": ya}), r, vp)
+        if fs and fs[0].tema == "ingresos":
+            calcular = False
+            pregunta = PreguntaPendiente(texto=f"Para calcular necesito tus ingresos. {fs[0].pregunta}", temas=["ingresos"], intencion="calcular")
+            partes = [x for x in partes if "calcul" not in norm(x)]
+        elif fs and not insiste:
+            calcular = False
+            top = fs[:2]
+            intro = "Antes de calcular necesito un dato que cambia el resultado." if len(top) == 1 else "Antes de calcular necesito dos datos que cambian el resultado."
+            pregunta = PreguntaPendiente(
+                texto=f"{intro} {' '.join(f.pregunta for f in top)} Si no los tienes a la mano, escribe «calcula así».",
+                temas=[f.tema for f in top], intencion="calcular",
+            )
+            partes = [x for x in partes if "calcul" not in norm(x)]
+        elif calcular and not any("calcul" in norm(x) for x in partes):
+            partes.append("Con eso calculo tu borrador.")
+        if calcular and e.por_revisar:
+            partes.append(f"Dejé por fuera {len(e.por_revisar)} dato(s) de tu exógena que aún no confirmas.")
+            plan.mostrar.append("revisar")
+
+    # 8. La pregunta va al final de la respuesta y no se vuelve a hacer
+    if pregunta:
+        if pregunta.texto and pregunta.texto not in " ".join(partes):
+            partes.append(pregunta.texto)
+        ya = list(dict.fromkeys([*ya, *pregunta.temas]))
+    elif p and not respondio and not (calcular or simulacion or hechas):
+        pregunta = p  # siguió preguntando otra cosa: lo pendiente se conserva
 
     mostrar = [w for w in dict.fromkeys(plan.mostrar) if w in WIDGETS]
-    calcular = plan.calcular
-    if calcular and not _hay_datos(e, nuevas):
-        calcular = False
-        if "ingres" not in numeros.normalizar(respuesta):
-            respuesta += f" Para calcular necesito al menos tus ingresos de {anio}: cuéntamelos o adjunta tu exógena."
-    elif calcular and e.por_revisar:
-        respuesta += f" Dejé por fuera {len(e.por_revisar)} dato(s) de tu exógena que aún no confirmas."
-        mostrar.append("revisar")
     if "revisar" in mostrar and not e.por_revisar:
         mostrar.remove("revisar")
 
+    texto_final = re.sub(r"\s+", " ", " ".join(x for x in partes if x)).strip() or "Entendido."
     return RespuestaChat(
-        respuesta=respuesta.strip(),
-        respuestas=nuevas,
+        respuesta=texto_final,
+        respuestas=r,
         anotaciones=hechas,
+        quitadas=quitadas,
         rechazadas=rechazadas,
         widgets=mostrar,
         cambiar_anio=cambiar,
         calcular=calcular,
+        simulacion=simulacion,
+        pregunta=pregunta,
+        ya_preguntado=ya,
         fuentes=plan.fuentes[:2],
         modelo=modelo,
         con_ia=con_ia,

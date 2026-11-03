@@ -53,7 +53,7 @@ También: cuánto me toca pagar | tarifa de renta | tabla de renta | cuánto cob
 Depende de tu renta líquida gravable, que es lo que queda de tus ingresos después de restar aportes, rentas exentas y deducciones. Hasta 1.090 UVT ({tramo0} en {anio}) la tarifa es 0 %; lo que pase de ahí paga por tramos del 19 %, 28 %, 33 %, 35 %, 37 % y 39 % (tabla del art. 241). Por eso alguien con ingresos de unos pocos millones al mes suele pagar poco o nada.
 
 ## ¿Qué es la declaración de renta?
-También: qué es declarar renta | para qué sirve declarar | qué es la renta | en qué consiste la declaración
+También: qué es declarar renta | para qué sirve declarar | qué es la renta | qué es eso de la renta | qué es eso de declarar | en qué consiste la declaración | de qué se trata la renta
 Es un formulario (el 210 para personas naturales) donde le cuentas a la DIAN cuánto ganaste, cuánto tenías y cuánto debías en un año. Con eso se calcula si te toca pagar impuesto o si te deben devolver plata.
 
 ## ¿Qué es la DIAN?

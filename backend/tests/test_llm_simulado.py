@@ -91,13 +91,42 @@ def test_asistente_descarta_cifras_inventadas(con_llm):
     assert not r.con_ia and "7.777.777" not in r.respuesta  # se usó la ruta con reglas
 
 
-def test_asistente_calcula_solo_si_hay_datos(con_llm):
+def test_asistente_pregunta_antes_de_calcular(con_llm):
     con_llm(_Falso(lambda m: json.dumps({"respuesta": "Calculo tu borrador con lo que tengo.", "calcular": True})))
     r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="calcula")))
-    assert not r.calcular and "ingresos" in r.respuesta
+    assert not r.calcular and "ingresos" in r.respuesta and r.pregunta.intencion == "calcular"
     e = asistente.EstadoChat(respuestas={"salarios_no_reportados": 60_000_000})
     r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="calcula", estado=e)))
-    assert r.calcular
+    assert not r.calcular and "Antes de calcular" in r.respuesta and "Calculo tu borrador" not in r.respuesta
+    e = e.model_copy(update={"pregunta_pendiente": r.pregunta, "ya_preguntado": r.ya_preguntado})
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "Listo, lo anoté.", "anotar": [{"campo": "ultimos_dos_digitos_cedula", "valor": "21"}]})))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="termina en 21 y no me retuvieron", estado=e)))
+    assert r.calcular  # al responder, el agente retoma y calcula
+
+
+def test_la_pregunta_del_modelo_queda_pendiente_y_la_cifra_sale_del_historial(con_llm):
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "¿Esos 3 millones son al mes o en todo el año?", "pregunta": {"campos": ["salarios"], "intencion": None}})))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="me pagan 3 millones")))
+    assert r.pregunta and r.pregunta.campo == "salarios" and r.pregunta.valor == 3_000_000 and not r.anotaciones
+    e = asistente.EstadoChat(pregunta_pendiente=r.pregunta, ya_preguntado=r.ya_preguntado)
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "Listo, lo anoté.", "anotar": [{"campo": "salarios", "valor": "3 millones", "periodo": "mensual"}]})))
+    historial = [{"rol": "usuario", "texto": "me pagan 3 millones"}, {"rol": "asistente", "texto": r.respuesta}]
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="al mes", historial=historial, estado=e)))
+    assert r.respuestas.salarios_no_reportados == 36_000_000  # la cifra la dijo el usuario en el mensaje anterior
+
+
+def test_si_el_modelo_no_dice_el_periodo_el_agente_pregunta(con_llm):
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "Listo, lo anoté.", "anotar": [{"campo": "salarios", "valor": "5 millones"}]})))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="me pagan 5 millones")))
+    assert not r.anotaciones and "al mes o en todo el año" in r.respuesta and "Listo" not in r.respuesta
+
+
+def test_simulacion_con_ia(con_llm):
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "Mira la diferencia:", "simular": [{"campo": "aportes_voluntarios", "valor": "1 millón", "periodo": "mensual"}]})))
+    e = asistente.EstadoChat(respuestas={"salarios_no_reportados": 144_000_000})
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="cuánto me ahorro si aportara 1 millón al mes a una AFC?", estado=e)))
+    assert r.simulacion and r.simulacion.impuesto_despues < r.simulacion.impuesto_antes
+    assert r.respuestas.aportes_voluntarios_afc_fpv == 0
 
 
 def test_asistente_acepta_texto_plano(con_llm):

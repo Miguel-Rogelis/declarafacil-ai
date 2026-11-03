@@ -61,8 +61,12 @@ def cantidades(texto: str) -> list[float]:
             continue
         # "1 millon 500 mil" → suma de partes
         while j < len(tokens) and tokens[j] in _MULT:
-            valor *= _MULT[tokens[j]]
+            mult = _MULT[tokens[j]]
+            valor *= mult
             j += 1
+            if j + 1 < len(tokens) and tokens[j] == "y" and tokens[j + 1] == "medio":
+                valor += mult / 2  # "3 millones y medio"
+                j += 2
             if j + 1 < len(tokens) and _numero(tokens[j] or "") is not None and tokens[j + 1] in ("mil", "lucas"):
                 valor += _numero(tokens[j]) * 1_000  # type: ignore[operator]
                 j += 2

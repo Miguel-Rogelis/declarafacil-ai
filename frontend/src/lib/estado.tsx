@@ -10,13 +10,15 @@ import {
   type EventoAgente,
   type Extraccion,
   type Fila,
+  type PreguntaPendiente,
   type Respuestas,
   type ResultadoLiquidacion,
+  type Simulacion,
 } from "./api";
 
 export type Ruta = "inicio" | "declarar" | "resultado" | "configuracion";
 
-export type Widget = "subir_exogena" | "revisar" | "traza_documento" | "traza_calculo" | "resultado" | "anotado";
+export type Widget = "subir_exogena" | "revisar" | "traza_documento" | "traza_calculo" | "resultado" | "anotado" | "simulacion";
 
 export interface Mensaje {
   id: number;
@@ -24,7 +26,11 @@ export interface Mensaje {
   texto?: string;
   widget?: Widget;
   anotaciones?: Anotacion[];
+  quitadas?: string[];
   antes?: Respuestas;
+  /** El agente pidió un dato que le falta. */
+  pregunta?: boolean;
+  simulacion?: Simulacion;
   deshecho?: boolean;
   eventos?: EventoAgente[];
   fuentes?: string[];
@@ -99,6 +105,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [escribiendo, setEscribiendo] = useState(false);
   const [archivoPendiente, setArchivoPendiente] = useState<File | null>(null);
   const contador = useRef(1);
+  const conversacion = useRef<{ pregunta: PreguntaPendiente | null; ya: string[] }>({ pregunta: null, ya: [] });
 
   // Estado más reciente para los callbacks asíncronos. Se actualiza a mano cuando una
   // acción depende de un cambio que React todavía no ha aplicado (p. ej. cambiar de año y calcular).
@@ -146,6 +153,8 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       filas: s.filas,
       topes: s.extraccion?.topes ?? {},
       respuestas: s.respuestas,
+      pregunta_pendiente: conversacion.current.pregunta,
+      ya_preguntado: conversacion.current.ya,
       resultado: r
         ? {
             anio_gravable: r.anio_gravable,
@@ -277,8 +286,11 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         const r = await api.chat(t, historial, estadoChat());
         setRespuestas(r.respuestas);
         ref.current.respuestas = r.respuestas;
-        if (r.anotaciones.length) agregar({ rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, antes });
-        agregar({ rol: "asistente", texto: r.respuesta, fuentes: r.fuentes, conIa: r.con_ia });
+        conversacion.current = { pregunta: r.pregunta, ya: r.ya_preguntado };
+        const cambiaron = r.anotaciones.length > 0 || r.quitadas.length > 0;
+        if (cambiaron) agregar({ rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, quitadas: r.quitadas, antes });
+        agregar({ rol: "asistente", texto: r.respuesta, fuentes: r.fuentes, conIa: r.con_ia, pregunta: !!r.pregunta });
+        if (r.simulacion) agregar({ rol: "asistente", widget: "simulacion", simulacion: r.simulacion });
         if (r.cambiar_anio && r.cambiar_anio !== ref.current.anio) ponerAnio(r.cambiar_anio);
         r.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
         setEscribiendo(false);
@@ -286,7 +298,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
           setResultado(null);
           ref.current.resultado = null;
           await calcular();
-        } else if (habia && (r.anotaciones.length || r.cambiar_anio)) {
+        } else if (habia && (cambiaron || r.cambiar_anio)) {
           recalcularSiHabia(true);
         }
       } catch (e) {
@@ -359,6 +371,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setResultado(null);
     setEventosCalculo([]);
     setMensajes([]);
+    conversacion.current = { pregunta: null, ya: [] };
     ref.current = { ...ref.current, extraccion: null, filas: [], decididas: {}, respuestas: respuestasIniciales(), resultado: null, mensajes: [] };
   }, []);
 

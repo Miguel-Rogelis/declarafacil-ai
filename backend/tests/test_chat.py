@@ -33,7 +33,23 @@ def _turno(mensaje, estado, historial=None):
     assert r.status_code == 200, r.text
     j = r.json()
     assert "sugerencias" not in j  # el agente no sugiere preguntas
-    return j, {**estado, "respuestas": j["respuestas"]}
+    nuevo = {**estado, "respuestas": j["respuestas"], "pregunta_pendiente": j["pregunta"], "ya_preguntado": j["ya_preguntado"]}
+    if j["cambiar_anio"]:
+        nuevo["anio_gravable"] = j["cambiar_anio"]
+    return j, nuevo
+
+
+class Charla:
+    """Conversación de varios turnos con historial, como la manda el front."""
+
+    def __init__(self, **estado):
+        self.estado = {"anio_gravable": 2025, **estado}
+        self.historial = []
+
+    def __call__(self, mensaje):
+        j, self.estado = _turno(mensaje, self.estado, self.historial)
+        self.historial += [{"rol": "usuario", "texto": mensaje}, {"rol": "asistente", "texto": j["respuesta"]}]
+        return j
 
 
 @pytest.mark.parametrize(
@@ -70,33 +86,84 @@ def test_las_respuestas_cambian_con_el_anio():
 
 
 def test_armar_la_declaracion_hablando_y_calcular_cuando_lo_pide():
-    e = {"anio_gravable": 2025, "pantalla": "declarar"}
-    j, e = _turno("calcula", e)
-    assert not j["calcular"] and "ingresos" in j["respuesta"]  # sin datos no calcula y dice qué falta
-    j, e = _turno("Gano 5 millones al mes", e)
-    assert e["respuestas"]["salarios_no_reportados"] == 60_000_000 and j["respuesta"] == "Listo, lo anoté."
-    j, e = _turno("tengo dos hijos", e)
-    assert e["respuestas"]["dependientes"] == 2
-    j, e = _turno("Prepagada de 350 mil al mes, y tengo un carro de 40 millones", e)
-    assert e["respuestas"]["medicina_prepagada"] == 4_200_000
-    assert e["respuestas"]["bienes_adicionales"][0]["valor"] == 40_000_000
-    j, e = _turno("es la primera vez que declaro y mi cédula termina en 21", e)
-    assert e["respuestas"]["declaraciones_previas"] == 0 and e["respuestas"]["ultimos_dos_digitos_nit"] == "21"
-    j, e = _turno("tengo que declarar?", e)
+    ch = Charla()
+    j = ch("calcula")
+    assert not j["calcular"] and "ingresos" in j["respuesta"] and j["pregunta"]["intencion"] == "calcular"
+    j = ch("me pagan 5 millones")
+    assert not j["anotaciones"] and "al mes o en todo el año" in j["respuesta"]  # cifra ambigua: pregunta
+    j = ch("al mes")
+    assert ch.estado["respuestas"]["salarios_no_reportados"] == 60_000_000
+    j = ch("tengo dos hijos, y un carro de 40 millones")
+    assert ch.estado["respuestas"]["dependientes"] == 2
+    assert ch.estado["respuestas"]["bienes_adicionales"][0]["valor"] == 40_000_000
+    j = ch("tengo que declarar?")
     assert "no estás obligado" in j["respuesta"]  # lo decide el motor con sus datos
-    j, e = _turno("cuando vence?", e)
+    j = ch("calcula")
+    assert not j["calcular"] and "Antes de calcular" in j["respuesta"]  # pregunta lo que cambia el resultado
+    assert set(j["pregunta"]["temas"]) == {"retenciones", "cedula"}
+    j = ch("no me hicieron retención y mi cédula termina en 21")
+    assert j["calcular"] and ch.estado["respuestas"]["ultimos_dos_digitos_nit"] == "21"  # retoma: calcula
+    j = ch("cuando vence?")
     assert "terminada en 21" in j["respuesta"]
-    j, e = _turno("calcula cuánto me toca", e)
-    assert j["calcular"]
+    j = ch("calcula de nuevo")
+    assert j["calcular"]  # ya preguntó: no vuelve a preguntar
 
-    r = c.post("/api/declaracion/liquidar", json={"anio_gravable": 2025, "filas": [], "topes": {}, "respuestas": e["respuestas"]})
+    r = c.post("/api/declaracion/liquidar", json={"anio_gravable": 2025, "filas": [], "topes": {}, "respuestas": ch.estado["respuestas"]})
     resultado = [line for line in r.text.splitlines() if line.startswith("data:") and "liquidacion" in line]
     assert resultado and "Estimamos tus aportes" in resultado[0]
 
 
+def test_calcula_asi_no_pregunta():
+    ch = Charla(respuestas={"salarios_no_reportados": 60_000_000})
+    assert ch("calcula así")["calcular"]
+
+
+def test_pregunta_por_su_caso_y_retoma():
+    ch = Charla()
+    j = ch("¿tengo que declarar?")
+    assert "$69.718.600" in j["respuesta"] and j["pregunta"]["intencion"] == "obligacion"
+    j = ch("gano 9 millones mensuales y tengo un apartamento de 250 millones")
+    assert "sí estás obligado" in j["respuesta"]
+    ch = Charla()
+    j = ch("cuándo vence mi declaración?")
+    assert j["pregunta"]["temas"] == ["cedula"]
+    j = ch("termina en 21")
+    assert "27 de agosto de 2026" in j["respuesta"]
+
+
+def test_respuestas_cortas_a_sus_preguntas():
+    ch = Charla(respuestas={"salarios_no_reportados": 144_000_000})
+    j = ch("calcula")
+    assert "dependientes" in j["pregunta"]["temas"]
+    j = ch("sí")
+    assert "Cuántas" in j["respuesta"] and not j["calcular"]  # "sí" sin número: pregunta cuántas
+    j = ch("dos")
+    assert ch.estado["respuestas"]["dependientes"] == 2 and j["calcular"]
+    ch = Charla()
+    j = ch("8 millones")
+    assert j["pregunta"]["temas"] == ["concepto"]
+    j = ch("es lo que vale mi carro")
+    assert ch.estado["respuestas"]["bienes_adicionales"][0]["valor"] == 8_000_000
+
+
+def test_simula_sin_cambiar_los_datos():
+    ch = Charla(respuestas={"salarios_no_reportados": 144_000_000})
+    j = ch("y si pagara prepagada de 500 mil al mes?")
+    assert j["simulacion"] and j["simulacion"]["impuesto_despues"] < j["simulacion"]["impuesto_antes"]
+    assert "te ahorrarías" in j["respuesta"] and ch.estado["respuestas"]["medicina_prepagada"] == 0
+
+
+def test_corrige_y_quita():
+    ch = Charla()
+    ch("tengo un carro de 40 millones y un apartamento de 200 millones")
+    j = ch("ya no tengo el carro")
+    assert j["quitadas"] == ["Bien: Carro"] and len(ch.estado["respuestas"]["bienes_adicionales"]) == 1
+    j = ch("quita la moto")
+    assert "No tenía eso anotado" in j["respuesta"]
+
+
 def test_obligado_con_sus_datos():
-    e = {"anio_gravable": 2025}
-    j, e = _turno("gano 8 millones al mes, tengo que declarar?", e)
+    j, _ = _turno("gano 8 millones al mes, tengo que declarar?", {"anio_gravable": 2025})
     assert "sí estás obligado" in j["respuesta"] and "$96.000.000" in j["respuesta"]
 
 
@@ -124,3 +191,55 @@ def test_solo_se_guardan_dos_digitos_de_la_cedula():
 def test_quita_ofrecimientos_del_final():
     assert asistente._limpiar("Es la DIAN. ¿Quieres que te explique más?") == "Es la DIAN."
     assert asistente._limpiar("**Sí.** Si quieres, te ayudo con eso.") == "Sí."
+
+
+def test_retoma_lo_que_queria_aunque_pregunte_otra_cosa_en_medio():
+    ch = Charla()
+    j = ch("y yo tengo que declarar?")
+    assert j["pregunta"]["intencion"] == "obligacion"
+    j = ch("me gano como 3 millones y medio")
+    assert "$3.500.000" in j["respuesta"] and j["pregunta"]["intencion"] == "obligacion"  # pregunta el periodo sin olvidar el objetivo
+    j = ch("al mes")
+    assert ch.estado["respuestas"]["salarios_no_reportados"] == 42_000_000 and "no estás obligado" in j["respuesta"]
+
+
+def test_calcula_sin_datos_pide_ingresos_y_luego_pregunta_lo_que_cambia_el_resultado():
+    ch = Charla()
+    j = ch("calcula cuanto me toca pagar")
+    assert j["respuesta"].startswith("Para calcular necesito tus ingresos") and not j["fuentes"]
+    j = ch("8 millones mensuales de salario")
+    assert not j["calcular"] and "Antes de calcular" in j["respuesta"]  # una ronda de preguntas antes de calcular
+    j = ch("me retuvieron 4.800.000")
+    assert j["calcular"]  # respondió: calcula con lo que hay
+
+
+def test_no_se_no_se_anota_como_cero():
+    ch = Charla(respuestas={"honorarios_no_reportados": 90_000_000})
+    ch("calcula")
+    j = ch("no sé")
+    assert j["calcular"] and not j["anotaciones"]
+
+
+def test_tengo_hijos_sin_numero_pregunta_cuantos():
+    ch = Charla()
+    j = ch("tengo hijos")
+    assert j["respuesta"] == "¿Cuántas personas dependen económicamente de ti?"
+    ch("3")
+    assert ch.estado["respuestas"]["dependientes"] == 3
+
+
+def test_que_es_eso_de_la_renta():
+    j, _ = _turno("que es eso de la renta?", {"anio_gravable": 2025})
+    assert j["fuentes"] == ["¿Qué es la declaración de renta?"]
+
+
+def test_dato_sin_cifra_pregunta_cuanto():
+    ch = Charla()
+    j = ch("tengo un carro")
+    assert "Cuánto vale" in j["respuesta"] and j["pregunta"]["temas"] == ["valor"]
+    ch("unos 40 millones")
+    assert ch.estado["respuestas"]["bienes_adicionales"][0] == {"concepto": "Carro", "valor": 40_000_000, "fuente": "chat"}
+    j = ch("pago medicina prepagada")
+    assert "al mes o en todo el año" in j["respuesta"]
+    j = ch("300 mil al mes")
+    assert ch.estado["respuestas"]["medicina_prepagada"] == 3_600_000

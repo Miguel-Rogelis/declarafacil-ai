@@ -45,7 +45,10 @@ def test_interprete_ubica_conceptos_y_copia_cifras_exactas():
     assert por_detalle["Pagos por salarios (Concepto: 2276)"].campo == "laboral.salarios_y_pagos_laborales"
     assert por_detalle["Intereses pagados en créditos de vivienda (Concepto: 1315)"].campo == "deducciones.intereses_vivienda"
     assert por_detalle["Activos aportes parafiscales, salud, pensión y cesantías (Concepto: 2214)"].tratamiento == "revisar"
-    assert por_detalle["Valor de los bonos de alimentación entregados (Concepto: 2276)"].origen_mapeo == "sin_mapeo"
+    bonos = por_detalle["Valor de los bonos de alimentación entregados (Concepto: 2276)"]
+    assert bonos.tratamiento == "informativo" and "387-1" in bonos.explicacion  # salario < 310 UVT y bonos < 41 UVT al mes: no son ingreso
+    parafiscales = por_detalle["Activos aportes parafiscales, salud, pensión y cesantías (Concepto: 2214)"]
+    assert "¿La dejo por fuera?" in parafiscales.pregunta and [o.recomendada for o in parafiscales.opciones] == [True, False]
     # Cada cifra del resultado es la suma exacta de sus filas de origen
     assert ext.resumen_campos["laboral.salarios_y_pagos_laborales"] == 96_000_000
     assert ext.resumen_campos["patrimonio.deudas"] == 98_200_000

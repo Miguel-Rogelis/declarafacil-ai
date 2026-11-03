@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.agents import anonimizador, asistente, explicador, interprete, lector
+from app.agents.base import FilaExogena
 from app.config import settings
 from app.llm import cliente
 from app.tax.modelos import DatosDeclaracion
@@ -43,19 +44,23 @@ def con_llm(monkeypatch):
 
 def test_interprete_con_ia_no_recibe_montos_ni_datos_personales(con_llm):
     falso = con_llm(_Falso(lambda m: json.dumps({"conceptos": [
-        {"i": 0, "campo": "laboral.salarios_y_pagos_laborales", "explicacion": "Bonos que te dio tu empleador; cuentan como ingreso laboral."},
-        {"i": 1, "campo": "patrimonio.bienes", "explicacion": "Aportes reportados por tu empleador."},
+        {"i": 0, "campo": "patrimonio.bienes", "explicacion": "Aportes reportados por tu empleador."},
+        {"i": 1, "campo": "laboral.salarios_y_pagos_laborales", "explicacion": "Un auxilio que te dio tu empleador; cuenta como ingreso laboral."},
     ]}), fallar_primero=True))
-    anon, ult, n = anonimizador.anonimizar(lector.leer(FIXTURE.read_bytes(), "x.xlsx"))
+    doc = lector.leer(FIXTURE.read_bytes(), "x.xlsx")
+    doc.filas.append(FilaExogena(id="raro", nit_informante="900123456", informante="COMERCIALIZADORA ANDINA S.A.S.",
+                                 detalle="Auxilio de conectividad digital (Concepto: 2276)", valor=1_800_000))
+    anon, ult, n = anonimizador.anonimizar(doc)
     ext, modelo, enviados = asyncio.run(interprete.interpretar(anon, ult, n))
     prompt = json.dumps(falso.llamadas[-1]["messages"])
     assert "1012345678" not in prompt and "LAURA" not in prompt
     assert "1800000" not in prompt and "1.800.000" not in prompt  # sin montos
     assert len(falso.llamadas) == 2  # el primer modelo falló y pasó al siguiente
     assert modelo and enviados >= 1
-    bonos = next(f for f in ext.filas if "bonos" in f.detalle)
-    assert bonos.origen_mapeo == "ia" and bonos.campo == "laboral.salarios_y_pagos_laborales"
-    assert bonos.valor == 1_800_000  # la cifra sale de la fila, no del modelo
+    auxilio = next(f for f in ext.filas if "Auxilio" in f.detalle)
+    assert auxilio.origen_mapeo == "ia" and auxilio.campo == "laboral.salarios_y_pagos_laborales"
+    assert auxilio.valor == 1_800_000  # la cifra sale de la fila, no del modelo
+    assert "Lo tomé como parte de tu salario. ¿Está bien?" in auxilio.pregunta  # el usuario confirma lo que ubicó la IA
     parafiscales = next(f for f in ext.filas if "parafiscales" in f.detalle)
     assert parafiscales.tratamiento == "revisar"  # la IA explica pero no puede aprobar lo que las reglas marcaron
 

@@ -1089,6 +1089,10 @@ def diagnosticar(e: EstadoChat) -> RespuestaChat:
     r = e.respuestas
     vp = vista_previa(e, r)
     partes = [diagnostico.diagnostico(e, r, vp)]
+    if e.por_revisar:
+        n = len(e.por_revisar)
+        partes.append("Hay un dato de tu exógena que no sé cómo tratar; te lo pregunto abajo." if n == 1
+                      else f"Hay {n} datos de tu exógena que no sé cómo tratar; te los pregunto abajo, uno por uno.")
     fs = faltantes(e, r, vp)
     pregunta = None
     ya = list(e.ya_preguntado)

@@ -82,11 +82,24 @@ class DocumentoLeido(BaseModel):
 Tratamiento = Literal["suma", "informativo", "revisar"]
 
 
+class OpcionRevision(BaseModel):
+    """Una respuesta posible a la pregunta de confirmación de una fila."""
+
+    texto: str
+    incluir: bool
+    campo: str | None = None
+    recomendada: bool = False
+
+
 class FilaInterpretada(FilaExogena):
     campo: str | None = None
     tratamiento: Tratamiento = "revisar"
     explicacion: str = ""
     origen_mapeo: Literal["reglas", "ia", "sin_mapeo"] = "sin_mapeo"
+    # Si hay que confirmarla: pregunta en lenguaje sencillo y respuestas cortas
+    pregunta: str = ""
+    ayuda: str = ""
+    opciones: list[OpcionRevision] = []
 
 
 class Perfil(BaseModel):

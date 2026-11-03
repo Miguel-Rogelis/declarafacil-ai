@@ -367,3 +367,17 @@ main { padding-bottom: 6rem; }
   .burbuja.bot { max-width: 100%; }
   .fila-entrada .boton { padding-inline: 0.9rem; }
 }
+
+/* ---------- Confirmar datos de la exógena ---------- */
+.revision { display: grid; gap: 0.6rem; }
+.revision-actual { background: #fff; border: 1.5px solid var(--reticula); border-left: 5px solid var(--resaltador); border-radius: 4px 12px 12px 4px; padding: 0.9rem 1rem; display: grid; gap: 0.45rem; }
+.revision-actual p { margin: 0; }
+.revision-pregunta { font-size: 1.02rem; font-weight: 600; line-height: 1.45; }
+.revision-opciones { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.3rem; }
+.revision-opciones .boton { display: inline-block; text-align: center; }
+.recomendada { font-weight: 500; opacity: 0.85; }
+.revision-hecha { display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.92rem; flex-wrap: wrap; }
+.revision-hecha .chulo { color: var(--sello); font-weight: 800; }
+@media (max-width: 640px) {
+  .revision-opciones { flex-direction: column; align-items: stretch; }
+}

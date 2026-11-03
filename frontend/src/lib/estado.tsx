@@ -50,6 +50,7 @@ interface Sesion {
   extraccion: Extraccion | null;
   filas: Fila[];
   decidir: (id: string, incluir: boolean, campo?: string | null) => void;
+  cambiarDecision: (id: string) => void;
   decididas: Record<string, boolean>;
   trazaDocumento: EventoAgente[];
   respuestas: Respuestas;
@@ -361,6 +362,26 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     [recalcularSiHabia],
   );
 
+  /** Vuelve a dejar pendiente un dato que ya se confirmó (botón "Cambiar"). */
+  const cambiarDecision = useCallback(
+    (id: string) => {
+      const s = ref.current;
+      const original = s.extraccion?.filas.find((f) => f.id === id);
+      if (!original) return;
+      const nuevas = s.filas.map((f) => (f.id === id ? original : f));
+      const nuevasDecididas = { ...s.decididas };
+      delete nuevasDecididas[id];
+      setFilas(nuevas);
+      setDecididas(nuevasDecididas);
+      ref.current = { ...ref.current, filas: nuevas, decididas: nuevasDecididas };
+      if (s.resultado) {
+        setResultado(null);
+        ref.current.resultado = null;
+      }
+    },
+    [],
+  );
+
   /** Cambio desde el selector del encabezado. */
   const cambiarAnio = useCallback(
     (a: number) => {
@@ -397,7 +418,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, decididas, trazaDocumento, respuestas,
+    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
     procesarArchivo, usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };

@@ -12,6 +12,7 @@ import re
 import unicodedata
 from typing import Any
 
+from app.agents import revision
 from app.agents.base import DocumentoLeido, Extraccion, FilaInterpretada, Perfil
 from app.llm import cliente
 
@@ -239,8 +240,13 @@ def construir_datos(filas: list[FilaInterpretada], topes: dict[str, float], anio
 async def interpretar(doc: DocumentoLeido, ultimos: str | None, enmascarados: int) -> tuple[Extraccion, str | None, int]:
     """Devuelve (extracción, modelo usado o None, filas enviadas al modelo)."""
     filas = [mapear_por_reglas(FilaInterpretada(**f.model_dump())) for f in doc.filas]
+    revision.resolver_duplicados(filas)
+    revision.resolver_alimentacion(filas, doc.anio)
     pendientes = [f for f in filas if f.tratamiento == "revisar"]
     modelo = await _interpretar_con_ia(pendientes)
+    for f in filas:
+        if f.tratamiento == "revisar" or f.origen_mapeo == "ia":
+            revision.preparar(f, filas, doc.anio)
     datos, perfil, resumen = construir_datos(filas, doc.topes, doc.anio, ultimos)
     extraccion = Extraccion(
         anio=doc.anio,

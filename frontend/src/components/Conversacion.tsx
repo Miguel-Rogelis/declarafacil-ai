@@ -1,12 +1,10 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Respuestas, ResultadoLiquidacion, Simulacion } from "../lib/api";
+import type { Fila, OpcionRevision, Respuestas, ResultadoLiquidacion, Simulacion } from "../lib/api";
 import { useSesion, type Mensaje } from "../lib/estado";
-import { NOMBRES_CAMPO, pesos } from "../lib/formato";
+import { pesos } from "../lib/formato";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "./MesaAgentes";
 import { Marca } from "./piezas";
-
-const CAMPOS_ELEGIBLES = Object.entries(NOMBRES_CAMPO).filter(([k]) => !k.endsWith("salario_promedio_mensual_6m"));
 
 function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
   if (m.rol === "usuario") return <div className="burbuja usuario">{m.texto}</div>;
@@ -70,47 +68,67 @@ function SubirExogena() {
   );
 }
 
+function opcionesDe(f: Fila): OpcionRevision[] {
+  if (f.opciones?.length) return f.opciones;
+  return [
+    { texto: "Sí, inclúyelo", incluir: true, campo: f.campo, recomendada: !!f.campo },
+    { texto: "No, déjalo por fuera", incluir: false, campo: null, recomendada: !f.campo },
+  ];
+}
+
+/** Datos dudosos de la exógena: una pregunta sencilla a la vez, con respuestas cortas. */
 function Revisar() {
-  const { porRevisar, filas, decididas, decidir } = useSesion();
-  const [destino, setDestino] = useState<Record<string, string>>({});
+  const { porRevisar, filas, decididas, decidir, cambiarDecision } = useSesion();
   const ids = useRef(new Set([...porRevisar.map((f) => f.id), ...Object.keys(decididas)]));
+  const [elegida, setElegida] = useState<Record<string, string>>({});
   const tarjetas = filas.filter((f) => ids.current.has(f.id));
   if (!tarjetas.length) return <p className="chico suave">No hay datos pendientes por confirmar.</p>;
+  const hechas = tarjetas.filter((f) => f.id in decididas);
+  const actual = tarjetas.find((f) => !(f.id in decididas));
+  const elegir = (f: Fila, o: OpcionRevision | undefined, texto: string) => {
+    setElegida((x) => ({ ...x, [f.id]: texto }));
+    decidir(f.id, o ? o.incluir : false, o?.campo ?? null);
+  };
   return (
-    <>
-      <p className="chico" style={{ margin: 0 }}>Confirma si cada dato va en tu declaración:</p>
-      {tarjetas.map((f) => {
-        const decidida = f.id in decididas;
-        return (
-          <div key={f.id} className={`tarjeta-revisar${decidida ? " decidida" : ""}`}>
-            <div className="monto">{pesos(f.valor)}</div>
-            <div>{f.detalle}</div>
-            <div className="chico suave">{f.informante}</div>
-            <p className="chico" style={{ marginTop: "0.4rem" }}>{f.explicacion}</p>
-            {f.origen_mapeo === "ia" && f.campo ? <p className="chico"><span className="etiqueta-ia">IA</span> Lo ubicó en: {NOMBRES_CAMPO[f.campo]}</p> : null}
-            {!f.campo && !decidida ? (
-              <div className="campo">
-                <label htmlFor={`destino-${f.id}`}>¿Dónde va?</label>
-                <select id={`destino-${f.id}`} className="entrada" value={destino[f.id] ?? ""} onChange={(e) => setDestino((x) => ({ ...x, [f.id]: e.target.value }))}>
-                  <option value="">Elige una opción</option>
-                  {CAMPOS_ELEGIBLES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-            ) : null}
-            <div className="acciones">
-              {decidida ? (
-                <span className="chico">{decididas[f.id] ? "Lo incluí." : "No lo incluí."}</span>
-              ) : (
-                <>
-                  <button className="boton chico" onClick={() => decidir(f.id, true, f.campo ?? destino[f.id])} disabled={!f.campo && !destino[f.id]}>Incluirlo</button>
-                  <button className="boton secundario chico" onClick={() => decidir(f.id, false)}>No incluirlo</button>
-                </>
-              )}
-            </div>
+    <div className="revision">
+      {hechas.map((f) => (
+        <div key={f.id} className="revision-hecha">
+          <span className="chulo" aria-hidden="true">✓</span>
+          <span>
+            {f.informante ?? "Dato"} ({pesos(f.valor)}): <strong>{elegida[f.id] ?? (decididas[f.id] ? "lo incluí" : "lo dejé por fuera")}</strong>
+          </span>
+          <button className="boton-texto chico" onClick={() => cambiarDecision(f.id)}>Cambiar</button>
+        </div>
+      ))}
+      {actual ? (
+        <div className="revision-actual">
+          {tarjetas.length > 1 ? <span className="chico suave">Dato {hechas.length + 1} de {tarjetas.length}</span> : null}
+          <p className="revision-pregunta">
+            {actual.pregunta || `${actual.informante ?? "Una entidad"} reportó ${pesos(actual.valor)} por «${actual.detalle}». ¿Lo incluyo en tu declaración?`}
+          </p>
+          {actual.ayuda ? <p className="chico suave">{actual.ayuda}</p> : null}
+          <div className="revision-opciones">
+            {opcionesDe(actual).map((o) => (
+              <button key={o.texto} className={`boton chico${o.recomendada ? "" : " secundario"}`} onClick={() => elegir(actual, o, o.texto)}>
+                {o.texto}
+                {o.recomendada ? <span className="recomendada"> · recomendado</span> : null}
+              </button>
+            ))}
+            <button
+              className="boton-texto chico"
+              onClick={() => {
+                const r = opcionesDe(actual).find((o) => o.recomendada);
+                elegir(actual, r, r ? `No sé (${r.texto.toLowerCase()})` : "No sé (lo dejé por fuera)");
+              }}
+            >
+              No sé
+            </button>
           </div>
-        );
-      })}
-    </>
+        </div>
+      ) : (
+        <p className="chico" style={{ margin: 0 }}>Listo, confirmaste todo. Si cambias de opinión, toca «Cambiar».</p>
+      )}
+    </div>
   );
 }
 

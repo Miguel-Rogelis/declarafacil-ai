@@ -14,6 +14,16 @@ export interface Fila {
   tratamiento: Tratamiento;
   explicacion: string;
   origen_mapeo: "reglas" | "ia" | "sin_mapeo";
+  pregunta?: string;
+  ayuda?: string;
+  opciones?: OpcionRevision[];
+}
+
+export interface OpcionRevision {
+  texto: string;
+  incluir: boolean;
+  campo: string | null;
+  recomendada: boolean;
 }
 
 export interface Perfil {

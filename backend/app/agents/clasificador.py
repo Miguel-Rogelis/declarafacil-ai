@@ -76,6 +76,7 @@ _SENALES: list[tuple[str, list[tuple[str, float]]]] = [
                                (r"art(iculo|\.)? 381", 0.15), (r"valor retenido", 0.15)]),
     ("predial", [(r"impuesto predial", 0.6), (r"avaluo catastral", 0.3), (r"\bchip\b|matricula inmobiliaria", 0.1)]),
     ("certificado_bancario", [(r"certificado tributario|certificacion tributaria|informacion tributaria", 0.5), (r"\bbanco\b|bancolombia|davivienda|bbva|nequi|daviplata", 0.2),
+                              (r"icetex|credito educativo", 0.45),
                               (r"cuenta de ahorros?|cuenta corriente|\bcdt\b|certificado de deposito", 0.2),
                               (r"saldo (a|al) 31|saldo a diciembre|saldo final", 0.2), (r"gravamen a los movimientos financieros|\bgmf\b|4 ?x ?1000", 0.15),
                               (r"rendimientos financieros|intereses (abonados|pagados|recibidos)", 0.1)]),

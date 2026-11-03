@@ -6,7 +6,9 @@
   "uvt_anio_presentacion": null,
   "fuentes": [
     "UVT 2026: Resolución DIAN 000238 de 2025",
-    "Pendiente: componente inflacionario AG 2026, calendario 2027, UVT 2027"
+    "Pendiente: componente inflacionario AG 2026, calendario 2027, UVT 2027",
+    "Intereses ICETEX: par. 4 art. 119 ET (máx. 100 UVT al año, dentro del límite del 40 %)",
+    "Donaciones: arts. 257 y 258 ET (25 %; 37 % para alimentos desde 2025, Ley 2380 de 2024; máximo 25 % del impuesto)"
   ],
   "topes_obligacion_uvt": {
     "patrimonio_bruto": 4500,
@@ -77,6 +79,7 @@
     "dependiente_adicional_max": 4,
     "medicina_prepagada_tope_uvt": 192,
     "intereses_vivienda_tope_uvt": 1200,
+    "intereses_icetex_tope_uvt": 100,
     "gmf_deducible_pct": 0.5,
     "aportes_voluntarios_afc_fpv_pct": 0.3,
     "aportes_voluntarios_afc_fpv_tope_uvt": 3800,
@@ -135,6 +138,7 @@
     "exencion_donaciones_tope_uvt": 1625,
     "exencion_seguros_vida_uvt": 3250
   },
+  "descuentos": {"donaciones_pct": 0.25, "donaciones_alimentos_pct": 0.37, "limite_donaciones_pct_impuesto": 0.25},
   "anticipo": {
     "pct_primera_declaracion": 0.25,
     "pct_segunda_declaracion": 0.5,

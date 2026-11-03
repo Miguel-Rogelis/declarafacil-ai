@@ -40,6 +40,8 @@ export const NOMBRES_CAMPO: Record<string, string> = {
   "deducciones.gmf_pagado": "4x1000",
   "deducciones.aportes_voluntarios_afc_fpv": "Aportes voluntarios y AFC",
   "deducciones.compras_factura_electronica": "Compras con factura electrónica",
+  "deducciones.intereses_icetex": "Intereses del ICETEX",
+  "pagos.impuesto_neto_anio_anterior": "Impuesto del año anterior",
   "pagos.retenciones_renta": "Retenciones",
   "pagos.saldo_favor_anterior": "Saldo a favor anterior",
   "pagos.anticipo_anio_anterior": "Anticipo del año anterior",

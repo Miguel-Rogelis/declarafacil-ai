@@ -119,6 +119,28 @@ export interface Resumen {
   total_a_pagar: number;
 }
 
+export interface Casilla {
+  numero: number;
+  nombre: string;
+  valor: number;
+  /** dato: se escribe (o se compara con la sugerida); calculada: la calcula MUISCA sola; informativa */
+  tipo: "dato" | "calculada" | "informativa";
+  formula: string | null;
+  campos: string[];
+  nota: string | null;
+  texto: string | null;
+}
+
+export interface Formulario210 {
+  numero: string;
+  anio_gravable: number;
+  disponible: boolean;
+  motivo: string;
+  secciones: { id: string; titulo: string; casillas: Casilla[] }[];
+  pago_total: number;
+  notas: string[];
+}
+
 export interface Liquidacion {
   anio_gravable: number;
   uvt: number;
@@ -128,6 +150,7 @@ export interface Liquidacion {
   alertas: Alerta[];
   vencimiento: { fecha: string; fecha_presentacion: string; extemporanea: boolean; meses_retraso: number } | null;
   opcion_independiente: string | null;
+  formulario: Formulario210 | null;
 }
 
 export interface ItemPatrimonio {
@@ -157,13 +180,16 @@ export interface Respuestas {
   intereses_vivienda: number;
   aportes_voluntarios_afc_fpv: number;
   gmf_pagado: number;
+  intereses_icetex: number;
   honorarios_no_reportados: number;
   costos_independiente: number;
   arriendos_no_reportados: number;
+  costos_arriendos: number;
   otros_ingresos_no_reportados: number;
   pensiones_no_reportadas: number;
   dividendos_gravados: number;
   ganancias_ocasionales: GananciasOcasionales;
+  donaciones_realizadas: number;
   bienes_adicionales: ItemPatrimonio[];
   deudas_adicionales: ItemPatrimonio[];
   declaraciones_previas: number | null;
@@ -183,9 +209,12 @@ export const respuestasIniciales = (): Respuestas => ({
   intereses_vivienda: 0,
   aportes_voluntarios_afc_fpv: 0,
   gmf_pagado: 0,
+  intereses_icetex: 0,
   honorarios_no_reportados: 0,
   costos_independiente: 0,
   arriendos_no_reportados: 0,
+  costos_arriendos: 0,
+  donaciones_realizadas: 0,
   otros_ingresos_no_reportados: 0,
   pensiones_no_reportadas: 0,
   dividendos_gravados: 0,

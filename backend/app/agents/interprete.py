@@ -42,6 +42,7 @@ CAMPOS: dict[str, str] = {
     "deducciones.gmf_pagado": "Gravamen a los movimientos financieros (4x1000)",
     "deducciones.aportes_voluntarios_afc_fpv": "Aportes voluntarios a pensión o AFC",
     "deducciones.compras_factura_electronica": "Compras con factura electrónica que dan beneficio",
+    "deducciones.intereses_icetex": "Intereses de crédito educativo del ICETEX",
     "pagos.retenciones_renta": "Retenciones en la fuente que te practicaron",
     "pagos.saldo_favor_anterior": "Saldo a favor del año anterior",
     "pagos.anticipo_anio_anterior": "Anticipo pagado el año anterior",
@@ -120,6 +121,16 @@ _TOPES = {
 
 def mapear_por_reglas(fila: FilaInterpretada) -> FilaInterpretada:
     det = _n(fila.detalle)
+    # Créditos educativos del ICETEX: los intereses se deducen (art. 119 ET) y el saldo es una deuda
+    if re.search(r"icetex|credito educativo|estudios tecnicos en el exterior", _n(fila.informante) + " " + det):
+        if re.search(r"interes", det):
+            fila.campo, fila.tratamiento, fila.origen_mapeo = "deducciones.intereses_icetex", "suma", "reglas"
+            fila.explicacion = "Intereses que pagaste por tu crédito educativo del ICETEX. Se restan hasta 100 UVT al año."
+            return fila
+        if re.search(r"saldo|cuentas por pagar|credito|obligacion|deuda", det):
+            fila.campo, fila.tratamiento, fila.origen_mapeo = "patrimonio.deudas", "suma", "reglas"
+            fila.explicacion = "Lo que le debías al ICETEX el 31 de diciembre. Se resta de tu patrimonio."
+            return fila
     for patron, campo, tratamiento, explicacion in _REGLAS:
         if re.search(patron, det):
             fila.campo, fila.tratamiento, fila.explicacion, fila.origen_mapeo = campo, tratamiento, explicacion, "reglas"  # type: ignore[assignment]

@@ -73,6 +73,9 @@ CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
     "intereses_vivienda": ("intereses_vivienda", "pesos", "Intereses de crédito de vivienda", 0, 5e9),
     "aportes_voluntarios": ("aportes_voluntarios_afc_fpv", "pesos", "Aportes voluntarios y AFC", 0, 5e9),
     "gmf": ("gmf_pagado", "pesos", "4x1000 pagado", 0, 1e9),
+    "intereses_icetex": ("intereses_icetex", "pesos", "Intereses del crédito del ICETEX", 0, 1e9),
+    "costos_arriendos": ("costos_arriendos", "pesos", "Gastos del inmueble que arriendas", 0, 5e10),
+    "donaciones_realizadas": ("donaciones_realizadas", "pesos", "Donaciones que hiciste a entidades sin ánimo de lucro", 0, 5e10),
     "venta_casa_utilidad": ("ganancias_ocasionales.utilidad_venta_casa_habitacion", "pesos", "Utilidad en la venta de tu casa", 0, 5e10),
     "venta_otros_activos": ("ganancias_ocasionales.utilidad_venta_otros_activos", "pesos", "Utilidad en la venta de otros bienes", 0, 5e10),
     "herencia_vivienda": ("ganancias_ocasionales.herencia_vivienda_causante", "pesos", "Herencia: vivienda", 0, 5e10),
@@ -92,13 +95,14 @@ CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
 }
 
 # Cifras que la gente suele decir por mes: si no dice el periodo, el agente pregunta.
-_MENSUALES = {"salarios", "pension", "arriendos", "medicina_prepagada", "honorarios", "aportes_voluntarios", "intereses_vivienda"}
+_MENSUALES = {"salarios", "pension", "arriendos", "medicina_prepagada", "honorarios", "aportes_voluntarios", "intereses_vivienda", "intereses_icetex"}
 
 # Tema de cada campo (para no volver a preguntar lo mismo)
 _TEMA = {
     "salarios": "ingresos", "honorarios": "ingresos", "pension": "ingresos", "arriendos": "ingresos", "otros_ingresos": "ingresos",
     "dividendos": "ingresos", "retenciones": "retenciones", "dependientes": "dependientes", "medicina_prepagada": "deducciones",
     "intereses_vivienda": "deducciones", "aportes_voluntarios": "deducciones", "gmf": "deducciones", "declaraciones_previas": "historial",
+    "intereses_icetex": "deducciones", "costos_arriendos": "costos_arriendo", "donaciones_realizadas": "donaciones_hechas",
     "ultimos_dos_digitos_cedula": "cedula", "bien": "patrimonio", "deuda": "patrimonio",
 }
 
@@ -106,7 +110,7 @@ _PREGUNTAS = {
     "ingresos": "¿Cuánto recibiste en {anio}? Por ejemplo, tu salario mensual o lo que te pagaron por honorarios en el año.",
     "retenciones": "¿Te hicieron retención en la fuente en {anio}? Si sí, ¿de cuánto fue en total? Sale en tu certificado de ingresos y retenciones.",
     "dependientes": "¿Alguien depende económicamente de ti, como hijos, pareja o papás?",
-    "deducciones": "¿Pagas medicina prepagada, intereses de un crédito de vivienda o aportes voluntarios a pensión o AFC?",
+    "deducciones": "¿Pagas medicina prepagada, intereses de un crédito de vivienda o del ICETEX, o aportes voluntarios a pensión o AFC?",
     "cedula": "¿En qué dos números termina tu cédula? Con eso sé tu fecha límite y si hay sanción.",
     "historial": "¿Es la primera vez que declaras renta? Eso cambia el anticipo.",
     "patrimonio": "¿Qué tenías al 31 de diciembre de {anio} (plata en cuentas, casa, carro) y cuánto debías?",
@@ -448,6 +452,8 @@ _OPCIONES: dict[str, list[str]] = {
     "deducciones": ["No pago nada de eso", "Sí"],
     "retenciones": ["No me retuvieron", "No sé"],
     "costos": ["No tuve costos", "No sé"],
+    "costos_arriendo": ["No tuve gastos", "No sé"],
+    "donaciones_hechas": ["No doné", "Sí"],
     "bienes": ["No tengo", "Sí"],
     "patrimonio": ["No tenía nada", "Sí"],
     "historial": ["Es la primera vez", "Es la segunda", "Ya llevo más de dos"],
@@ -567,12 +573,17 @@ _SEGUIMIENTO = {
     "ganancias": "¿Qué fue? Si vendiste algo, dime en cuánto lo vendiste y en cuánto lo habías comprado.",
     "retenciones": "¿De cuánto fue en total? Sale en tu certificado de ingresos y retenciones.",
     "costos": "¿De cuánto fueron en total en el año?",
+    "costos_arriendo": "¿De cuánto fueron en el año? Suma predial, administración, mantenimiento e intereses del crédito de ese inmueble.",
+    "donaciones_hechas": "¿Cuánto donaste en el año? Necesitas el certificado de la entidad que recibió la donación.",
     "anterior": "¿De cuánto fue?",
 }
 _RE_AFIRMATIVO = re.compile(r"^(si|sip|claro|asi es|correcto|exacto|obvio|afirmativo)\b")
 _RE_NO_SE = re.compile(r"^(no se|ni idea|no tengo idea|no me acuerdo|no recuerdo|no estoy segur\w*)\b")
 
 _CONCEPTOS: list[tuple[str, str]] = [
+    (r"icetex|credito educativo|prestamo educativo|credito (de|del|para) (mi |el )?(estudio|universidad|carrera)", "intereses_icetex"),
+    (r"gastos?\b.{0,30}(arriend|inmueble|alquil)|(predial|administracion|mantenimiento).{0,30}(arriend|alquil)", "costos_arriendos"),
+    (r"\b(done|donamos|hice (una )?donacion(es)?|di (una )?donacion|le done|aporte a una fundacion)\b", "donaciones_realizadas"),
     (r"voluntari|\bafc\b|\bavc\b", "aportes_voluntarios"),
     (r"prepagad|medicina|poliza de salud|plan complementario", "medicina_prepagada"),
     (r"interes\w*.{0,30}(vivienda|hipotec|apartamento|casa)|hipotec|leasing habitacional", "intereses_vivienda"),
@@ -716,6 +727,10 @@ def _respuesta_a_pendiente(mensaje: str, p: PreguntaPendiente, ya: list[dict[str
         salida.append({"campo": "impuesto_anio_anterior", "valor": montos[0]})
     if "costos" in p.temas and "costos_independiente" not in campos_ya and montos and (_concepto_de(msg) or {"campo": "costos_independiente"})["campo"] == "costos_independiente":
         salida.append({"campo": "costos_independiente", "valor": montos[0]})
+    if "costos_arriendo" in p.temas and "costos_arriendos" not in campos_ya and montos and not _concepto_de(msg):
+        salida.append({"campo": "costos_arriendos", "valor": montos[0], "periodo": "anual"})
+    if "donaciones_hechas" in p.temas and "donaciones_realizadas" not in campos_ya and montos and not _concepto_de(msg):
+        salida.append({"campo": "donaciones_realizadas", "valor": montos[0], "periodo": "anual"})
     if "historial" in p.temas and "declaraciones_previas" not in campos_ya and re.search(r"segunda|2da|\buna\b|el ano pasado", msg) and not re.search(r"tercera|mas de", msg):
         salida.append({"campo": "declaraciones_previas", "valor": 1})
     elif "historial" in p.temas and "declaraciones_previas" not in campos_ya and re.search(r"tercera|cuarta|mas de|llevo (varias|muchas|mas)|ya llevo", msg):

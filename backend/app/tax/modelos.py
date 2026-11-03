@@ -4,7 +4,7 @@ Todos los valores monetarios están en pesos colombianos (COP) del año gravable
 """
 
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -70,6 +70,14 @@ class Deducciones(BaseModel):
     gmf_pagado: float = 0
     aportes_voluntarios_afc_fpv: float = 0
     compras_factura_electronica: float = 0
+    intereses_icetex: float = 0
+
+
+class Descuentos(BaseModel):
+    """Lo que se resta directamente del impuesto (arts. 257 y 258 ET)."""
+
+    donaciones: float = Field(default=0, description="Donaciones a entidades sin ánimo de lucro del régimen especial (25 %)")
+    donaciones_alimentos: float = Field(default=0, description="Donaciones de alimentos a bancos de alimentos (37 % desde 2025)")
 
 
 class ItemPatrimonio(BaseModel):
@@ -118,6 +126,7 @@ class DatosDeclaracion(BaseModel):
     dividendos: Dividendos = Dividendos()
     ganancias_ocasionales: GananciasOcasionales = GananciasOcasionales()
     deducciones: Deducciones = Deducciones()
+    descuentos: Descuentos = Descuentos()
     patrimonio: Patrimonio = Patrimonio()
     indicadores: Indicadores = Indicadores()
     pagos: Pagos = Pagos()
@@ -193,6 +202,39 @@ class Resumen(BaseModel):
     total_a_pagar: float
 
 
+# ---------- Formulario 210 casilla por casilla ----------
+
+TipoCasilla = Literal["dato", "calculada", "informativa"]
+
+
+class Casilla(BaseModel):
+    numero: int
+    nombre: str
+    valor: float
+    tipo: TipoCasilla = "dato"  # dato: se escribe (o se revisa contra la sugerida); calculada: la calcula MUISCA
+    formula: str | None = None
+    campos: list[str] = []  # datos de la declaración de donde sale (para mostrar su origen)
+    nota: str | None = None
+    texto: str | None = None  # para casillas que no son pesos ("Sí" / "No", número de personas)
+
+
+class SeccionFormulario(BaseModel):
+    id: str
+    titulo: str
+    casillas: list[Casilla]
+
+
+class Formulario(BaseModel):
+    numero: str = "210"
+    anio_gravable: int
+    disponible: bool = True
+    motivo: str = ""
+    secciones: list[SeccionFormulario] = []
+    pago_total: float = 0
+    notas: list[str] = []
+
+
+
 class Liquidacion(BaseModel):
     anio_gravable: int
     uvt: float
@@ -202,3 +244,4 @@ class Liquidacion(BaseModel):
     alertas: list[Alerta]
     vencimiento: Vencimiento | None = None
     opcion_independiente: str | None = None
+    formulario: Formulario | None = None

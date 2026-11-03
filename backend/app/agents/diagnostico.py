@@ -242,9 +242,11 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         falta.append("medicina prepagada")
     if not (r.intereses_vivienda or ex.get("deducciones.intereses_vivienda")):
         falta.append("intereses de un crédito de vivienda")
+    if not (r.intereses_icetex or ex.get("deducciones.intereses_icetex")):
+        falta.append("intereses de un crédito del ICETEX")
     if not (r.aportes_voluntarios_afc_fpv or _suma(ex, "deducciones.aportes_voluntarios")):
         falta.append("aportes voluntarios a pensión o AFC")
-    ya_vienen = [x for x in ("medicina prepagada", "intereses de un crédito de vivienda", "aportes voluntarios a pensión o AFC") if x not in falta]
+    ya_vienen = [x for x in ("medicina prepagada", "intereses de un crédito de vivienda", "intereses de un crédito del ICETEX", "aportes voluntarios a pensión o AFC") if x not in falta]
     if falta:
         agregar(impuesto > 0 and trabajo, Vacio(
             "deducciones", "si pagas " + _lista(falta, "o"),
@@ -256,6 +258,12 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         "costos", "si tuviste costos de tu actividad como independiente",
         "Como independiente, ¿tuviste costos o gastos de tu actividad con factura a tu nombre? Si no, uso el 25 % exento, que suele convenir más.",
         "Las facturas electrónicas a tu nombre las ves en el portal de facturación de la DIAN.",
+    ))
+    arriendos = r.arriendos_no_reportados + ex.get("capital.arrendamientos", 0)
+    agregar(impuesto > 0 and arriendos and not r.costos_arriendos and not ex.get("capital.costos_gastos_procedentes"), Vacio(
+        "costos_arriendo", "si tuviste gastos del inmueble que arriendas",
+        "¿Tuviste gastos del inmueble que arriendas, como predial, administración, mantenimiento o intereses del crédito? Se restan de los arriendos.",
+        "Recibos del predial y de la administración, facturas de mantenimiento y el certificado de intereses del banco.",
     ))
     vehiculo = any(any(v in norm(b.concepto) for v in _VEHICULOS) for b in r.bienes_adicionales)
     if con_exo or "certificado_bancario" in docs:
@@ -294,6 +302,11 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         "ganancias", "si vendiste un bien o recibiste herencia, donación o premio",
         f"¿En {anio} vendiste algún bien que tenías hace más de dos años, o recibiste una herencia, una donación o un premio?",
         "Escritura o contrato de venta; documentos de la sucesión.",
+    ))
+    agregar(impuesto > 0 and not r.donaciones_realizadas, Vacio(
+        "donaciones_hechas", "si donaste a una fundación",
+        "¿Donaste en el año a una fundación o entidad sin ánimo de lucro que te dio certificado? El 25 % de lo donado se descuenta del impuesto.",
+        "Certificado de donación de la entidad (con su NIT y el valor donado).",
     ))
     agregar(sancion > 0 and r.sin_sanciones_ultimos_2_anios, Vacio(
         "sanciones", "si te han sancionado por declarar tarde",

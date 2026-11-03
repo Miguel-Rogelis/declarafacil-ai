@@ -114,6 +114,10 @@ def valores_anio(anio: int) -> dict[str, str]:
         "dependientes_texto": dependientes,
         "factura_texto": factura,
         "dividendos_texto": dividendos,
+        "icetex_tope": pesos(cg.get("intereses_icetex_tope_uvt", 100) * uvt),
+        "vivienda_tope": pesos(cg["intereses_vivienda_tope_uvt"] * uvt),
+        "prepagada_tope": pesos(cg["medicina_prepagada_tope_uvt"] * uvt),
+        "donaciones_alimentos": f"{r.get('descuentos', {}).get('donaciones_alimentos_pct', 0.25) * 100:.0f} %",
         "go_tarifa": f"{go['tarifa_general'] * 100:.0f} %",
         "go_casa_uvt": miles(go["exencion_venta_casa_habitacion_uvt"]),
     }

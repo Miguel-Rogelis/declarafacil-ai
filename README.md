@@ -32,9 +32,12 @@ Todo pasa en un **chat a pantalla completa** con un agente. El usuario lleva la 
 - Puede cambiar de año gravable (2021 a 2025) desde el selector de arriba o pidiéndolo en el chat.
 - "Tus datos" abre un panel con cada cifra y de dónde sale.
 
-Recibe: si está obligado a declarar, el saldo a pagar o a favor, la sanción si va tarde, alertas antes de firmar, el borrador por cédulas y, al tocar cada línea, la norma y las filas de la exógena de donde sale.
+Recibe: si está obligado a declarar, el saldo a pagar o a favor, la sanción si va tarde, alertas antes de firmar y el borrador en dos vistas:
 
-Cubre la cédula general (trabajo, honorarios, capital y no laborales), pensiones, dividendos (subcédulas 1 y 2 con el descuento del art. 254-1), ganancias ocasionales, patrimonio, anticipo (art. 807) y sanción por extemporaneidad (arts. 639-641).
+- **Formulario 210 casilla por casilla** (años gravables 2023 a 2025): cada valor en su casilla con la numeración y las fórmulas del formulario oficial (Resolución DIAN 000044 de 2024, instructivo modificado por la 000120 de 2024), en el orden de MUISCA. Marca qué casillas se escriben y cuáles calcula la DIAN sola (con su fórmula), deja copiar cada valor (o todos), muestra de qué documento sale cada cifra y oculta las que van en cero. Los valores van aproximados a miles y los totales se recalculan desde las casillas ya aproximadas, como hace MUISCA, para que lo que se copia cuadre. Para 2021 y 2022 el formulario tenía otra numeración y se usa la vista por secciones.
+- **Explicado por secciones**, con la norma de cada línea y las filas de la exógena o del certificado de donde sale.
+
+Cubre la cédula general por subcédula como el formulario (rentas de trabajo, trabajo sin relación laboral con costos, capital y no laborales), con cada renta exenta y deducción imputada a su subcédula y el límite del 40 % repartido en el orden del instructivo; pensiones; dividendos (subcédulas 1 y 2, impuesto del art. 240 y descuento del art. 254-1); ganancias ocasionales; patrimonio; descuento por donaciones (arts. 257 y 258); anticipo (art. 807) y sanción por extemporaneidad (arts. 639-641). Beneficios incluidos: 25 % exento, cesantías según el salario, aportes voluntarios y AFC, intereses de vivienda, intereses del ICETEX (hasta 100 UVT), dependientes (10 % y 72 UVT adicionales), medicina prepagada, 50 % del 4x1000, 1 % de compras con factura electrónica y gastos de los inmuebles que se arriendan. Para independientes elige solo lo más favorable entre restar costos (casilla 43) o el 25 % exento (casilla 32).
 
 ## Arquitectura: un agente, una responsabilidad
 
@@ -65,7 +68,7 @@ flowchart LR
 | Intérprete | Sí, acotada | Ubica cada concepto de la exógena en la declaración y lo explica. **Nunca recibe montos**: elige una casilla de una lista cerrada y el código copia la cifra de la fila original. |
 | Extractor | No | Saca las cifras de los certificados con reglas por tipo: las casillas del 220 por su título; en banco, vivienda, prepagada, aportes y cesantías, el concepto (saldo, intereses, retención, 4x1000…) y el producto (cuenta, CDT, crédito, tarjeta). No cuenta totales encima del detalle. |
 | Conciliador | No | Cruza todos los documentos: el certificado reemplaza a la exógena en el mismo dato de la misma entidad (por NIT o nombre), las cesantías del 220 reemplazan las del fondo, un CDT por confirmar se resuelve con los saldos del banco y un predial igual al avalúo de la exógena no se suma dos veces. Avisa cada diferencia. |
-| Motor tributario | No | Liquida la declaración con las reglas del año (UVT, topes, art. 241, límite del 40 % / 1.340 UVT, etc.). |
+| Motor tributario | No | Liquida la declaración con las reglas del año (UVT, topes, art. 241, límite del 40 % / 1.340 UVT, etc.) y arma el formulario 210 casilla por casilla. |
 | Auditor | No | Detecta datos por confirmar, ingresos menores a los reportados, patrimonio, vencimientos y beneficios no usados. |
 | Explicador | Sí | Redacta el resumen. Cada cifra que escribe se compara contra el cálculo; si inventa una, se descarta y se usa la plantilla. |
 | Asistente | Sí | El agente del chat: responde con la base de conocimiento completa (`backend/data/conocimiento`, con las cifras del año elegido) y decide la acción que pide el usuario (anotar, calcular, cambiar de año, abrir la carga de la exógena). La IA solo propone; el código valida cada dato (lista cerrada de campos y rangos, **cada monto anotado debe aparecer en el mensaje del usuario** y **cada cifra de la respuesta debe estar en los datos que recibió**; si no, se descarta). Sin IA o sin cupo, sigue funcionando con reglas. |
@@ -86,7 +89,7 @@ El **orquestador** (`backend/app/orquestador.py`) es un flujo fijo y trazable: c
 ```
 backend/
   app/agents/       un archivo por agente (el Asistente usa conocimiento.py para la base por año y diagnostico.py para deducir y saber qué falta)
-  app/tax/          motor tributario y modelos (sin IA)
+  app/tax/          motor tributario, formulario 210 casilla por casilla y modelos (sin IA)
   app/llm/          cliente de OpenRouter con respaldo entre modelos
   app/orquestador.py
   app/routers/api.py
@@ -95,7 +98,7 @@ backend/
   data/agentes.json modelos y temperatura por agente
   data/conocimiento base de conocimiento del Asistente
   data/demo/        exógena y certificados ficticios (220 y banco) para probar
-  tests/            119 pruebas (motor por año, agentes, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada)
+  tests/            137 pruebas (motor por año, formulario 210 casilla por casilla, agentes, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada)
   scripts/          generadores de la exógena y los certificados demo y de las reglas 2021-2024
 frontend/           React + Vite + TypeScript, animaciones con Motion
 Dockerfile          construye el front y lo sirve desde FastAPI
@@ -144,12 +147,11 @@ Límites a tener en cuenta:
 - Personas naturales **residentes**, no obligadas a llevar contabilidad.
 - No cubre: rentas del exterior, régimen SIMPLE, descuento por donaciones, renta presuntiva (0 % desde 2021) ni el cálculo de renta por comparación patrimonial (el Auditor solo la advierte).
 - Años 2021 y 2022 usan las reglas anteriores a la Ley 2277 (límite de 5.040 UVT, renta exenta de 2.880 UVT, dividendos con tabla propia, ganancias ocasionales al 10 %). Los vencimientos de los años 2021 a 2024 se generaron con la regla de cada decreto de calendario (el método reproduce el calendario oficial 2026); conviene revisarlos contra el calendario publicado.
-- Deducciones y rentas exentas se agregan para toda la cédula general (no se reparten por subcédula como en el formulario).
 - La sanción se estima con la reducción del art. 640 si el usuario indica que no ha sido sancionado en los últimos dos años; no incluye intereses de mora.
 - Los renglones R29, R30, R32 y R132 que se mencionan vienen de la columna *Uso declaración sugerida* de la propia exógena.
-- El borrador sigue el contenido del formulario 210 (el de 2023 y siguientes sirve también para el año gravable 2025), pero lo muestra por secciones y no renglón por renglón. La DIAN no recibe archivos de terceros para el 210: se diligencia en su formulario virtual en MUISCA y se firma ahí.
+- La DIAN no recibe archivos de terceros para el 210: se diligencia en su formulario virtual en MUISCA (versión para expertos) y se firma ahí. La vista casilla por casilla es para copiar esos valores; no es un documento oficial. No cubre casillas de rentas del exterior, ECE, compensaciones de pérdidas, rentas gravables por comparación patrimonial (el Auditor la advierte) ni el aporte voluntario del art. 244-1.
 - Los certificados se leen con reglas sobre su texto: funcionan con los PDF que descargan las entidades (con texto), no con fotos ni escaneos. Los formatos de cada banco varían; lo que no se reconoce con seguridad se pregunta antes de usarlo. Los certificados de ejemplo son ficticios y se generan con `scripts/demo_certificados.py`.
 
 ## Fuentes normativas
 
-Estatuto Tributario (arts. 206, 241, 242, 254-1, 307, 311-1, 314, 317, 331, 336, 387, 639-641, 807); Ley 2277 de 2022; resoluciones DIAN de UVT de cada año (2021: $36.308; 2022: $38.004; 2023: $42.412; 2024: $47.065; 2025: $49.799); Resolución DIAN 000238 de 2025 (UVT 2026: $52.374); Decreto 0898 de 2026 (componente inflacionario AG 2025: 55,43 %); Decreto 2229 de 2023 (calendario tributario); calendario 2026 para personas naturales.
+Estatuto Tributario (arts. 119, 206, 241, 242, 254-1, 257, 258, 259, 307, 311-1, 314, 317, 331, 336, 387, 639-641, 807); Ley 2277 de 2022; Ley 2380 de 2024 (donaciones de alimentos); Resolución DIAN 000044 de 2024 (formulario 210 para el año gravable 2023 y siguientes) y Resolución 000120 de 2024 (instructivo), compiladas en la Resolución Única 000227 de 2025; resoluciones DIAN de UVT de cada año (2021: $36.308; 2022: $38.004; 2023: $42.412; 2024: $47.065; 2025: $49.799); Resolución DIAN 000238 de 2025 (UVT 2026: $52.374); Decreto 0898 de 2026 (componente inflacionario AG 2025: 55,43 %); Decreto 2229 de 2023 (calendario tributario); calendario 2026 para personas naturales.

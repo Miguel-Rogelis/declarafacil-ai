@@ -28,6 +28,7 @@ _NOMBRES = {
     "deducciones.medicina_prepagada": "medicina prepagada",
     "deducciones.intereses_vivienda": "intereses de vivienda",
     "deducciones.aportes_voluntarios_afc_fpv": "ahorro voluntario o AFC",
+    "deducciones.intereses_icetex": "intereses del ICETEX",
 }
 
 _FINANCIERA = re.compile(r"banco|bancolombia|davivienda|bbva|colpatria|scotiabank|itau|nequi|daviplata|fiduc|financ|cooperativ|fondo|credito|tarjeta|leasing|corporacion|caja")

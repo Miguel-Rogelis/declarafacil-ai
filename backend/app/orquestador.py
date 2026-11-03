@@ -56,13 +56,16 @@ class Respuestas(BaseModel):
     intereses_vivienda: float = 0
     aportes_voluntarios_afc_fpv: float = 0
     gmf_pagado: float = 0
+    intereses_icetex: float = 0
     honorarios_no_reportados: float = 0
     costos_independiente: float = 0
     arriendos_no_reportados: float = 0
+    costos_arriendos: float = 0
     otros_ingresos_no_reportados: float = 0
     pensiones_no_reportadas: float = 0
     dividendos_gravados: float = 0
     ganancias_ocasionales: GananciasOcasionales = GananciasOcasionales()
+    donaciones_realizadas: float = 0
     bienes_adicionales: list[ItemPatrimonio] = []
     deudas_adicionales: list[ItemPatrimonio] = []
     declaraciones_previas: int | None = None
@@ -305,6 +308,9 @@ def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
     d.deducciones.intereses_vivienda += r.intereses_vivienda
     d.deducciones.aportes_voluntarios_afc_fpv += r.aportes_voluntarios_afc_fpv
     d.deducciones.gmf_pagado += r.gmf_pagado
+    d.deducciones.intereses_icetex += r.intereses_icetex
+    d.capital.costos_gastos_procedentes += r.costos_arriendos
+    d.descuentos.donaciones += r.donaciones_realizadas
     d.independiente.honorarios_y_servicios += r.honorarios_no_reportados
     d.independiente.costos_gastos_procedentes += r.costos_independiente
     d.capital.arrendamientos += r.arriendos_no_reportados

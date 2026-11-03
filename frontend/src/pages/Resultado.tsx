@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Formulario210 } from "../components/Formulario210";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "../components/MesaAgentes";
 import type { Fila, Linea } from "../lib/api";
 import { useSesion } from "../lib/estado";
@@ -43,6 +44,7 @@ function LineaFormulario({ linea, fuentes, filas }: { linea: Linea; fuentes: Rec
 export default function Resultado() {
   const { filas, resultado, trazaDocumento, ir, reiniciar, calcular, calculando, eventosCalculo, errorCalculo, hayDatos } = useSesion();
   const lanzado = useRef(false);
+  const [vista, setVista] = useState<"formulario" | "secciones">("formulario");
 
   useEffect(() => {
     if (resultado || !hayDatos || calculando || lanzado.current) return;
@@ -152,6 +154,7 @@ export default function Resultado() {
           <MesaAgentes fases={[...(trazaDocumento.length ? FASES_DOCUMENTO : []), ...FASES_CALCULO]} eventos={[...trazaDocumento, ...resultado.traza]} compacta soloActivos />
 
           <h2 className="titular t-24" style={{ marginTop: "2rem" }}>Topes de obligación</h2>
+          <div className="tabla-scroll">
           <table className="tabla" style={{ marginTop: "0.6rem" }}>
             <thead><tr><th>Tope</th><th>Tu valor</th><th>Límite</th></tr></thead>
             <tbody>
@@ -164,22 +167,35 @@ export default function Resultado() {
               ))}
             </tbody>
           </table>
+          </div>
         </aside>
       </div>
 
-      <section className="hoja-210" aria-labelledby="t-borrador">
-        <header>
-          <h2 id="t-borrador" className="titular t-24">Borrador de tu declaración</h2>
-          <span className="chico suave">Año gravable {liq.anio_gravable}, UVT {pesos(liq.uvt)}. Toca una línea para ver de dónde sale.</span>
-        </header>
-        {liq.secciones.map((s) => (
-          <section key={s.id}>
-            <h3>{s.titulo}</h3>
-            {s.lineas.map((l) => <LineaFormulario key={l.clave} linea={l} fuentes={fuentes} filas={filas} />)}
-          </section>
-        ))}
-        <div className="sello-borrador" style={{ bottom: "auto", top: "-1.1rem" }}>BORRADOR</div>
-      </section>
+      <div className="pestanas no-imprimir" role="tablist" aria-label="Cómo ver tu borrador">
+        <button role="tab" aria-selected={vista === "formulario"} className={vista === "formulario" ? "activa" : ""} onClick={() => setVista("formulario")}>
+          Formulario 210 casilla por casilla
+        </button>
+        <button role="tab" aria-selected={vista === "secciones"} className={vista === "secciones" ? "activa" : ""} onClick={() => setVista("secciones")}>
+          Explicado por secciones
+        </button>
+      </div>
+      {vista === "formulario" && liq.formulario ? (
+        <Formulario210 f={liq.formulario} fuentes={fuentes} filas={filas} />
+      ) : (
+        <section className="hoja-210" aria-labelledby="t-borrador">
+          <header>
+            <h2 id="t-borrador" className="titular t-24">Borrador de tu declaración</h2>
+            <span className="chico suave">Año gravable {liq.anio_gravable}, UVT {pesos(liq.uvt)}. Toca una línea para ver de dónde sale.</span>
+          </header>
+          {liq.secciones.map((s) => (
+            <section key={s.id}>
+              <h3>{s.titulo}</h3>
+              {s.lineas.map((l) => <LineaFormulario key={l.clave} linea={l} fuentes={fuentes} filas={filas} />)}
+            </section>
+          ))}
+          <div className="sello-borrador" style={{ bottom: "auto", top: "-1.1rem" }}>BORRADOR</div>
+        </section>
+      )}
 
       <div className="acciones-resultado">
         <a className="boton sello" href="https://www.dian.gov.co" target="_blank" rel="noreferrer">Ir a la DIAN a firmar</a>

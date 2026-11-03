@@ -92,6 +92,26 @@ En MUISCA, con tu firma electrónica de la DIAN. Si no la tienes, la habilitas e
 También: cómo declaro | dónde declaro | cómo hago la declaración en la dian | pasos para declarar | formulario 210
 En MUISCA, en el formulario 210. Revisas la declaración sugerida, la ajustas con tus datos (aquí te ayudo con el borrador), la firmas con tu firma electrónica y, si hay saldo a pagar, generas el recibo 490.
 
+## ¿Cómo paso mi borrador al formulario 210 de la DIAN?
+También: cómo lleno el 210 | casilla por casilla | dónde va cada valor | copiar a muisca | en qué casilla va | vista del formulario | formulario de la dian
+Cuando calculas, en "Ver el borrador completo" está la pestaña "Formulario 210" con cada valor en su casilla, igual que en la DIAN. Entra a MUISCA como usuario registrado, ve a "Diligenciar y presentar formulario 210", crea el borrador del año y elige la versión para expertos. Compara casilla por casilla con la declaración sugerida y escribe las que no coincidan; las que dicen "La calcula la DIAN" no se escriben. Al final firmas con tu firma electrónica y presentas. Para 2021 y 2022 el formulario tenía otra numeración, así que ahí usa el borrador por secciones.
+
+## ¿Puedo restar los intereses del crédito del ICETEX?
+También: icetex | crédito educativo | préstamo de la universidad | intereses del icetex | deducir icetex
+Sí. Los intereses que pagaste en el año por un crédito educativo del ICETEX para tu educación superior se restan hasta 100 UVT al año ({icetex_tope} en {anio}), dentro del límite del 40 %. Lo que debías al 31 de diciembre va en tus deudas. El ICETEX te da el certificado de intereses pagados en su portal.
+
+## ¿Puedo restar los gastos del apartamento que arriendo?
+También: gastos del arriendo | costos del inmueble | predial del inmueble que arriendo | administración del apartamento arrendado | deducir mantenimiento
+Sí. Si recibes arriendos, puedes restar los gastos de ese inmueble que tengan factura o soporte: predial, administración, mantenimiento, seguros e intereses del crédito con que lo compraste. Van en las rentas de capital y bajan la renta de ese arriendo, no la de tu salario.
+
+## ¿Las donaciones me bajan el impuesto?
+También: donaciones | doné a una fundación | descuento por donaciones | certificado de donación
+Si donaste a una entidad sin ánimo de lucro del régimen tributario especial y te dio certificado, el 25 % de lo donado se resta directamente del impuesto ({donaciones_alimentos} si donaste alimentos a un banco de alimentos), con máximo el 25 % de tu impuesto del año. No es lo mismo que una donación que tú recibes: esa es ganancia ocasional.
+
+## ¿Qué deducciones y beneficios puedo usar?
+También: qué me puedo restar | beneficios tributarios | cómo pago menos impuesto | qué deducciones hay | rentas exentas que puedo usar
+En {anio}: el 25 % de tus pagos laborales queda exento (máximo {exenta_tope_uvt} UVT); las cesantías, según tu salario; intereses de vivienda (hasta {vivienda_tope}); intereses del ICETEX (hasta {icetex_tope}); medicina prepagada (hasta {prepagada_tope}); dependientes; aportes voluntarios a pensión o AFC; la mitad del 4x1000. Todo eso junto no puede pasar del 40 % de tus ingresos netos ni de {limite_uvt} UVT. {factura_texto} {dependientes_texto} Además, las donaciones a fundaciones se descuentan del impuesto.
+
 ## ¿Cómo pago la renta?
 También: dónde pago | cómo se paga | recibo 490 | pagar por pse | puedo pagar a cuotas
 Después de presentar, generas en MUISCA el recibo 490 y pagas en bancos autorizados o por PSE. Si no puedes pagar todo, puedes pedirle a la DIAN una facilidad de pago, pero mientras tanto corren intereses de mora.

@@ -69,7 +69,7 @@ def montos(linea_n: str) -> list[Monto]:
 _CONOCIDAS = [
     "Bancolombia", "Davivienda", "BBVA", "Banco de Bogotá", "Banco Popular", "Banco de Occidente", "Banco AV Villas", "Banco Caja Social",
     "Itaú", "Scotiabank Colpatria", "Banco Falabella", "Banco Pichincha", "Banco GNB Sudameris", "Bancoomeva", "Banco Agrario", "Banco W",
-    "Banco Finandina", "Banco Serfinanza", "Nu Colombia", "Lulo Bank", "Nequi", "Daviplata", "Fondo Nacional del Ahorro", "Porvenir",
+    "Banco Finandina", "Banco Serfinanza", "Nu Colombia", "Lulo Bank", "Nequi", "Daviplata", "Fondo Nacional del Ahorro", "ICETEX", "Porvenir",
     "Protección", "Colfondos", "Skandia", "Colpensiones", "Colsanitas", "Sura", "Coomeva", "Compensar", "Allianz", "Mapfre", "Bolívar",
     "Fiduciaria Bancolombia", "Fiduciaria Bogotá", "Credicorp Capital", "Confiar", "Cotrafa",
 ]
@@ -212,6 +212,7 @@ _CONCEPTOS_RE = [(c, re.compile(p)) for c, p in _CONCEPTOS]
 _PRODUCTOS = [
     ("vivienda", r"credito (de )?vivienda|credito hipotecario|hipotecari|leasing habitacional|prestamo de vivienda", "crédito de vivienda"),
     ("tarjeta", r"tarjeta de credito", "tarjeta de crédito"),
+    ("educativo", r"icetex|credito educativo|prestamo educativo", "crédito educativo del ICETEX"),
     ("credito", r"credito|prestamo|obligacion(es)? financiera|obligacion (no|nro|numero|#)|libranza|cartera de credito|leasing|sobregiro", "crédito"),
     ("cdt", r"\bcdt\b|certificado de deposito|deposito a termino", "CDT"),
     ("voluntario", r"pensiones voluntarias|fondo voluntario|pension voluntaria|\bafc\b|\bavc\b|fomento de la construccion", "ahorro voluntario"),
@@ -370,7 +371,7 @@ class Dato:
 
 def _de_banco(c: Candidato, tipo: str) -> Dato | None:
     k, nombre = c.producto or ("", "")
-    deuda = k in ("credito", "tarjeta", "vivienda")
+    deuda = k in ("credito", "tarjeta", "vivienda", "educativo")
     if c.concepto == "saldo":
         if tipo == "certificado_cesantias" or k == "cesantias":
             return Dato("patrimonio.bienes", "Saldo de cesantías a 31 de diciembre", c.valor, "Tus cesantías en el fondo son parte de tu patrimonio.", c.referencia)
@@ -384,8 +385,10 @@ def _de_banco(c: Candidato, tipo: str) -> Dato | None:
             if c.concepto == "correccion":
                 return Dato(None, "Corrección monetaria del crédito de vivienda", c.valor, "No la sumé: pregúntale al banco si ya va dentro de los intereses que certifica.", c.referencia)
             return Dato("deducciones.intereses_vivienda", "Intereses pagados del crédito de vivienda", c.valor, "Se pueden restar con tope (art. 119 ET).", c.referencia, agrupar=True)
+        if k == "educativo":
+            return Dato("deducciones.intereses_icetex", "Intereses pagados del crédito educativo del ICETEX", c.valor, "Se restan hasta 100 UVT al año (art. 119 ET).", c.referencia, agrupar=True)
         if deuda:
-            return Dato(None, f"Intereses pagados de {nombre}", c.valor, "Los intereses de créditos que no son de vivienda no se restan.", c.referencia)
+            return Dato(None, f"Intereses pagados de {nombre}", c.valor, "Los intereses de créditos que no son de vivienda ni del ICETEX no se restan.", c.referencia)
         if tipo in ("certificado_voluntarios", "certificado_cesantias") or k in ("voluntario", "cesantias"):
             return Dato(None, "Rendimientos del fondo", c.valor, "Se miran cuando retiras la plata; por ahora no se suman.", c.referencia)
         if c.concepto == "correccion":
@@ -557,6 +560,7 @@ _RESUMEN = {
     "deducciones.intereses_vivienda": "intereses de vivienda",
     "deducciones.medicina_prepagada": "prepagada",
     "deducciones.aportes_voluntarios_afc_fpv": "aportes voluntarios o AFC",
+    "deducciones.intereses_icetex": "intereses del ICETEX",
     "pagos.impuesto_neto_anio_anterior": "impuesto neto",
     "pagos.anticipo_anio_anterior": "anticipo para este año",
     "pagos.saldo_favor_anterior": "saldo a favor",

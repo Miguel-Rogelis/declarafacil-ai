@@ -8,6 +8,7 @@ import math
 from datetime import date
 from typing import Any
 
+from app.tax import formulario
 from app.tax import reglas as repo_reglas
 from app.tax.modelos import (
     Alerta,
@@ -77,6 +78,7 @@ class _Calculo:
         self.opcion_ind = opcion_ind
         self.secciones: list[Seccion] = []
         self.alertas: list[Alerta] = []
+        self.valores: dict[str, Any] = {}  # cifras intermedias para el formulario 210
 
     def u(self, cantidad_uvt: float) -> float:
         return cantidad_uvt * self.uvt
@@ -113,7 +115,13 @@ class _Calculo:
         ingresos_total = ingresos_lab + ingresos_ind + ingresos_cap + ingresos_nl
         incr_total = incr_lab + incr_ind + incr_cap + incr_nl
         ingreso_neto = max(ingresos_total - incr_total, 0)
-        renta_liquida = neto_lab + (neto_ind - costos_ind) + neto_cap + neto_nl
+
+        # Subcédulas como en el formulario 210. Los honorarios van con las rentas de trabajo
+        # (casilla 32) si toman el 25 % exento, o en su propia sección (casilla 43) si restan costos.
+        con_costos = self.opcion_ind == "costos"
+        rl_trab = neto_lab + (0 if con_costos else neto_ind)
+        rl_43 = max(neto_ind - costos_ind, 0) if con_costos else 0.0
+        renta_liquida = rl_trab + rl_43 + neto_cap + neto_nl
 
         ingresos_trabajo = ingresos_lab + ingresos_ind
         hay_trabajo = ingresos_trabajo > 0
@@ -124,6 +132,7 @@ class _Calculo:
             dep_387 = min(ingresos_trabajo * cg["dependiente_art387_pct"], self.u(cg["dependiente_art387_tope_uvt"]))
         prepagada = min(ded.medicina_prepagada, self.u(cg["medicina_prepagada_tope_uvt"])) if hay_trabajo else 0
         intereses = min(ded.intereses_vivienda, self.u(cg["intereses_vivienda_tope_uvt"]))
+        icetex = min(ded.intereses_icetex, self.u(cg.get("intereses_icetex_tope_uvt", 100)))
         gmf = ded.gmf_pagado * cg["gmf_deducible_pct"]
         afc = min(
             ded.aportes_voluntarios_afc_fpv,
@@ -133,14 +142,44 @@ class _Calculo:
         pct_ces = _pct_cesantias(lab.salario_promedio_mensual_6m, self.uvt, cg["cesantias_exencion_por_salario_promedio_uvt"])
         cesantias_exentas = lab.cesantias_e_intereses * pct_ces
 
-        base_trabajo_25 = neto_lab + (neto_ind if self.opcion_ind == "renta_exenta_25" else 0)
-        otras = dep_387 + prepagada + intereses + gmf + afc + cesantias_exentas
-        base_25 = max(base_trabajo_25 - otras, 0)
-        exenta_25 = min(base_25 * cg["renta_exenta_laboral_pct"], self.u(cg["renta_exenta_laboral_tope_uvt"]))
+        # A qué subcédula se imputa cada beneficio (casillas 35-40, 47-52, 63-68 y 80-85). Los de
+        # trabajo (dependiente, prepagada, cesantías, 25 %) van a las rentas de trabajo; los demás,
+        # a las rentas de trabajo hasta donde alcance su renta líquida y lo que sobre, a las siguientes.
+        sub = {k: {"afc": 0.0, "otras_exentas": 0.0, "intereses": 0.0, "otras_deducciones": 0.0} for k in ("trab", "43", "cap", "nl")}
+        rl = {"trab": rl_trab, "43": rl_43, "cap": neto_cap, "nl": neto_nl}
+        propia = "trab" if rl_trab > 0 or not con_costos else "43"
+        sub[propia]["otras_deducciones"] += dep_387 + prepagada
+        sub["trab"]["otras_exentas"] += cesantias_exentas
+        usado = {k: sum(v.values()) for k, v in sub.items()}
+        for nombre, casilla, valor in (("afc", "afc", afc), ("intereses", "intereses", intereses), ("gmf", "otras_deducciones", gmf), ("icetex", "otras_deducciones", icetex)):
+            resto = valor
+            for k in ("trab", "43", "cap", "nl"):
+                cabe = max(rl[k] - usado[k], 0)
+                poner = min(resto, cabe)
+                if poner > 0:
+                    sub[k][casilla] += poner
+                    usado[k] += poner
+                    resto -= poner
+            if resto > 0:  # no cabe en ninguna: queda en trabajo (la ley no deja restarlo)
+                sub[propia][casilla] += resto
+                usado[propia] += resto
 
+        # 25 % exento sobre lo que queda de las rentas de trabajo (num. 10 art. 206 ET)
+        base_trabajo_25 = rl_trab
+        otras = dep_387 + prepagada + intereses + gmf + icetex + afc + cesantias_exentas
+        base_25 = max(base_trabajo_25 - usado["trab"], 0)
+        exenta_25 = min(base_25 * cg["renta_exenta_laboral_pct"], self.u(cg["renta_exenta_laboral_tope_uvt"]))
+        sub["trab"]["otras_exentas"] += exenta_25
+
+        # Límite global y reparto en orden: trabajo, trabajo sin relación laboral, capital, no laborales
         sujetas = otras + exenta_25
         limite = min(ingreso_neto * cg["limite_rentas_exentas_deducciones_pct"], self.u(cg["limite_rentas_exentas_deducciones_uvt"]))
-        aceptadas = min(sujetas, limite, renta_liquida)
+        cupo = limite
+        limitadas: dict[str, float] = {}
+        for k in ("trab", "43", "cap", "nl"):
+            limitadas[k] = min(sum(sub[k].values()), cupo, rl[k])
+            cupo -= limitadas[k]
+        aceptadas = sum(limitadas.values())
         recorte = sujetas - aceptadas
         if recorte > 1000:
             self.alertas.append(
@@ -167,6 +206,22 @@ class _Calculo:
 
         rlg = max(renta_liquida - aceptadas - fuera, 0)
 
+        # Lo que necesita el formulario 210, casilla por casilla
+        self.valores["cg"] = {
+            "trab": {"ingresos": ingresos_lab + (0 if con_costos else ingresos_ind), "incr": incr_lab + (0 if con_costos else incr_ind), "rl": rl_trab},
+            "43": {"ingresos": ingresos_ind if con_costos else 0.0, "incr": incr_ind if con_costos else 0.0, "costos": costos_ind, "rl": rl_43},
+            "cap": {"ingresos": ingresos_cap, "incr": incr_cap, "costos": costos_cap, "rl": neto_cap},
+            "nl": {"ingresos": ingresos_nl, "incr": incr_nl, "costos": costos_nl, "rl": neto_nl},
+            "sub": sub,
+            "limitadas": limitadas,
+            "factura": factura,
+            "dep_72": dep_72,
+            "n_dependientes": ded.dependientes,
+            "renta_liquida": renta_liquida,
+            "aceptadas": aceptadas,
+            "rlg": rlg,
+        }
+
         lineas = [
             Linea(clave="ing_lab", concepto="Ingresos por rentas de trabajo (salarios y cesantías)", valor=ingresos_lab, norma="Art. 103 ET", campos=["laboral.salarios_y_pagos_laborales", "laboral.cesantias_e_intereses"]),
             Linea(clave="incr_lab", concepto="Aportes obligatorios a pensión y salud (no constituyen renta)", valor=incr_lab, norma="Arts. 55 y 56 ET", campos=["laboral.aportes_obligatorios_pension", "laboral.aportes_obligatorios_salud", "laboral.aportes_voluntarios_rais"]),
@@ -184,6 +239,7 @@ class _Calculo:
             Linea(clave="prepagada", concepto="Medicina prepagada", valor=prepagada, norma="Art. 387 ET", campos=["deducciones.medicina_prepagada"]),
             Linea(clave="intereses_vivienda", concepto="Intereses de crédito de vivienda", valor=intereses, norma="Art. 119 ET", campos=["deducciones.intereses_vivienda"]),
             Linea(clave="gmf", concepto="50 % del gravamen a los movimientos financieros (4x1000)", valor=gmf, norma="Art. 115 ET", campos=["deducciones.gmf_pagado"]),
+            Linea(clave="icetex", concepto="Intereses de crédito educativo del ICETEX (máx. 100 UVT)", valor=icetex, norma="Art. 119 ET", campos=["deducciones.intereses_icetex"]),
             Linea(clave="afc_fpv", concepto="Aportes voluntarios a pensión y cuentas AFC", valor=afc, norma="Arts. 126-1 y 126-4 ET", campos=["deducciones.aportes_voluntarios_afc_fpv"]),
             Linea(clave="cesantias_exentas", concepto=f"Cesantías exentas ({pct_ces:.0%})", valor=cesantias_exentas, norma="Num. 4 art. 206 ET", campos=["laboral.cesantias_e_intereses", "laboral.salario_promedio_mensual_6m"]),
             Linea(clave="exenta_25", concepto=f"Renta exenta del 25 % (máx. {_uvt(cg['renta_exenta_laboral_tope_uvt'])} UVT al año)", valor=exenta_25, norma="Num. 10 art. 206 ET"),
@@ -210,6 +266,7 @@ class _Calculo:
         neto = max(p.pensiones_nacionales - p.aportes_salud, 0)
         exenta = min(neto, self.u(self.r["cedula_pensiones"]["renta_exenta_mensual_uvt"] * 12))
         rlg = neto - exenta
+        self.valores["pen"] = {"ingresos": p.pensiones_nacionales, "incr": p.aportes_salud, "rl": neto, "exenta": exenta, "rlg": rlg}
         self.secciones.append(
             Seccion(
                 id="cedula_pensiones",
@@ -235,6 +292,7 @@ class _Calculo:
         impuesto_sub2 = sub2 * rd["tarifa_subcedula_gravada"]
         base_241 = sub1 + (sub2 - impuesto_sub2)
         descuento = max(base_241 / self.uvt - rd["descuento_art254_1_umbral_uvt"], 0) * rd["descuento_art254_1_pct"] * self.uvt
+        self.valores["div"] = {"sub1": sub1, "sub2": sub2, "impuesto_sub2": impuesto_sub2}
         self.secciones.append(
             Seccion(
                 id="cedula_dividendos",
@@ -293,6 +351,7 @@ class _Calculo:
         exentas = sum(p[2] for p in partes)
         gravable_general = sum(p[1] - p[2] for p in partes)
         impuesto = gravable_general * rg["tarifa_general"] + g.loterias_premios * rg["tarifa_loterias"]
+        self.valores["go"] = {"ingresos": bruto, "exentas": exentas, "gravables": gravable_general + g.loterias_premios, "impuesto": impuesto}
         lineas = [Linea(clave=f"go_{i}", concepto=p[0], valor=p[1], norma=p[3]) for i, p in enumerate(partes) if p[1]]
         if g.loterias_premios:
             lineas.append(Linea(clave="go_loterias", concepto="Loterías, rifas y premios (tarifa 20 %)", valor=g.loterias_premios, norma="Art. 317 ET"))
@@ -322,8 +381,21 @@ class _Calculo:
         rlg_total = cg["rlg"] + pen["rlg"] + div["base_241"]
         impuesto_241 = impuesto_tabla_241(rlg_total, self.uvt, self.r["tabla_renta_art241"])
         impuesto_renta = impuesto_241 + div["impuesto_sub2"]
-        descuentos = min(div["descuento"], impuesto_241)  # art. 259 ET
+        # Descuentos: dividendos (art. 254-1) y donaciones (arts. 257 y 258: máximo 25 % del impuesto);
+        # en total no pueden pasar del impuesto (art. 259 ET)
+        rdesc = self.r.get("descuentos", {})
+        dn = self.d.descuentos
+        donaciones = (dn.donaciones * rdesc.get("donaciones_pct", 0.25) + dn.donaciones_alimentos * rdesc.get("donaciones_alimentos_pct", 0.25))
+        donaciones = min(donaciones, impuesto_renta * rdesc.get("limite_donaciones_pct_impuesto", 0.25))
+        desc_div = min(div["descuento"], impuesto_241)
+        descuentos = min(desc_div + donaciones, impuesto_renta)
+        donaciones = max(descuentos - desc_div, 0)
         impuesto_neto = max(impuesto_renta - descuentos, 0)
+        if donaciones:
+            self.alertas.append(Alerta(nivel="info", titulo="Descuento por donaciones",
+                                       detalle=f"Restaste {cop(donaciones)} del impuesto por tus donaciones. Necesitas el certificado de la entidad que recibió la donación."))
+        self.valores["liq"] = {"rlg_total": rlg_total, "impuesto_241": impuesto_241, "impuesto_sub2": div["impuesto_sub2"],
+                               "desc_div": desc_div, "desc_donaciones": donaciones, "impuesto_neto": impuesto_neto}
         return {
             "cg": cg,
             "pen": pen,
@@ -437,12 +509,16 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
         pct = ra["pct_segunda_declaracion"]
     else:
         pct = ra["pct_siguientes"]
+
+    def anticipo_de(impuesto_neto: float, retenciones: float) -> float:
+        """Procedimiento 1 (impuesto de este año) o 2 (promedio de los dos últimos), el que sea menor."""
+        opciones = [impuesto_neto * pct - retenciones]
+        if pagos.declaraciones_previas >= 1 and pagos.impuesto_neto_anio_anterior > 0:
+            opciones.append((impuesto_neto + pagos.impuesto_neto_anio_anterior) / 2 * pct - retenciones)
+        return max(min(opciones), 0)
+
     impuesto_neto = res["impuesto_neto"]
-    proc1 = impuesto_neto * pct - pagos.retenciones_renta
-    opciones = [proc1]
-    if pagos.declaraciones_previas >= 1 and pagos.impuesto_neto_anio_anterior > 0:
-        opciones.append((impuesto_neto + pagos.impuesto_neto_anio_anterior) / 2 * pct - pagos.retenciones_renta)
-    anticipo = max(min(opciones), 0)
+    anticipo = anticipo_de(impuesto_neto, pagos.retenciones_renta)
 
     total_cargo = impuesto_neto + res["go"]["impuesto"]
     saldo_sin_sancion = total_cargo + anticipo - pagos.anticipo_anio_anterior - pagos.saldo_favor_anterior - pagos.retenciones_renta
@@ -511,6 +587,34 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
         for ln in s.lineas:
             ln.valor = _redondear(ln.valor, redondeo)
 
+    # Formulario 210 casilla por casilla (2023 y siguientes). Sus totales salen de casillas ya
+    # aproximadas a miles, como en MUISCA; el resumen y el borrador usan esos mismos totales.
+    form = formulario.armar(
+        d, r, calc.valores,
+        {"patrimonio_bruto": bruto, "deudas": deudas, "sancion": sancion, "anticipo_de": anticipo_de},
+        lambda base: impuesto_tabla_241(base, uvt, r["tabla_renta_art241"]),
+    )
+    if form.disponible:
+        c = {x.numero: x.valor for sec in form.secciones for x in sec.casillas}
+        alinear = {
+            "rlg_total": c[111], "impuesto_241": c[116], "impuesto_renta": c[121], "descuentos": c[125], "impuesto_neto": c[126],
+            "impuesto_go": c[127], "total_cargo": c[129], "anticipo_sig": c[133], "saldo_pagar": c[136], "saldo_favor": c[137],
+        }
+        alinear_otras = {
+            "patrimonio_bruto": c[29], "deudas": c[30], "patrimonio_liquido": c[31],
+            "renta_liquida_cg": c[91], "aceptadas": c[41] + c[53] + c[69] + c[86], "rlg_cg": c[97],
+            "rlg_pen": c[103], "imp_sub2": c[118], "desc_div": c[124], "go_gravables": c[115], "go_impuesto": c[127],
+        }
+        for sec in calc.secciones:
+            for ln in sec.lineas:
+                if sec.id == "liquidacion" and ln.clave in alinear:
+                    ln.valor = alinear[ln.clave]
+                elif sec.id != "liquidacion" and ln.clave in alinear_otras:
+                    ln.valor = alinear_otras[ln.clave]
+        impuesto_neto, anticipo, total_cargo = c[126], c[133], c[129]
+        saldo_pagar, saldo_favor = c[136], c[137]
+        res = {**res, "rlg_total": c[111], "impuesto_renta": c[121], "descuentos": c[125], "go": {**res["go"], "impuesto": c[127]}}
+
     resumen = Resumen(
         patrimonio_bruto=_redondear(bruto, redondeo),
         deudas=_redondear(deudas, redondeo),
@@ -551,4 +655,5 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
         alertas=calc.alertas,
         vencimiento=venc,
         opcion_independiente=opcion_elegida,
+        formulario=form,
     )

@@ -271,7 +271,7 @@ def test_al_subir_la_exogena_deduce_y_pregunta_lo_que_no_muestra():
     assert "trabajas para COMERCIALIZADORA ANDINA S.A.S." in d["respuesta"] and "sí estás obligado" in d["respuesta"]
     assert "Ya vienen incluidos" in d["respuesta"] and "prepagada" in d["respuesta"]
     assert d["pregunta"]["temas"] == ["dependientes", "deducciones"] and d["widgets"] == ["revisar"]
-    assert "¿Pagas aportes voluntarios a pensión o AFC?" in d["respuesta"]  # no pregunta por lo que ya trae (prepagada, vivienda)
+    assert "¿Pagas intereses de un crédito del ICETEX o aportes voluntarios a pensión o AFC?" in d["respuesta"]  # no pregunta por lo que ya trae (prepagada, vivienda)
     ch = Charla(**{**e, "pregunta_pendiente": d["pregunta"], "ya_preguntado": d["ya_preguntado"]})
     j = ch("no, a ninguna")
     assert not j["calcular"] and "carro o moto" in j["respuesta"]  # la exógena no muestra vehículos

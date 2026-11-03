@@ -28,7 +28,7 @@ function Fila210({ c, fuentes, filas }: { c: Casilla; fuentes: Record<string, st
   const detalle = c.nota || c.formula || origen.length > 0;
   return (
     <div className={`f210-fila ${c.tipo}${c.valor ? "" : " cero"}`}>
-      <span className="f210-num" aria-label={`Casilla ${c.numero}`}>{c.numero}</span>
+      <span className="f210-num"><span className="visualmente-oculto">Casilla </span>{c.numero}</span>
       <div className="f210-nombre">
         {detalle ? (
           <button className="f210-abrir" onClick={() => setAbierta(!abierta)} aria-expanded={abierta}>{c.nombre}</button>
@@ -111,12 +111,12 @@ export function Formulario210({ f, fuentes, filas }: { f: F210; fuentes: Record<
           <label className="f210-todas">
             <input type="checkbox" checked={todas} onChange={(e) => setTodas(e.target.checked)} /> Ver todas las casillas
           </label>
-          <button className="boton secundario chico" onClick={() => void copiarTodo()}>{copiadoTodo ? "Copiado" : "Copiar las que escribes"}</button>
+          <button className="boton secundario chico" onClick={() => void copiarTodo()}>{copiadoTodo ? "Copiadas" : "Copiar las casillas que escribes"}</button>
         </div>
       </header>
       <div className="f210-leyenda">
-        <span><i className="muestra dato" /> La escribes o la comparas con la sugerida</span>
-        <span><i className="muestra calculada" /> La calcula la DIAN sola</span>
+        <span><i className="muestra dato" aria-hidden="true" /> La escribes o la comparas con la sugerida</span>
+        <span><i className="muestra calculada" aria-hidden="true" /> La calcula la DIAN sola</span>
         {!todas ? <span className="suave">Las casillas que no aparecen van en 0.</span> : null}
       </div>
 
@@ -128,7 +128,7 @@ export function Formulario210({ f, fuentes, filas }: { f: F210; fuentes: Record<
       ))}
 
       <div className="f210-pago">
-        <span className="f210-num">980</span>
+        <span className="f210-num"><span className="visualmente-oculto">Casilla </span>980</span>
         <strong>Pago total</strong>
         <span className="f210-valor">{pesos(f.pago_total)}</span>
       </div>
@@ -136,7 +136,7 @@ export function Formulario210({ f, fuentes, filas }: { f: F210; fuentes: Record<
         {f.notas.map((n) => <li key={n}>{n}</li>)}
         <li>Es un borrador para copiar en MUISCA, no un documento oficial. La firma y la presentación son tuyas.</li>
       </ul>
-      <div className="sello-borrador">BORRADOR</div>
+      <div className="sello-borrador" aria-hidden="true">BORRADOR</div>
     </section>
   );
 }

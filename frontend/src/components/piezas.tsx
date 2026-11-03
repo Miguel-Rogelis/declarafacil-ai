@@ -1,12 +1,38 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { aNumero, pesos } from "../lib/formato";
 
-export function Marca() {
+/** Símbolo d-chulo: la d de DeclaraFácil escrita de un trazo que remata en chulo.
+ *  `chico` usa el corte para tamaños pequeños (trazo más grueso), el que va en el encabezado y el favicon. */
+export function Marca({ chico = false }: { chico?: boolean }) {
   return (
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <circle cx="32" cy="32" r="28" fill="none" stroke="var(--sello)" strokeWidth="5" />
-      <circle cx="32" cy="32" r="19" fill="none" stroke="var(--sello)" strokeWidth="2.5" />
-      <path d="M23 33l6 6 12-14" fill="none" stroke="var(--sello)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 256 256" aria-hidden="true">
+      <g transform={chico ? "translate(-30.7 -18.7) scale(1.146)" : "translate(-22.5 -11.1) scale(1.087)"}>
+        <path
+          d="M184 124 C 166 110, 148 104, 126 104 C 94 104, 66 126, 66 157 C 66 188, 92 208, 120 208 C 128 208, 136 205, 142 200 L 162 220 L 211 36"
+          fill="none"
+          stroke="var(--sello)"
+          strokeWidth={chico ? 38 : 30}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
+/** El símbolo usado como letra: recortado a su caja para que se siente en la línea base junto al texto.
+ *  Usa el corte grueso, que a tamaño de texto se lee mejor. */
+export function LetraD({ className = "" }: { className?: string }) {
+  return (
+    <svg className={`letra-d ${className}`.trim()} viewBox="47 17 183 222" aria-hidden="true">
+      <path
+        d="M184 124 C 166 110, 148 104, 126 104 C 94 104, 66 126, 66 157 C 66 188, 92 208, 120 208 C 128 208, 136 205, 142 200 L 162 220 L 211 36"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={38}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -77,6 +103,45 @@ export function Segmentado<T extends string | number>({ opciones, valor, onCambi
     <div className="segmentado" role="group" aria-label={etiqueta}>
       {opciones.map((o) => (
         <button key={String(o.valor)} type="button" aria-pressed={valor === o.valor} onClick={() => onCambio(o.valor)}>
+          {o.texto}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Pestañas accesibles: flechas, Inicio y Fin mueven la selección; solo la elegida entra en el orden de Tab. */
+export function Pestanas<T extends string>({ opciones, valor, onCambio, etiqueta, idPanel, pegadas = false, className = "" }: {
+  opciones: { valor: T; texto: string }[];
+  valor: T;
+  onCambio: (v: T) => void;
+  etiqueta: string;
+  idPanel: string;
+  pegadas?: boolean;
+  className?: string;
+}) {
+  const mover = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = opciones.findIndex((o) => o.valor === valor);
+    const destino = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: opciones.length - 1 }[e.key];
+    if (destino === undefined) return;
+    e.preventDefault();
+    const nueva = opciones[(destino + opciones.length) % opciones.length];
+    onCambio(nueva.valor);
+    e.currentTarget.querySelector<HTMLButtonElement>(`#pestana-${idPanel}-${nueva.valor}`)?.focus();
+  };
+  return (
+    <div className={`pestanas${pegadas ? " pegadas" : ""} ${className}`} role="tablist" aria-label={etiqueta} onKeyDown={mover}>
+      {opciones.map((o) => (
+        <button
+          key={o.valor}
+          id={`pestana-${idPanel}-${o.valor}`}
+          type="button"
+          role="tab"
+          aria-selected={o.valor === valor}
+          aria-controls={idPanel}
+          tabIndex={o.valor === valor ? 0 : -1}
+          onClick={() => onCambio(o.valor)}
+        >
           {o.texto}
         </button>
       ))}

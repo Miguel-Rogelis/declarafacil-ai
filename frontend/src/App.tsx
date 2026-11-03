@@ -1,36 +1,28 @@
 import { MotionConfig } from "motion/react";
-import { Marca } from "./components/piezas";
+import { Encabezado } from "./components/Navegacion";
+import Noise from "./components/reactbits/Noise";
+import { ShaderFlow } from "./components/ShaderFlow";
 import { ProveedorSesion, useSesion, type Ruta } from "./lib/estado";
 import Configuracion from "./pages/Configuracion";
 import Declarar from "./pages/Declarar";
 import Inicio from "./pages/Inicio";
 import Resultado from "./pages/Resultado";
 
-function Encabezado() {
-  const { ruta, anio, cambiarAnio, anios, resultado } = useSesion();
-  const enlace = (r: Ruta, texto: string) => (
-    <a href={`#/${r}`} aria-current={ruta === r ? "page" : undefined}>{texto}</a>
-  );
-  const vigentes = anios.filter((a) => a.estado === "vigente");
+/** Fondo animado detrás de la parte de arriba (el shader de la plantilla rbp-portfolio con la tinta y el sello).
+ *  En la portada va más vivo; en el chat, quieto y suave para no distraer. */
+function Fondo({ ruta }: { ruta: Ruta }) {
+  const portada = ruta === "inicio";
   return (
-    <header className="encabezado">
-      <div className="contenedor">
-        <a className="marca" href="#/inicio"><Marca /> DeclaraFácil</a>
-        <label className="selector-anio">
-          Año gravable
-          <select value={anio} onChange={(e) => cambiarAnio(Number(e.target.value))}>
-            {(vigentes.length ? vigentes : [{ anio_gravable: 2025 }]).map((a) => (
-              <option key={a.anio_gravable} value={a.anio_gravable}>{a.anio_gravable}</option>
-            ))}
-          </select>
-        </label>
-        <nav className="nav" aria-label="Principal">
-          {enlace("declarar", "Chat")}
-          {resultado ? enlace("resultado", "Resultado") : null}
-          {enlace("configuracion", "Reglas y agentes")}
-        </nav>
-      </div>
-    </header>
+    <div className={`fondo-animado${ruta === "declarar" ? " suave" : ""}${portada ? " vivo" : ""}`} aria-hidden="true">
+      <ShaderFlow
+        className="shader-flow"
+        brightness={portada ? 1.35 : 1.15}
+        iterations={portada ? 12 : 10}
+        flowSpeed={portada ? [0.05, 0.12] : [0, 0.1]}
+        colorLowA={[0.07, 0.23, 0.2]}
+        colorHighA={[0.42, 0.33, 0.85]}
+      />
+    </div>
   );
 }
 
@@ -38,6 +30,8 @@ function Marco() {
   const { ruta } = useSesion();
   return (
     <div className={`app${ruta === "declarar" ? " app-chat" : ""}`}>
+      <Noise fixed fps={0} opacity={0.04} size={1.2} blendMode="multiply" contrast={0.5} zIndex={60} />
+      <Fondo ruta={ruta} />
       <Encabezado />
       <Paginas />
     </div>
@@ -47,7 +41,7 @@ function Marco() {
 function Paginas() {
   const { ruta } = useSesion();
   return (
-    <main className="principal">
+    <main className="principal" id="contenido" tabIndex={-1}>
       {ruta === "inicio" ? <Inicio /> : null}
       {ruta === "declarar" ? <Declarar /> : null}
       {ruta === "resultado" ? <Resultado /> : null}

@@ -4,6 +4,7 @@ import type { Fila, OpcionRevision, Respuestas, ResultadoLiquidacion, Simulacion
 import { useSesion, type Mensaje } from "../lib/estado";
 import { pesos } from "../lib/formato";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "./MesaAgentes";
+import { FadeIn } from "./Movimiento";
 import { Marca } from "./piezas";
 
 function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
@@ -61,7 +62,7 @@ function SubirExogena() {
           e.target.value = "";
         }}
       />
-      <p className="chico suave" style={{ margin: "0.5rem 0 0" }}>
+      <p className="chico suave sin-margen mt-1">
         Para probar sin datos reales: <button className="boton-texto chico" onClick={() => void usarEjemplo()}>usar documentos ficticios</button> (exógena, certificado del empleador y del banco)
       </p>
     </>
@@ -95,7 +96,7 @@ function Revisar() {
   const { porRevisar, filas, decididas, elecciones, cambiarDecision } = useSesion();
   const hechas = filas.filter((f) => f.id in decididas);
   if (!hechas.length) {
-    return <p className="chico suave" style={{ margin: 0 }}>{porRevisar.length ? "Te pregunto abajo, uno por uno." : "No hay datos pendientes por confirmar."}</p>;
+    return <p className="chico suave sin-margen">{porRevisar.length ? "Te pregunto abajo, uno por uno." : "No hay datos pendientes por confirmar."}</p>;
   }
   return (
     <div className="revision">
@@ -108,7 +109,7 @@ function Revisar() {
           <button className="boton-texto chico" onClick={() => cambiarDecision(f.id)}>Cambiar</button>
         </div>
       ))}
-      {porRevisar.length ? <p className="chico suave" style={{ margin: 0 }}>Quedan {porRevisar.length}; te pregunto abajo.</p> : null}
+      {porRevisar.length ? <p className="chico suave sin-margen">Quedan {porRevisar.length}; te pregunto abajo.</p> : null}
     </div>
   );
 }
@@ -126,16 +127,35 @@ function CuadroPregunta() {
   }, [pregunta]);
   const ocupado = escribiendo || calculando;
   const fila = porRevisar[0];
+  const atajos = useRef<(() => void)[]>([]);
+  atajos.current = [];
+
+  // Las opciones llevan número: fuera de un campo de texto basta oprimir 1, 2, 3… (en la caja, el número se escribe)
+  useEffect(() => {
+    const alOprimir = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || !/^[1-9]$/.test(e.key)) return;
+      const el = document.activeElement;
+      const enCampo = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+      const accion = atajos.current[Number(e.key) - 1];
+      if (enCampo || !accion || document.querySelector("[aria-modal='true']")) return;
+      e.preventDefault();
+      accion();
+    };
+    window.addEventListener("keydown", alOprimir);
+    return () => window.removeEventListener("keydown", alOprimir);
+  }, []);
 
   if (fila) {
     const opciones = opcionesDe(fila);
     const recomendada = opciones.find((o) => o.recomendada);
     const elegir = (o: OpcionRevision | undefined, texto: string) => decidir(fila.id, o ? o.incluir : false, o?.campo ?? null, texto);
+    const noSe = () => elegir(recomendada, recomendada ? `No sé (${recomendada.texto.toLowerCase()})` : "No sé (lo dejé por fuera)");
+    atajos.current = [...opciones.map((o) => () => elegir(o, o.texto)), noSe];
     return (
       <div className="cuadro-pregunta" role="group" aria-label={`Confirma un dato ${deDonde(fila)}`}>
         <div className="cuadro-cabeza">
           <span className="cuadro-titulo">Confirma un dato {deDonde(fila)}</span>
-          <span className="chico suave">{porRevisar.length > 1 ? `Quedan ${porRevisar.length}` : "Último"}</span>
+          <span className="chico suave cuadro-paso">{porRevisar.length > 1 ? `Faltan ${porRevisar.length}` : "Es el último"}</span>
         </div>
         <p className="cuadro-texto">{fila.pregunta || `${fila.informante ?? "Una entidad"} reportó ${pesos(fila.valor)} por «${fila.detalle}». ¿Lo incluyo en tu declaración?`}</p>
         {fila.ayuda ? <p className="chico suave cuadro-ayuda">{fila.ayuda}</p> : null}
@@ -147,7 +167,7 @@ function CuadroPregunta() {
               {o.recomendada ? <span className="sello-chico">Recomendado</span> : null}
             </button>
           ))}
-          <button className="opcion" onClick={() => elegir(recomendada, recomendada ? `No sé (${recomendada.texto.toLowerCase()})` : "No sé (lo dejé por fuera)")}>
+          <button className="opcion" onClick={noSe}>
             <span className="num">{opciones.length + 1}</span>
             <span>No sé</span>
           </button>
@@ -170,12 +190,13 @@ function CuadroPregunta() {
       void enviar(todas.join(". "));
     }
   };
+  if (!ocupado) atajos.current = parte.opciones.map((o) => () => responder(o));
   return (
     <div className="cuadro-pregunta" role="group" aria-label="Pregunta de DeclaraFácil">
       <div className="cuadro-cabeza">
         <span className="cuadro-titulo">{(pregunta.intro || "Necesito un dato").replace(/[:.]\s*$/, "")}</span>
         {partes.length > 1 ? <span className="chico suave cuadro-paso">{paso + 1} de {partes.length}</span> : null}
-        <button className="cuadro-cerrar" aria-label="Cerrar la pregunta" title="Cerrar (puedes escribir tu respuesta abajo)" onClick={cerrarPregunta}>×</button>
+        <button className="cuadro-cerrar" aria-label="Cerrar la pregunta" title="Cerrar (puedes escribir tu respuesta abajo)" onClick={cerrarPregunta}><span aria-hidden="true">×</span></button>
       </div>
       <p className="cuadro-texto">{parte.texto}</p>
       {parte.opciones.length ? (
@@ -207,7 +228,7 @@ function CuadroPregunta() {
         <button className="boton chico" disabled={!otra.trim() || ocupado}>{paso + 1 < partes.length ? "Siguiente" : "Responder"}</button>
       </form>
       {pregunta.intencion === "calcular" ? (
-        <button className="boton-texto chico cuadro-saltar" disabled={ocupado} onClick={() => void enviar("calcula así")}>Calcular con lo que hay</button>
+        <button className="boton-texto chico cuadro-saltar" disabled={ocupado} onClick={() => void enviar([...dichas, "calcula así"].join(". "))}>Calcular con lo que hay</button>
       ) : null}
     </div>
   );
@@ -259,7 +280,11 @@ function TarjetaSimulacion({ s }: { s: Simulacion }) {
             <tr key={nombre}>
               <th scope="row">{nombre}</th>
               <td>{pesos(a)}</td>
-              <td className={b < a ? "baja" : b > a ? "sube" : undefined}>{pesos(b)}</td>
+              <td className={b < a ? "baja" : b > a ? "sube" : undefined}>
+                {b !== a ? <span aria-hidden="true">{b < a ? "↓ " : "↑ "}</span> : null}
+                {pesos(b)}
+                {b !== a ? <span className="visualmente-oculto">{b < a ? " (baja)" : " (sube)"}</span> : null}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -272,7 +297,7 @@ function supuestos(r: Respuestas, conExogena: boolean): string[] {
   const s: string[] = [];
   if (!conExogena && !r.retenciones_no_reportadas) s.push("sin retenciones");
   if (!r.dependientes) s.push("sin personas a cargo");
-  if (!r.medicina_prepagada && !r.intereses_vivienda && !r.aportes_voluntarios_afc_fpv) s.push("sin deducciones");
+  if (!conExogena && !r.medicina_prepagada && !r.intereses_vivienda && !r.aportes_voluntarios_afc_fpv) s.push("sin deducciones");
   if (r.declaraciones_previas === null) s.push("primera declaración");
   if (!r.ultimos_dos_digitos_nit) s.push("sin fecha límite (falta tu cédula)");
   return s;
@@ -323,15 +348,18 @@ function Widget({ m }: { m: Mensaje }) {
 
 /** El chat a pantalla completa. El usuario lleva la conversación de inicio a fin. */
 export default function Conversacion({ barra }: { barra?: ReactNode }) {
-  const { mensajes, enviar, escribiendo, calculando, procesarArchivos, archivoPendiente, setArchivoPendiente, extraccion, anio } = useSesion();
+  const { mensajes, enviar, escribiendo, calculando, procesarArchivos, archivoPendiente, setArchivoPendiente, extraccion, anio, usarEjemplo } = useSesion();
   const [texto, setTexto] = useState("");
   const lista = useRef<HTMLDivElement>(null);
   const adjuntar = useRef<HTMLInputElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
+  const procesado = useRef<File[] | null>(null);
 
   useEffect(() => {
-    if (archivoPendiente && !extraccion) {
+    // En desarrollo React monta el efecto dos veces: sin esta guarda los archivos se leían doble
+    if (archivoPendiente && !extraccion && procesado.current !== archivoPendiente) {
       const a = archivoPendiente;
+      procesado.current = a;
       setArchivoPendiente(null);
       void procesarArchivos(a);
     }
@@ -350,6 +378,8 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
   useEffect(() => {
     const el = caja.current;
     if (!el) return;
+    el.style.height = "";
+    if (!texto) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
   }, [texto]);
@@ -365,14 +395,20 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
   return (
     <section className={`chat${vacio ? " vacio-inicial" : ""}`} aria-label="Conversación con DeclaraFácil">
       {barra}
-      <div className="chat-mensajes" ref={lista} aria-live="polite">
+      <div className="chat-mensajes" ref={lista} role="log" aria-label="Mensajes">
         <div className="chat-columna">
           {vacio ? (
-            <div className="chat-bienvenida">
+            <FadeIn className="chat-bienvenida">
               <Marca />
               <h1 className="titular t-36">¿En qué te ayudo con tu renta?</h1>
-              <p className="suave">Pregúntame lo que quieras, cuéntame tus ingresos o adjunta con el clip tu exógena y tus certificados (puedes subir varios a la vez). Uso las reglas del año gravable {anio}.</p>
-            </div>
+              <p className="suave">Pregúntame lo que quieras, cuéntame tus ingresos o adjunta con el clip tu exógena y tus certificados. Uso las reglas del año gravable {anio}.</p>
+              <div className="sugerencias">
+                {["¿Me toca declarar renta?", "Gano 4 millones al mes", "¿Qué es la exógena?"].map((s) => (
+                  <button key={s} type="button" className="sugerencia" disabled={ocupado} onClick={() => mandar(s)}>{s}</button>
+                ))}
+                <button type="button" className="sugerencia ejemplo" disabled={ocupado} onClick={() => void usarEjemplo()}>Probar con documentos ficticios</button>
+              </div>
+            </FadeIn>
           ) : null}
           {mensajes.filter((m) => !m.oculto).map((m) =>
             m.widget ? (
@@ -382,7 +418,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             ),
           )}
           {escribiendo ? (
-            <div className="burbuja bot"><span className="escribiendo" aria-label="Escribiendo"><i /><i /><i /></span></div>
+            <div className="burbuja bot"><span className="escribiendo" role="status" aria-label="Escribiendo"><i /><i /><i /></span></div>
           ) : null}
         </div>
       </div>
@@ -418,7 +454,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             className="entrada"
             rows={1}
             value={texto}
-            placeholder="Escribe aquí"
+            placeholder="Pregunta algo"
             onChange={(e) => setTexto(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {

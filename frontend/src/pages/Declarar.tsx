@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Conversacion from "../components/Conversacion";
 import type { DocumentoCargado, Fila, Respuestas } from "../lib/api";
 import { useSesion } from "../lib/estado";
@@ -115,6 +115,36 @@ function HojaTrabajo({ filas, respuestas, documentos }: { filas: Fila[]; respues
 export default function Declarar() {
   const { filas, respuestas, anio, mensajes, reiniciar, porRevisar, documentos } = useSesion();
   const [abierto, setAbierto] = useState(false);
+  const boton = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLElement>(null);
+
+  // Panel modal: Escape cierra, Tab no se sale del panel y al cerrar el foco vuelve al botón
+  useEffect(() => {
+    if (!abierto) return;
+    const disparador = boton.current;
+    const alOprimir = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAbierto(false);
+        return;
+      }
+      if (e.key !== "Tab" || !panel.current) return;
+      const enfocables = panel.current.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])");
+      const primero = enfocables[0];
+      const ultimo = enfocables[enfocables.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo?.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero?.focus();
+      }
+    };
+    document.addEventListener("keydown", alOprimir);
+    return () => {
+      document.removeEventListener("keydown", alOprimir);
+      disparador?.focus();
+    };
+  }, [abierto]);
   const cantidad = filas.filter((f) => f.campo && f.tratamiento !== "informativo").length + extrasDeRespuestas(respuestas).length;
   const barra = (
     <div className="chat-barra">
@@ -122,7 +152,7 @@ export default function Declarar() {
         {mensajes.length ? (
           <button className="boton-texto chico" onClick={() => reiniciar()}>Empezar de nuevo</button>
         ) : <span />}
-        <button className="boton secundario chico" onClick={() => setAbierto(true)} aria-expanded={abierto} aria-controls="panel-datos">
+        <button ref={boton} className="boton secundario chico" onClick={() => setAbierto(true)} aria-expanded={abierto} aria-controls="panel-datos">
           Tus datos{cantidad ? ` (${cantidad})` : ""}{porRevisar.length ? ` · ${porRevisar.length} por confirmar` : ""}
         </button>
       </div>
@@ -134,21 +164,22 @@ export default function Declarar() {
       <AnimatePresence>
         {abierto ? (
           <>
-            <motion.div className="velo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAbierto(false)} />
+            <motion.div className="velo" aria-hidden="true" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAbierto(false)} />
             <motion.aside
               id="panel-datos"
               className="panel-datos"
+              ref={panel}
               role="dialog"
-              aria-label="Tus datos"
+              aria-modal="true"
+              aria-labelledby="titulo-panel-datos"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "tween", duration: 0.22 }}
-              onKeyDown={(e) => e.key === "Escape" && setAbierto(false)}
             >
               <header>
                 <div>
-                  <h2 className="titular t-21">Tus datos, año {anio}</h2>
+                  <h2 id="titulo-panel-datos" className="titular t-21">Tus datos, año {anio}</h2>
                   <span className="chico suave">Lo que traen tus documentos y lo que me contaste. Cada cifra muestra de dónde sale.</span>
                 </div>
                 <button className="boton-texto" onClick={() => setAbierto(false)} autoFocus>Cerrar</button>

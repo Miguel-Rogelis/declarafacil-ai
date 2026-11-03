@@ -43,7 +43,7 @@ export function MesaAgentes({ fases, eventos, compacta = false, soloActivos = fa
               {terminado && ev?.duracion_ms != null && !compacta ? <div className="chico suave">{(ev.duracion_ms / 1000).toFixed(1)} s</div> : null}
             </div>
             <AnimatePresence>
-              {trabajando ? <span className="trabajando" aria-label="Trabajando" /> : null}
+              {trabajando ? <span className="trabajando" role="img" aria-label="Trabajando" /> : null}
               {terminado ? (
                 <motion.span
                   key="sello"
@@ -51,6 +51,7 @@ export function MesaAgentes({ fases, eventos, compacta = false, soloActivos = fa
                   initial={{ scale: 1.9, rotate: -24, opacity: 0 }}
                   animate={{ scale: 1, rotate: -9, opacity: 1 }}
                   transition={{ type: "spring", stiffness: 520, damping: 18 }}
+                  role="img"
                   aria-label={TEXTO_SELLO[ev.estado]}
                 >
                   {TEXTO_SELLO[ev.estado]}

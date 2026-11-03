@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type AgenteConfig } from "../lib/api";
+import { FadeIn } from "../components/Movimiento";
+import { Pestanas } from "../components/piezas";
 import { useSesion } from "../lib/estado";
 
 type Reglas = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -57,9 +59,12 @@ function PanelReglas({ token }: { token: string }) {
   const [destino, setDestino] = useState("");
   const [uvtNueva, setUvtNueva] = useState("");
 
+  const [errorCarga, setErrorCarga] = useState("");
+
   useEffect(() => {
     setReglas(null);
-    api.reglas(anio).then(setReglas).catch((e) => setMsg({ texto: e.message, error: true }));
+    setErrorCarga("");
+    api.reglas(anio).then(setReglas).catch((e) => setErrorCarga(`No pude cargar las reglas de ${anio}. ${e.message}`));
   }, [anio]);
 
   const guardar = async () => {
@@ -82,7 +87,7 @@ function PanelReglas({ token }: { token: string }) {
 
   return (
     <div>
-      <div className="campo" style={{ maxWidth: "20rem" }}>
+      <div className="campo campo-angosto">
         <label htmlFor="anio-reglas">Año gravable</label>
         <select id="anio-reglas" className="entrada" value={anio} onChange={(e) => setAnio(Number(e.target.value))}>
           {anios.map((a) => <option key={a.anio_gravable} value={a.anio_gravable}>{a.anio_gravable} ({a.estado})</option>)}
@@ -114,8 +119,9 @@ function PanelReglas({ token }: { token: string }) {
             })}
           </div>
 
-          <h3 className="titular t-21" style={{ marginTop: "2rem" }}>Tabla del artículo 241</h3>
-          <table className="tabla" style={{ marginTop: "0.6rem", maxWidth: "720px" }}>
+          <h3 className="titular t-21 mt-3">Tabla del artículo 241</h3>
+          <div className="tabla-scroll mt-1">
+          <table className="tabla tabla-241">
             <thead><tr><th>Desde (UVT)</th><th>Hasta (UVT)</th><th>Tarifa (%)</th><th>Impuesto fijo (UVT)</th></tr></thead>
             <tbody>
               {(reglas.tabla_renta_art241 as Reglas[]).map((t, i) => (
@@ -128,6 +134,7 @@ function PanelReglas({ token }: { token: string }) {
               ))}
             </tbody>
           </table>
+          </div>
           <p className="chico suave">
             Los cambios guardados aquí duran hasta que el servidor se reinicie. Para dejarlos fijos, descarga el JSON y reemplaza backend/data/reglas/ag{anio}.json en el repositorio.
           </p>
@@ -151,15 +158,17 @@ function PanelReglas({ token }: { token: string }) {
             </button>
           </div>
 
-          <h3 className="titular t-21" style={{ marginTop: "2.5rem" }}>Preparar un año nuevo</h3>
+          <h3 className="titular t-21 mt-3">Preparar un año nuevo</h3>
           <p className="suave">Copia las reglas de {anio} como borrador para otro año y ajusta lo que cambie.</p>
-          <div style={{ display: "flex", gap: "0.8rem", alignItems: "end", flexWrap: "wrap" }}>
+          <div className="fila-campos">
             <div className="campo"><label htmlFor="destino">Año nuevo</label><input id="destino" className="entrada" type="number" value={destino} onChange={(e) => setDestino(e.target.value)} placeholder={String(anio + 1)} /></div>
             <div className="campo"><label htmlFor="uvtn">UVT de ese año</label><input id="uvtn" className="entrada" type="number" value={uvtNueva} onChange={(e) => setUvtNueva(e.target.value)} /></div>
             <button className="boton secundario" onClick={clonar} disabled={!destino}>Crear borrador</button>
           </div>
         </>
-      ) : <p className="suave">Cargando reglas…</p>}
+      ) : errorCarga ? (
+        <p className="mensaje-estado error" role="alert">{errorCarga}</p>
+      ) : <p className="suave" role="status">Cargando reglas…</p>}
       {msg ? <p className={`mensaje-estado${msg.error ? " error" : ""}`} role="status">{msg.texto}</p> : null}
     </div>
   );
@@ -192,9 +201,9 @@ function TarjetaAgente({ id, cfg, token }: { id: string; cfg: AgenteConfig; toke
         <strong className="t-21">{cfg.nombre}</strong>
         {cfg.usa_ia ? <span className="etiqueta-ia">IA</span> : <span className="etiqueta-reglas">Reglas</span>}
       </header>
-      <p className="suave" style={{ margin: "0.4rem 0 0" }}>{cfg.responsabilidad}</p>
+      <p className="suave sin-margen mt-1">{cfg.responsabilidad}</p>
       {cfg.usa_ia ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 9rem", gap: "1rem" }}>
+        <div className="rejilla-agente">
           <div className="campo">
             <label htmlFor={`m-${id}`}>Modelos de OpenRouter, en orden de preferencia</label>
             <textarea id={`m-${id}`} className="entrada" rows={3} value={modelos} onChange={(e) => setModelos(e.target.value)} />
@@ -235,15 +244,15 @@ function PanelAgentes({ token }: { token: string }) {
     api.modelosGratis().then(setGratis).catch((e) => setError(e.message));
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(0,0.7fr)", gap: "2rem", alignItems: "start" }}>
-      <div>{agentes ? Object.entries(agentes).map(([id, cfg]) => <TarjetaAgente key={id} id={id} cfg={cfg} token={token} />) : <p className="suave">Cargando agentes…</p>}</div>
+    <div className="panel-agentes">
+      <div>{agentes ? Object.entries(agentes).map(([id, cfg]) => <TarjetaAgente key={id} id={id} cfg={cfg} token={token} />) : (error ? null : <p className="suave" role="status">Cargando agentes…</p>)}</div>
       <aside>
         <h3 className="titular t-21">Modelos gratis de hoy</h3>
         <p className="chico suave">OpenRouter cambia su lista de modelos gratuitos casi cada semana. Consulta la lista actual y copia los identificadores que quieras usar.</p>
         <button className="boton secundario chico" onClick={verGratis}>Consultar OpenRouter</button>
-        {error ? <p className="mensaje-estado error">{error}</p> : null}
+        {error ? <p className="mensaje-estado error" role="alert">{error}</p> : null}
         {gratis ? (
-          <ul className="chico" style={{ paddingLeft: "1.1rem", maxHeight: "50vh", overflow: "auto" }}>
+          <ul className="chico lista-modelos">
             {gratis.map((m) => <li key={m.id}><code>{m.id}</code></li>)}
           </ul>
         ) : null}
@@ -257,22 +266,32 @@ export default function Configuracion() {
   const [token, setToken] = useToken();
   const { modoLlm } = useSesion();
   return (
-    <div className="contenedor" style={{ paddingTop: "2.5rem" }}>
-      <h1 className="titular t-48">Reglas y agentes</h1>
-      <p className="lead">Cambia los valores tributarios de cada año sin tocar código y elige qué modelo usa cada agente.</p>
+    <div className="contenedor pagina">
+      <FadeIn>
+        <h1 className="titular t-48">Reglas y agentes</h1>
+        <p className="lead">Cambia los valores tributarios de cada año sin tocar código y elige qué modelo usa cada agente.</p>
+      </FadeIn>
       <p className="chico suave">
         {modoLlm === "openrouter" ? "Conectado a OpenRouter." : "Modo simulado: falta la variable OPENROUTER_API_KEY en el servidor, así que los agentes con IA usan su ruta sin modelo."}
       </p>
-      <div className="campo" style={{ maxWidth: "22rem" }}>
+      <div className="campo campo-angosto">
         <label htmlFor="token">Clave de administrador</label>
         <input id="token" className="entrada" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
         <span className="ayuda">Necesaria para guardar cambios. Es la variable ADMIN_TOKEN del servidor.</span>
       </div>
-      <div className="pestanas" role="tablist">
-        <button role="tab" aria-selected={pestana === "reglas"} onClick={() => setPestana("reglas")}>Reglas por año</button>
-        <button role="tab" aria-selected={pestana === "agentes"} onClick={() => setPestana("agentes")}>Agentes</button>
+      <Pestanas
+        etiqueta="Qué configurar"
+        idPanel="panel-config"
+        valor={pestana}
+        onCambio={setPestana}
+        opciones={[
+          { valor: "reglas", texto: "Reglas por año" },
+          { valor: "agentes", texto: "Agentes" },
+        ]}
+      />
+      <div id="panel-config" role="tabpanel" aria-labelledby={`pestana-panel-config-${pestana}`}>
+        {pestana === "reglas" ? <PanelReglas token={token} /> : <PanelAgentes token={token} />}
       </div>
-      {pestana === "reglas" ? <PanelReglas token={token} /> : <PanelAgentes token={token} />}
     </div>
   );
 }

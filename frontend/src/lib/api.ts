@@ -431,9 +431,19 @@ export function liquidar(
 }
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, init);
+  let r: Response;
+  try {
+    r = await fetch(url, init);
+  } catch {
+    throw new Error("No hay conexión con el servidor. Si acaba de despertar, espera unos segundos y vuelve a intentar.");
+  }
   if (!r.ok) {
-    let detalle = `Error ${r.status}`;
+    let detalle =
+      r.status === 401 || r.status === 403
+        ? "La clave de administrador no es válida."
+        : r.status >= 500
+          ? "El servidor tuvo un problema. Espera unos segundos y vuelve a intentar."
+          : `El servidor respondió con un error (${r.status}).`;
     try {
       const j = await r.json();
       if (j?.detail) detalle = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);

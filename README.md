@@ -13,11 +13,13 @@ Todo pasa en un **chat a pantalla completa** con un agente. El usuario lleva la 
 - Responde directo, incluso lo más básico ("¿qué es la DIAN?", "¿cómo sé si tengo que declarar?", "¿me pueden meter a la cárcel?"), sin haber subido nada. Las respuestas usan las cifras del año elegido.
 - Si el usuario cuenta sus datos con sus palabras ("gano 4 millones al mes", "tengo 2 hijos", "un carro de 40 millones"), el agente los anota, muestra qué anotó y deja deshacerlo.
 - Si pide calcular ("calcula", "¿cuánto me toca pagar?"), calcula ahí mismo. Si después cambia un dato o el año, el agente actualiza el cálculo solo.
-- **Pregunta cuando le falta información**, como lo haría un contador, pero solo cuando el dato cambia la respuesta:
-  - Cifras ambiguas: "gano 3 millones y medio" → "¿al mes o en todo el año?"; "tengo un carro" → "¿cuánto vale?"; "tengo hijos" → "¿cuántos?"; una cifra sin concepto → "¿a qué corresponde?".
-  - Antes de calcular, una sola ronda (máximo dos datos) de lo que cambia el resultado y aún no sabe: retenciones, personas a cargo, deducciones, cédula, historial, patrimonio. Con "calcula así" calcula con lo que hay; el resultado dice qué supuso.
-  - Si pregunta por su caso ("¿tengo que declarar?", "¿cuándo vence?") y falta el dato, lo pide y, cuando el usuario responde, retoma: le dice si está obligado o su fecha exacta.
-  - Nunca repite una pregunta. Respuestas cortas como "2", "al mes", "no", "no sé" o "termina en 21" se entienden según lo que preguntó.
+- **Deduce de la exógena apenas se sube**: quién le reportó qué (empleador, bancos, créditos, fondo de cesantías, catastro), si está obligado y por qué, y qué beneficios ya vienen incluidos (retenciones, prepagada, intereses de vivienda, 1 % de facturas). Si algo no cuadra (por ejemplo, consignaciones muy por encima de los ingresos), pregunta de dónde salió la diferencia.
+- **Pregunta cuando le falta información**, como un contador, solo cuando el dato cambia la respuesta y sin preguntar lo que ya trae la exógena:
+  - Lo que la exógena no muestra: personas a cargo, aportes voluntarios, vehículos, ingresos que no pasan por un banco o un empleador, ventas, herencias o premios, sanciones previas, el impuesto del año pasado.
+  - Cifras ambiguas: "gano 3 millones y medio" → "¿al mes o en todo el año?"; "tengo un carro" → "¿cuánto pagaste?"; "tengo hijos" → "¿cuántos?"; "vendí el lote en 80 millones" → "¿en cuánto lo habías comprado?" (la ganancia la calcula el código).
+  - Antes de calcular hace como máximo dos rondas de preguntas (hasta dos datos cada una). Con "calcula así" calcula con lo que hay; el resultado dice qué supuso.
+  - Si pregunta por su caso ("¿tengo que declarar?", "¿cuándo vence?") y falta el dato, lo pide y retoma. Nunca repite una pregunta; entiende respuestas cortas ("2", "al mes", "no", "no sé", "fue un préstamo").
+- **Guía para conseguir cada dato**: "¿qué documentos necesito?" da la lista de SU caso con los nombres de sus entidades; "¿qué me falta?" dice lo que falta y empieza a preguntarlo; y explica cómo sacar cada certificado (220, tributario del banco, intereses de vivienda, prepagada, cesantías, pensión, predial, declaración anterior, soportes de dependientes).
 - Simula escenarios sin tocar los datos: "¿y si pagara prepagada de 400 mil al mes?" → cuánto cambia el impuesto.
 - Corrige: "quita la moto", "me equivoqué, no son 2 hijos" y cada cambio se puede deshacer.
 - Si pregunta por su caso ("¿tengo que declarar?", "¿cuándo vence?") y ya hay datos, responde con su caso: la obligación la decide el motor con sus cifras y la fecha sale de su cédula.
@@ -72,7 +74,7 @@ El **orquestador** (`backend/app/orquestador.py`) es un flujo fijo y trazable: c
 
 ```
 backend/
-  app/agents/       un archivo por agente (el Asistente usa conocimiento.py para la base por año)
+  app/agents/       un archivo por agente (el Asistente usa conocimiento.py para la base por año y diagnostico.py para deducir y saber qué falta)
   app/tax/          motor tributario y modelos (sin IA)
   app/llm/          cliente de OpenRouter con respaldo entre modelos
   app/orquestador.py
@@ -82,7 +84,7 @@ backend/
   data/agentes.json modelos y temperatura por agente
   data/conocimiento base de conocimiento del Asistente
   data/demo/        exógena ficticia para probar
-  tests/            85 pruebas (motor por año, agentes, conversaciones del chat, API, ruta con IA simulada)
+  tests/            93 pruebas (motor por año, agentes, conversaciones del chat, API, ruta con IA simulada)
   scripts/          generadores de la exógena demo y de las reglas 2021-2024
 frontend/           React + Vite + TypeScript, animaciones con Motion
 Dockerfile          construye el front y lo sirve desde FastAPI

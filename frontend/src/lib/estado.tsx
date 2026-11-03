@@ -226,6 +226,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       agregar({ rol: "usuario", texto: `📎 ${archivo.name}` });
       const idTraza = agregar({ rol: "asistente", widget: "traza_documento", eventos: [] });
       const acumulado: EventoAgente[] = [];
+      let leida = false;
       await analizarDocumento(archivo, ref.current.anio, {
         onAgente: (e) => {
           acumulado.push(e);
@@ -239,7 +240,10 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
           setTrazaDocumento(r.traza);
           setResultado(null);
           ref.current = { ...ref.current, extraccion: ex, filas: ex.filas, decididas: {}, resultado: null };
-          setRespuestas((x) => ({ ...x, ultimos_dos_digitos_nit: x.ultimos_dos_digitos_nit ?? ex.ultimos_dos_digitos_nit }));
+          const conDigitos = { ...ref.current.respuestas, ultimos_dos_digitos_nit: ref.current.respuestas.ultimos_dos_digitos_nit ?? ex.ultimos_dos_digitos_nit };
+          setRespuestas(conDigitos);
+          ref.current.respuestas = conDigitos;
+          leida = true;
           const suma = ex.filas.filter((f) => f.tratamiento === "suma").length;
           const rev = porRevisarDe(ex.filas, {}).length;
           const partes = [`Leí ${ex.filas.length} datos de tu exógena: ubiqué ${suma} en tu declaración${rev ? ` y ${rev} necesitan tu confirmación` : ""}.`];
@@ -254,14 +258,26 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
             }
           }
           agregar({ rol: "asistente", texto: partes.join(" ") });
-          if (rev) agregar({ rol: "asistente", widget: "revisar" });
         },
         onError: (m) => {
           agregar({ rol: "asistente", texto: `No pude leer el archivo: ${m}` });
         },
       });
+      if (!leida) return;
+      // El agente dice qué dedujo de la exógena y pregunta lo que ella no muestra
+      setEscribiendo(true);
+      try {
+        const d = await api.diagnostico(estadoChat());
+        conversacion.current = { pregunta: d.pregunta, ya: d.ya_preguntado };
+        agregar({ rol: "asistente", texto: d.respuesta, pregunta: !!d.pregunta });
+        d.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
+      } catch {
+        if (porRevisarDe(ref.current.filas, {}).length) agregar({ rol: "asistente", widget: "revisar" });
+      } finally {
+        setEscribiendo(false);
+      }
     },
-    [agregar, actualizar, anios, ponerAnio],
+    [agregar, actualizar, anios, ponerAnio, estadoChat],
   );
 
   const usarEjemplo = useCallback(async () => {
@@ -289,7 +305,9 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         conversacion.current = { pregunta: r.pregunta, ya: r.ya_preguntado };
         const cambiaron = r.anotaciones.length > 0 || r.quitadas.length > 0;
         if (cambiaron) agregar({ rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, quitadas: r.quitadas, antes });
-        agregar({ rol: "asistente", texto: r.respuesta, fuentes: r.fuentes, conIa: r.con_ia, pregunta: !!r.pregunta });
+        // Solo se marca como pregunta si el agente preguntó en este turno (no si sigue pendiente de antes)
+        const pregunto = !!r.pregunta && !!r.pregunta.texto && r.respuesta.includes(r.pregunta.texto.slice(0, 40));
+        agregar({ rol: "asistente", texto: r.respuesta, fuentes: r.fuentes, conIa: r.con_ia, pregunta: pregunto });
         if (r.simulacion) agregar({ rol: "asistente", widget: "simulacion", simulacion: r.simulacion });
         if (r.cambiar_anio && r.cambiar_anio !== ref.current.anio) ponerAnio(r.cambiar_anio);
         r.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));

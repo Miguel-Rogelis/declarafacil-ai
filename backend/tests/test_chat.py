@@ -93,20 +93,20 @@ def test_armar_la_declaracion_hablando_y_calcular_cuando_lo_pide():
     assert not j["anotaciones"] and "al mes o en todo el año" in j["respuesta"]  # cifra ambigua: pregunta
     j = ch("al mes")
     assert ch.estado["respuestas"]["salarios_no_reportados"] == 60_000_000
+    assert not j["calcular"] and "Antes de calcular" in j["respuesta"]  # retoma: primera ronda de lo que falta
+    assert j["pregunta"]["temas"] == ["retenciones", "patrimonio"]
     j = ch("tengo dos hijos, y un carro de 40 millones")
     assert ch.estado["respuestas"]["dependientes"] == 2
     assert ch.estado["respuestas"]["bienes_adicionales"][0]["valor"] == 40_000_000
+    assert "últimas cosas" in j["respuesta"] and j["pregunta"]["rondas"] == 2
     j = ch("tengo que declarar?")
     assert "no estás obligado" in j["respuesta"]  # lo decide el motor con sus datos
-    j = ch("calcula")
-    assert not j["calcular"] and "Antes de calcular" in j["respuesta"]  # pregunta lo que cambia el resultado
-    assert set(j["pregunta"]["temas"]) == {"retenciones", "cedula"}
-    j = ch("no me hicieron retención y mi cédula termina en 21")
-    assert j["calcular"] and ch.estado["respuestas"]["ultimos_dos_digitos_nit"] == "21"  # retoma: calcula
+    j = ch("mi cédula termina en 21 y no vendí nada")
+    assert j["calcular"] and ch.estado["respuestas"]["ultimos_dos_digitos_nit"] == "21"  # última ronda respondida: calcula
     j = ch("cuando vence?")
     assert "terminada en 21" in j["respuesta"]
-    j = ch("calcula de nuevo")
-    assert j["calcular"]  # ya preguntó: no vuelve a preguntar
+    j = ch("calcula así")
+    assert j["calcular"]
 
     r = c.post("/api/declaracion/liquidar", json={"anio_gravable": 2025, "filas": [], "topes": {}, "respuestas": ch.estado["respuestas"]})
     resultado = [line for line in r.text.splitlines() if line.startswith("data:") and "liquidacion" in line]
@@ -138,7 +138,8 @@ def test_respuestas_cortas_a_sus_preguntas():
     j = ch("sí")
     assert "Cuántas" in j["respuesta"] and not j["calcular"]  # "sí" sin número: pregunta cuántas
     j = ch("dos")
-    assert ch.estado["respuestas"]["dependientes"] == 2 and j["calcular"]
+    assert ch.estado["respuestas"]["dependientes"] == 2 and not j["calcular"]  # todavía hay una ronda
+    assert ch("calcula así")["calcular"]
     ch = Charla()
     j = ch("8 millones")
     assert j["pregunta"]["temas"] == ["concepto"]
@@ -210,12 +211,16 @@ def test_calcula_sin_datos_pide_ingresos_y_luego_pregunta_lo_que_cambia_el_resul
     j = ch("8 millones mensuales de salario")
     assert not j["calcular"] and "Antes de calcular" in j["respuesta"]  # una ronda de preguntas antes de calcular
     j = ch("me retuvieron 4.800.000")
-    assert j["calcular"]  # respondió: calcula con lo que hay
+    assert not j["calcular"] and j["pregunta"]["rondas"] == 2  # segunda ronda
+    j = ch("no")
+    assert j["calcular"]  # máximo dos rondas: calcula con lo que hay
 
 
 def test_no_se_no_se_anota_como_cero():
     ch = Charla(respuestas={"honorarios_no_reportados": 90_000_000})
     ch("calcula")
+    j = ch("no sé")
+    assert not j["anotaciones"]
     j = ch("no sé")
     assert j["calcular"] and not j["anotaciones"]
 
@@ -236,10 +241,78 @@ def test_que_es_eso_de_la_renta():
 def test_dato_sin_cifra_pregunta_cuanto():
     ch = Charla()
     j = ch("tengo un carro")
-    assert "Cuánto vale" in j["respuesta"] and j["pregunta"]["temas"] == ["valor"]
+    assert "Cuánto pagaste por tu carro" in j["respuesta"] and j["pregunta"]["temas"] == ["valor"]
     ch("unos 40 millones")
     assert ch.estado["respuestas"]["bienes_adicionales"][0] == {"concepto": "Carro", "valor": 40_000_000, "fuente": "chat"}
     j = ch("pago medicina prepagada")
     assert "al mes o en todo el año" in j["respuesta"]
     j = ch("300 mil al mes")
     assert ch.estado["respuestas"]["medicina_prepagada"] == 3_600_000
+
+
+# ---------- Con exógena: deduce, pregunta lo que no muestra y guía ----------
+
+import json  # noqa: E402
+
+
+def _estado_exogena(**extra):
+    demo = c.get("/api/demo/exogena").content
+    r = c.post("/api/documentos/analizar", files={"archivo": ("exo.xlsx", demo)}, data={"anio_gravable": "2025"})
+    ext = next(json.loads(x[5:])["extraccion"] for x in r.text.splitlines() if x.startswith("data:") and '"extraccion"' in x)
+    revisar = [f["detalle"] for f in ext["filas"] if f["tratamiento"] == "revisar"]
+    return {"anio_gravable": 2025, "tiene_exogena": True, "anio_exogena": ext["anio"], "filas": ext["filas"], "topes": {**ext["topes"], **extra.pop("topes", {})},
+            "resumen_exogena": ext["resumen_campos"], "perfil": ext["perfil"], "por_revisar": revisar,
+            "respuestas": {"ultimos_dos_digitos_nit": ext["ultimos_dos_digitos_nit"]}, **extra}
+
+
+def test_al_subir_la_exogena_deduce_y_pregunta_lo_que_no_muestra():
+    e = _estado_exogena()
+    d = c.post("/api/chat/diagnostico", json=e).json()
+    assert "trabajas para COMERCIALIZADORA ANDINA S.A.S." in d["respuesta"] and "sí estás obligado" in d["respuesta"]
+    assert "Ya vienen incluidos" in d["respuesta"] and "prepagada" in d["respuesta"]
+    assert d["pregunta"]["temas"] == ["dependientes", "deducciones"] and d["widgets"] == ["revisar"]
+    assert "¿Pagas aportes voluntarios a pensión o AFC?" in d["respuesta"]  # no pregunta por lo que ya trae (prepagada, vivienda)
+    ch = Charla(**{**e, "pregunta_pendiente": d["pregunta"], "ya_preguntado": d["ya_preguntado"]})
+    j = ch("no, a ninguna")
+    assert not j["calcular"] and "carro o moto" in j["respuesta"]  # la exógena no muestra vehículos
+    j = ch("no")
+    assert j["calcular"]
+
+
+def test_consignaciones_que_no_cuadran():
+    e = _estado_exogena(topes={"Tope 4 - Movimiento": 400_000_000})
+    d = c.post("/api/chat/diagnostico", json=e).json()
+    assert d["pregunta"]["temas"] == ["consignaciones"] and "no me cuadra" in d["respuesta"]
+    ch = Charla(**{**e, "pregunta_pendiente": d["pregunta"], "ya_preguntado": d["ya_preguntado"]})
+    j = ch("fue un préstamo de mi papá")
+    assert "no es ingreso" in j["respuesta"]
+
+
+def test_que_me_falta_y_documentos_de_su_caso():
+    ch = Charla(**_estado_exogena())
+    j = ch("qué me falta?")
+    assert "me falta saber" in j["respuesta"] and j["pregunta"]
+    j = ch("qué documentos necesito?")
+    assert "formulario 220) de COMERCIALIZADORA ANDINA S.A.S." in j["respuesta"] and "BANCO EJEMPLO S.A." in j["respuesta"]
+    assert j["respuesta"].count("\n– ") >= 5 and ".." not in j["respuesta"]  # una línea por documento
+
+
+@pytest.mark.parametrize(
+    ("pregunta", "seccion"),
+    [("como saco el certificado del banco", "¿Cómo saco el certificado tributario del banco?"),
+     ("donde pido el certificado 220", "¿Cómo saco el certificado de ingresos y retenciones?"),
+     ("que valor le pongo a mi moto", "¿Qué valor le pongo a mi carro?"),
+     ("como saco el certificado de porvenir", "¿Cómo saco el certificado de cesantías o de aportes voluntarios?")],
+)
+def test_guia_como_conseguir_cada_documento(pregunta, seccion):
+    j, _ = _turno(pregunta, {"anio_gravable": 2025})
+    assert j["fuentes"] == [seccion]
+
+
+def test_venta_calcula_la_ganancia():
+    ch = Charla(respuestas={"salarios_no_reportados": 60_000_000})
+    j = ch("vendí mi carro en 50 millones")
+    assert "En cuánto habías comprado" in j["respuesta"] and not j["anotaciones"]
+    j = ch("en 40 millones")
+    assert ch.estado["respuestas"]["ganancias_ocasionales"]["utilidad_venta_otros_activos"] == 10_000_000
+    assert "ganancia de la venta es $10.000.000" in j["respuesta"]

@@ -110,7 +110,7 @@ El patrimonio bruto es todo lo que tenías al 31 de diciembre: plata en cuentas,
 
 ## ¿Qué patrimonio debo declarar?
 También: tengo que declarar el carro | tengo que declarar la casa | qué bienes declaro | cómo declaro mis bienes
-Todo lo que tenías al 31 de diciembre: cuentas, inversiones, inmuebles, vehículos, aportes y cuentas por cobrar, y restas tus deudas a esa fecha. Los inmuebles van mínimo por su avalúo catastral. La exógena no trae todo (por ejemplo, vehículos), así que eso me lo cuentas tú.
+Todo lo que tenías al 31 de diciembre: cuentas, inversiones, inmuebles, vehículos, aportes y cuentas por cobrar, y restas tus deudas a esa fecha. Las cuentas van por su saldo; los inmuebles, mínimo por su avalúo catastral; los vehículos, por lo que pagaste por ellos. La exógena no trae todo (por ejemplo, vehículos), así que eso me lo cuentas tú.
 
 ## ¿Qué son las retenciones en la fuente?
 También: qué es la retención | me hicieron retención | qué es retefuente
@@ -179,3 +179,48 @@ No. DeclaraFácil prepara un borrador y te explica cada cifra. La firma y la pre
 ## ¿Qué pasa con mis datos?
 También: es seguro | guardan mis datos | privacidad | quién ve mi información
 El archivo se procesa en memoria y no se guarda. Antes de usar IA se quitan tu cédula, tu nombre y tus números de cuenta, y las cifras las maneja el código, no la IA.
+
+## ¿Cómo saco el certificado de ingresos y retenciones?
+También: certificado 220 | formulario 220 | certificado laboral para la renta | certificado de mi empleador | cómo pido el certificado de ingresos | dónde saco el certificado de retenciones
+Lo expide tu empleador (formulario 220). Pídelo en recursos humanos o en el área de nómina; muchas empresas lo publican en su portal de empleados. Trae tu salario del año, lo que te descontaron para salud y pensión y la retención en la fuente. Si cambiaste de trabajo, necesitas uno de cada empleador.
+
+## ¿Cómo saco el certificado tributario del banco?
+También: certificado bancario | certificado del banco | certificado de la cuenta | certificado de saldos | certificado de intereses del banco | certificado del cdt
+Entra a la banca virtual o la app de tu banco y busca la sección de certificados, normalmente como "certificado tributario" o "certificado para declaración de renta"; elige el año gravable {anio}. Trae el saldo de tus cuentas e inversiones al 31 de diciembre, los intereses que te pagaron y las retenciones. Si no lo encuentras, lo pides en una oficina o por la línea de atención.
+
+## ¿Cómo saco el certificado de intereses del crédito de vivienda?
+También: certificado de intereses de vivienda | certificado del crédito hipotecario | certificado del leasing habitacional | intereses del apartamento
+Lo da el banco que te prestó, en su banca virtual (sección de certificados) o en una oficina. Pide el de intereses pagados en {anio} y el saldo de la deuda al 31 de diciembre: los intereses se pueden deducir con tope y el saldo va como deuda en tu patrimonio.
+
+## ¿Cómo saco el certificado de medicina prepagada?
+También: certificado de prepagada | certificado de pólizas de salud | certificado del plan complementario
+Lo expide la empresa de medicina prepagada o la aseguradora, en su portal de usuarios o por la línea de atención. Pide el certificado de pagos del año {anio}. Solo cuentan los pagos de planes a tu nombre o de tus dependientes.
+
+## ¿Cómo saco el certificado de cesantías o de aportes voluntarios?
+También: certificado de cesantías | certificado del fondo de pensiones | certificado de pensión voluntaria | certificado afc | certificado porvenir | certificado protección | certificado colfondos
+Entra al portal o la app de tu fondo (por ejemplo Porvenir, Protección, Colfondos, Skandia o el Fondo Nacional del Ahorro) y busca "certificados" o "certificado tributario". Para cesantías trae lo que te consignaron y el saldo; para aportes voluntarios o AFC, lo que aportaste en el año y si cumple las condiciones para restarlo.
+
+## ¿Cómo saco el certificado de mi pensión?
+También: certificado de pensionado | certificado colpensiones | certificado de ingresos de pensión
+Si te paga Colpensiones, descárgalo en su portal web con tu cédula (sección de certificados para pensionados). Si te paga un fondo privado, en el portal o la app de ese fondo. Trae lo que recibiste en el año y las retenciones.
+
+## ¿Cómo sé el avalúo catastral de mi casa?
+También: avalúo catastral | valor de mi casa para la renta | valor del apartamento | predial | cuánto vale mi casa para declarar
+Está en el recibo del impuesto predial del año, que te llega o descargas en la página de la secretaría de hacienda de tu municipio. La casa se declara como mínimo por ese avalúo; si la compraste por más, puedes usar lo que pagaste más las mejoras.
+
+## ¿Qué valor le pongo a mi carro?
+También: cómo declaro el carro | valor del carro | cómo declaro la moto | valor del vehículo para la renta
+Los vehículos se declaran por lo que pagaste por ellos (está en la factura o el contrato de compraventa), no por lo que valen hoy ni por el avalúo del impuesto vehicular. Si lo vendiste antes del 31 de diciembre, ya no va en tu patrimonio.
+
+## ¿Cómo saco mi declaración del año pasado?
+También: declaración anterior | declaración del año pasado | cómo veo lo que declaré | consultar declaraciones
+Entra a MUISCA en dian.gov.co con tu usuario, busca "Consultar declaraciones" o "Mis declaraciones" y descarga el formulario 210 del año anterior. De ahí salen el impuesto neto de renta y el anticipo, que sirven para calcular el anticipo de este año.
+
+## ¿Qué soportes necesito para mis dependientes?
+También: soportes de dependientes | cómo demuestro que mi hijo depende de mí | papeles de los hijos | certificado de estudio
+Para hijos menores de 18 años, el registro civil de nacimiento. Para hijos de 18 a 23 años, además, un certificado de estudio. Para tu pareja o tus papás, algo que muestre que dependen económicamente de ti y que sus ingresos son bajos. No se adjuntan a la declaración, pero debes guardarlos por si la DIAN los pide.
+
+## ¿Cómo sé cuánto me retuvieron?
+También: cuánto me retuvieron | dónde veo la retención | retención en la fuente que me hicieron
+Está en el certificado de ingresos y retenciones de tu empleador (formulario 220), en el certificado tributario de tu banco y en tu exógena, donde cada entidad reporta lo que te retuvo.
+

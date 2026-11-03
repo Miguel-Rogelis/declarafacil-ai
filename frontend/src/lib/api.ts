@@ -239,7 +239,9 @@ export interface PreguntaPendiente {
   intencion: "calcular" | "obligacion" | "vencimiento" | "simular" | null;
   campo: string | null;
   valor: number | null;
+  concepto?: string | null;
   simular: Record<string, unknown>[];
+  rondas?: number;
 }
 
 export interface Simulacion {
@@ -381,6 +383,12 @@ export const api = {
     }),
   probarAgente: (id: string) => json<{ ok: boolean; modelo?: string; detalle?: string }>(`/api/agentes/${id}/probar`, { method: "POST" }),
   modelosGratis: () => json<{ id: string; nombre: string; contexto: number }[]>("/api/agentes/modelos-gratis"),
+  diagnostico: (estado: EstadoChat) =>
+    json<RespuestaChat>("/api/chat/diagnostico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(estado),
+    }),
   chat: (mensaje: string, historial: { rol: string; texto: string }[], estado: EstadoChat) =>
     json<RespuestaChat>("/api/chat", {
       method: "POST",

@@ -101,7 +101,11 @@ def test_asistente_pregunta_antes_de_calcular(con_llm):
     e = e.model_copy(update={"pregunta_pendiente": r.pregunta, "ya_preguntado": r.ya_preguntado})
     con_llm(_Falso(lambda m: json.dumps({"respuesta": "Listo, lo anoté.", "anotar": [{"campo": "ultimos_dos_digitos_cedula", "valor": "21"}]})))
     r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="termina en 21 y no me retuvieron", estado=e)))
-    assert r.calcular  # al responder, el agente retoma y calcula
+    assert not r.calcular and r.pregunta.rondas == 2  # retoma: segunda y última ronda
+    e = e.model_copy(update={"respuestas": r.respuestas, "pregunta_pendiente": r.pregunta, "ya_preguntado": r.ya_preguntado})
+    con_llm(_Falso(lambda m: json.dumps({"respuesta": "Listo.", "anotar": []})))
+    r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="no", estado=e)))
+    assert r.calcular  # al responder la última ronda, calcula
 
 
 def test_la_pregunta_del_modelo_queda_pendiente_y_la_cifra_sale_del_historial(con_llm):

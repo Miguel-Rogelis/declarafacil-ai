@@ -67,6 +67,12 @@ async def liquidar(solicitud: orquestador.SolicitudLiquidacion) -> AsyncIterable
         yield _evento(item)
 
 
+@router.post("/chat/diagnostico")
+def chat_diagnostico(estado: asistente.EstadoChat) -> asistente.RespuestaChat:
+    """Lo que el agente dice apenas lee la exógena: qué deduce y qué le falta (sin IA)."""
+    return asistente.diagnosticar(estado)
+
+
 @router.post("/chat")
 async def chat(turno: asistente.TurnoChat) -> asistente.RespuestaChat:
     if not turno.mensaje.strip():

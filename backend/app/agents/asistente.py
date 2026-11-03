@@ -31,7 +31,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from app.agents import diagnostico, interprete, numeros
-from app.agents.base import FilaInterpretada
+from app.agents.base import DocumentoCargado, FilaInterpretada
 from app.agents.conocimiento import (
     SeccionKB,
     anios_vigentes,
@@ -171,6 +171,8 @@ class EstadoChat(BaseModel):
     resultado: dict[str, Any] | None = None
     pregunta_pendiente: PreguntaPendiente | None = None
     ya_preguntado: list[str] = []
+    documentos: list[DocumentoCargado] = []  # lo que ha subido: exógena y certificados
+    recien: list[str] = []  # ids de los documentos que acaba de subir
 
 
 class TurnoChat(BaseModel):
@@ -535,7 +537,7 @@ _RE_CALCULAR = re.compile(
     r"|(mi|el) borrador|(ver|muestrame) (el|mi) resultado|cuanto me (sale|da|queda)"
 )
 _RE_INSISTE = re.compile(r"\b(asi|igual|de una|sin eso|con lo que (tengas|hay|tienes)|no importa|calcula ya|ya calcula|hazlo ya)\b")
-_RE_SUBIR = re.compile(r"\b(subir|subo|adjunt\w*|cargar|cargo|enviar|envio|mandar|mando|te paso|aqui esta)\b.{0,25}(exogena|archivo|excel|reporte|documento)|^(ya )?(la|lo) tengo\b")
+_RE_SUBIR = re.compile(r"\b(subir|subo|adjunt\w*|cargar|cargo|enviar|envio|mandar|mando|te paso|aqui esta)\b.{0,25}(exogena|archivo|excel|reporte|documento|certificado|pdf)|^(ya )?(la|lo|los) tengo\b")
 _RE_SIN_EXOGENA = re.compile(r"no (la |lo )?tengo.{0,20}(exogena|archivo|reporte)|no tengo (la )?exogena|sin (la )?exogena")
 _RE_POR_QUE = re.compile(r"por que (me )?(sale|da|toca|queda)|ese valor|de donde sale|explica\w* (el |mi )?resultado|como (se )?(calculo|salio)|por que (tanto|tan poco)")
 _RE_OBLIGACION = re.compile(
@@ -829,7 +831,9 @@ def _sin_ia(t: TurnoChat) -> _Plan:
         else:
             partes.append("No me falta nada importante: con lo que tengo ya puedo calcular tu borrador.")
     elif _RE_DOCS.search(msg) and _hay_datos(e, e.respuestas):
-        partes.append("Para tu caso necesitas:\n" + "\n".join("– " + d for d in diagnostico.documentos(e, e.respuestas)))
+        tengo = diagnostico.ya_tengo(e)
+        lista = "\n".join("– " + d for d in diagnostico.documentos(e, e.respuestas))
+        partes.append(("Ya tengo: " + "; ".join(tengo) + ".\nTe falta:\n" if tengo else "Para tu caso necesitas:\n") + lista)
     elif _RE_OBLIGACION.search(msg) and not plan.simular:
         if _RE_COMO_SE.search(msg):
             sec = next(s for s in base_del_anio(anio) if s.titulo.startswith("¿Cómo sé si tengo"))
@@ -888,7 +892,7 @@ def _sin_ia(t: TurnoChat) -> _Plan:
 
 # ---------- Ruta con IA ----------
 
-SISTEMA = """Eres el agente de DeclaraFácil. Ayudas a personas en Colombia con la declaración de renta de personas naturales residentes (formulario 210): resuelves sus dudas y armas su borrador con lo que te cuentan o con su exógena. Hoy es {hoy}.
+SISTEMA = """Eres el agente de DeclaraFácil. Ayudas a personas en Colombia con la declaración de renta de personas naturales residentes (formulario 210): resuelves sus dudas y armas su borrador con lo que te cuentan, con su exógena y con sus certificados (ingresos y retenciones, banco, vivienda, prepagada…). Hoy es {hoy}.
 
 CÓMO RESPONDES
 - Responde exactamente lo que te preguntaron, desde la primera frase. Sin rodeos, sin introducciones y sin temas que no pidieron.
@@ -897,7 +901,7 @@ CÓMO RESPONDES
 - Ninguna pregunta es tonta: responde lo básico con naturalidad.
 - La persona lleva la conversación: nada de preguntas de relleno ni ofrecimientos ("¿Quieres que…?", "Si quieres…", "¿Algo más?").
 - PERO pregunta cuando te falte información para hacer bien lo que la persona quiere: una cifra que no sabes si es mensual o anual, una cifra sin concepto, o un dato de su caso que necesitas para contestarle (por ejemplo, pregunta si tiene que declarar y no sabes sus ingresos). Una sola pregunta concreta (máximo dos datos), di para qué la necesitas y descríbela en "pregunta". No repitas lo que está en YA PREGUNTASTE.
-- Deduce todo lo que puedas de lo que ya sabes (LO QUE EL SISTEMA DEDUJO, la exógena, la conversación) y nunca preguntes algo que ya está ahí.
+- Deduce todo lo que puedas de lo que ya sabes (LO QUE EL SISTEMA DEDUJO, sus documentos, la conversación) y nunca preguntes algo que ya está ahí. Si un certificado y la exógena traen el mismo dato, vale el del certificado (el sistema ya los cruzó).
 - Si pregunta cómo conseguir un dato o un documento, guíalo paso a paso con la BASE DE CONOCIMIENTO y, si aplica, con los nombres de las entidades de su caso (DOCUMENTOS DE SU CASO).
 - Si pregunta qué le falta, usa LO QUE FALTA y dile de dónde sale cada dato.
 - Si hay una PREGUNTA PENDIENTE y el mensaje la responde (aunque sea corto: "2", "al mes", "no", "termina en 21"), interprétalo en ese contexto y anótalo.
@@ -912,7 +916,7 @@ ACCIONES (las ejecuta el sistema después de validar)
 - "simular": igual que anotar, cuando pregunta qué pasaría ("¿y si pago prepagada?", "¿cuánto me ahorro si aporto a AFC?"). No se anota: el sistema calcula la diferencia y la agrega a tu respuesta, así que solo di algo como "Mira la diferencia:".
 - "calcular": true si pide calcular, liquidar, ver cuánto paga o ver su borrador. El sistema puede preguntar antes lo que falte.
 - "cambiar_anio": el año gravable (2021 a 2025) si pide cambiar de año o quiere declarar otro año.
-- "mostrar": ["subir_exogena"] si quiere subir o adjuntar su exógena; ["revisar"] si quiere confirmar los datos dudosos de su exógena.
+- "mostrar": ["subir_exogena"] si quiere subir o adjuntar su exógena o sus certificados (puede subir varios a la vez); ["revisar"] si quiere confirmar los datos dudosos de sus documentos.
 - "pregunta": si tu respuesta pide un dato, {{"campos": [claves de CAMPOS que esperas], "intencion": "calcular" | "obligacion" | "vencimiento" | null}}. Si no preguntas nada, null.
 - "fuente": el título exacto de la sección de la BASE DE CONOCIMIENTO que usaste, o null.
 
@@ -952,16 +956,27 @@ def _celda(t: str) -> str:
     return re.sub(r"\s+", " ", t.replace("|", "/")).strip()
 
 
+_FUENTE = {
+    "exogena": "exógena", "certificado_220": "certificado 220", "certificado_bancario": "certificado del banco",
+    "certificado_vivienda": "certificado de vivienda", "certificado_prepagada": "certificado de prepagada",
+    "certificado_voluntarios": "certificado de aportes voluntarios", "certificado_cesantias": "certificado de cesantías",
+    "certificado_retencion": "certificado de retención", "declaracion_anterior": "declaración anterior", "predial": "predial",
+}
+
+
 def _tabla_exogena(e: EstadoChat) -> str:
     """La exógena ya procesada, en una tabla markdown: los modelos la leen mejor que una lista de campos."""
     if not e.filas:
         return "EXÓGENA (totales por campo):\n" + "\n".join(f"- {k}: {pesos(v)}" for k, v in list(e.resumen_exogena.items())[:20])
-    lineas = ["EXÓGENA (cada dato reportado, ya procesado por el sistema; las cifras son exactas):",
-              "| Entidad | Concepto | Valor | Va en | Uso |", "|---|---|---|---|---|"]
-    for f in e.filas[:45]:
+    lineas = ["DATOS DE SUS DOCUMENTOS (exógena y certificados, ya procesados y cruzados por el sistema; las cifras son exactas; "
+              "las filas «reemplazado» no cuentan porque un certificado trae el mismo dato):",
+              "| Fuente | Entidad | Concepto | Valor | Va en | Uso |", "|---|---|---|---|---|---|"]
+    for f in e.filas[:60]:
         concepto = re.sub(r"\((concepto|titular|formato)[^)]*\)", "", f.detalle, flags=re.I)
         destino = interprete.CAMPOS.get(f.campo or "", "—")
-        lineas.append(f"| {_celda(f.informante or '—')[:45]} | {_celda(concepto)[:70]} | {pesos(f.valor)} | {destino} | {_USO.get(f.tratamiento, f.tratamiento)} |")
+        uso = "reemplazado" if f.reemplazada_por else _USO.get(f.tratamiento, f.tratamiento)
+        fuente = _FUENTE.get(f.fuente, "documento")
+        lineas.append(f"| {fuente} | {_celda(f.informante or '—')[:45]} | {_celda(concepto)[:70]} | {pesos(f.valor)} | {destino} | {uso} |")
     if e.topes:
         lineas.append("Topes que reporta la DIAN: " + "; ".join(f"{k}: {pesos(v)}" for k, v in e.topes.items()))
     return "\n".join(lineas)
@@ -982,10 +997,12 @@ def _estado_texto(e: EstadoChat, vp: Liquidacion | None) -> str:
     notados.pop("sin_sanciones_ultimos_2_anios", None)
     go = {k: v for k, v in r.ganancias_ocasionales.model_dump().items() if v and not isinstance(v, bool)}
     partes = [f"Pantalla: {e.pantalla}.", f"Exógena: {'sí, del año ' + str(e.anio_exogena) if e.tiene_exogena else 'no ha subido'}."]
+    if e.documentos:
+        partes.append("DOCUMENTOS QUE SUBIÓ: " + "; ".join(d.etiqueta + (f" ({d.resumen})" if d.resumen and d.tipo != "exogena" else "") for d in e.documentos))
     if e.resumen_exogena:
         partes.append(_tabla_exogena(e))
     if e.por_revisar:
-        partes.append(f"Datos de la exógena por confirmar ({len(e.por_revisar)}): " + "; ".join(e.por_revisar[:5]))
+        partes.append(f"Datos de sus documentos por confirmar ({len(e.por_revisar)}): " + "; ".join(e.por_revisar[:5]))
     partes.append(_datos_chat(notados))
     if go:
         partes.append("Ganancias ocasionales que contó: " + json.dumps(go, ensure_ascii=False))
@@ -1004,10 +1021,10 @@ def _estado_texto(e: EstadoChat, vp: Liquidacion | None) -> str:
         partes.append("Vista previa: no hay datos todavía (ni ingresos ni exógena).")
     if r.ultimos_dos_digitos_nit:
         partes.append("Fecha límite (calculada por el sistema): " + (texto_vencimiento(e.anio_gravable, r.ultimos_dos_digitos_nit) or "sin dato"))
-    if e.tiene_exogena:
+    if e.tiene_exogena or e.documentos:
         dx = diagnostico.diagnostico(e, r, vp)
         if dx:
-            partes.append("LO QUE EL SISTEMA DEDUJO DE LA EXÓGENA: " + dx)
+            partes.append("LO QUE EL SISTEMA DEDUJO DE SUS DOCUMENTOS: " + dx)
     vs = diagnostico.vacios(e, r, vp)
     if vs:
         partes.append("LO QUE FALTA PARA UN CÁLCULO COMPLETO (con dónde se consigue): " + "; ".join(
@@ -1172,30 +1189,39 @@ def diagnosticar(e: EstadoChat) -> RespuestaChat:
     """
     r = e.respuestas
     vp = vista_previa(e, r)
-    partes = [diagnostico.diagnostico(e, r, vp)]
-    if e.por_revisar:
-        n = len(e.por_revisar)
-        partes.append("Hay un dato de tu exógena que no sé cómo tratar; te lo pregunto abajo." if n == 1
-                      else f"Hay {n} datos de tu exógena que no sé cómo tratar; te los pregunto abajo, uno por uno.")
+    recien = [d for d in e.documentos if d.id in e.recien]
+    # Si ya había documentos y solo llegaron certificados, no repite todo lo que dedujo antes
+    primera = not e.recien or len(recien) == len(e.documentos) or any(d.tipo == "exogena" for d in recien)
+    donde = diagnostico.en_documentos(e)
+    partes = [diagnostico.diagnostico(e, r, vp)] if primera else []
+    # Al sumar un certificado solo se mencionan los datos por confirmar que trae ese certificado
+    nuevos_por_revisar = [f for f in e.filas if f.documento in e.recien and f.tratamiento == "revisar"]
+    avisar_revision = bool(e.por_revisar) if primera else bool(nuevos_por_revisar)
+    if avisar_revision:
+        n = len(e.por_revisar) if primera else len(nuevos_por_revisar)
+        partes.append(f"Hay un dato de {donde} que no sé cómo tratar; te lo pregunto abajo." if n == 1
+                      else f"Hay {n} datos de {donde} que no sé cómo tratar; te los pregunto abajo, uno por uno.")
     fs = faltantes(e, r, vp)
     pregunta = None
     ya = list(e.ya_preguntado)
     if fs:
         top = _ronda(fs)
-        intro = "Algo no me cuadra." if top[0].tema == "consignaciones" else "Lo que la exógena no me dice:"
-        preguntas = " ".join(re.sub(r" Lo de .* ya viene en tu exógena\.", "", f.pregunta) for f in top)
+        intro = "Algo no me cuadra." if top[0].tema == "consignaciones" else (
+            "Lo que la exógena no me dice:" if donde == "tu exógena" else "Lo que tus documentos no me dicen:")
+        sin_ya = r" Lo de .* ya viene en (tu exógena|tus documentos)\."
+        preguntas = " ".join(re.sub(sin_ya, "", f.pregunta) for f in top)
         pregunta = PreguntaPendiente(texto=f"{intro} {preguntas}", temas=[f.tema for f in top], intencion="calcular", rondas=1,
-                                     intro=intro, partes=[_parte(f.tema, re.sub(r" Lo de .* ya viene en tu exógena\.", "", f.pregunta)) for f in top])
+                                     intro=intro, partes=[_parte(f.tema, re.sub(sin_ya, "", f.pregunta)) for f in top])
         partes.append(pregunta.texto)
         ya = list(dict.fromkeys([*ya, *pregunta.temas]))
     elif vp:
         partes.append("Con esto ya puedo calcular tu borrador cuando me digas.")
-    texto = _ordenar_texto("\n".join(x for x in partes if x)) or "Leí tu exógena."
+    texto = _ordenar_texto("\n".join(x for x in partes if x)) or ("Leí tu exógena." if primera else "Con esto tengo más claro tu caso.")
     return RespuestaChat(
         respuesta=texto,
         texto_visible=_ordenar_texto(texto.replace(pregunta.texto, "")) if pregunta else texto,
         respuestas=r,
-        widgets=["revisar"] if e.por_revisar else [],
+        widgets=["revisar"] if avisar_revision else [],
         pregunta=pregunta,
         pregunta_nueva=bool(pregunta),
         ya_preguntado=ya,

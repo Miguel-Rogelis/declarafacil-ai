@@ -136,7 +136,8 @@ main { padding-bottom: 6rem; }
 .burbuja p { margin: 0; }
 .burbuja p + p { margin-top: 0.6rem; }
 .bot { align-self: flex-start; background: var(--hoja); border: 1.5px solid var(--reticula); border-top-left-radius: 4px; }
-.usuario { align-self: flex-end; background: var(--tinta); color: var(--papel); border-top-right-radius: 4px; }
+.usuario { align-self: flex-end; background: var(--tinta); color: var(--papel); border-top-right-radius: 4px; white-space: pre-line; overflow-wrap: anywhere; }
+.burbuja, .fila-hoja .concepto, .fila-hoja .origen { overflow-wrap: anywhere; }
 .quien { display: flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: var(--tinta-suave); margin-bottom: 0.35rem; font-weight: 600; }
 .quien svg { width: 18px; height: 18px; }
 .opciones { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.9rem; }
@@ -200,7 +201,7 @@ main { padding-bottom: 6rem; }
 .mesa { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--tinta); }
 .mesa li { display: grid; grid-template-columns: 1fr 76px; gap: 1rem; align-items: center; padding: 0.85rem 0; border-bottom: 1px solid var(--reticula); min-height: 84px; }
 .mesa .nombre { font-weight: 750; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-.mesa .mensaje { color: var(--tinta-suave); font-size: 0.94rem; margin-top: 0.15rem; }
+.mesa .mensaje { color: var(--tinta-suave); font-size: 0.94rem; margin-top: 0.15rem; white-space: pre-line; overflow-wrap: anywhere; }
 .mesa .modelo { font-size: 0.8rem; color: var(--sello); margin-top: 0.2rem; word-break: break-all; }
 .mesa .pendiente .nombre { color: var(--tinta-suave); font-weight: 600; }
 .sello-agente {

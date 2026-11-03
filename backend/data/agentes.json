@@ -1,19 +1,19 @@
 {
   "lector": {
     "nombre": "Lector",
-    "responsabilidad": "Lee el archivo de la exógena (Excel o PDF) y lo convierte en filas estructuradas. No interpreta nada.",
+    "responsabilidad": "Lee cada archivo (Excel o PDF): las filas de la exógena y el texto y las tablas de los certificados. No interpreta nada.",
     "usa_ia": false,
     "activo": true
   },
   "anonimizador": {
     "nombre": "Anonimizador",
-    "responsabilidad": "Enmascara cédula, nombres y números de cuenta antes de que cualquier dato salga del servidor.",
+    "responsabilidad": "Enmascara cédula, nombres, direcciones y números de cuenta de cada documento antes de que cualquier dato salga del servidor.",
     "usa_ia": false,
     "activo": true
   },
   "clasificador": {
     "nombre": "Clasificador",
-    "responsabilidad": "Confirma que el documento es un reporte de información exógena y de qué año. Usa reglas primero y solo consulta al modelo si hay duda.",
+    "responsabilidad": "Identifica cada documento (exógena, certificado de ingresos y retenciones, del banco, de vivienda, de prepagada, de aportes voluntarios, de cesantías, predial o la declaración anterior) y de qué año es. Usa reglas primero y solo consulta al modelo si no lo reconoce, con títulos sin cifras.",
     "usa_ia": true,
     "activo": true,
     "modelos": [
@@ -37,6 +37,18 @@
     ],
     "temperatura": 0,
     "razonamiento": "low"
+  },
+  "extractor": {
+    "nombre": "Extractor",
+    "responsabilidad": "Saca las cifras de los certificados (banco, 220, vivienda, prepagada, aportes voluntarios, cesantías, declaración anterior) con reglas. Cada cifra queda con su documento y su entidad.",
+    "usa_ia": false,
+    "activo": true
+  },
+  "conciliador": {
+    "nombre": "Conciliador",
+    "responsabilidad": "Cruza los documentos para no contar nada dos veces: si un certificado y la exógena traen el mismo dato de la misma entidad, usa el del certificado y avisa si no coinciden.",
+    "usa_ia": false,
+    "activo": true
   },
   "motor": {
     "nombre": "Motor tributario",

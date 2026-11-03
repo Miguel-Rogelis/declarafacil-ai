@@ -54,7 +54,35 @@ def cronometro():
     yield t0
 
 
-# ---------- Documento de exógena ----------
+# ---------- Documentos: exógena y certificados ----------
+
+TipoDocumento = Literal[
+    "exogena",
+    "certificado_220",
+    "certificado_bancario",
+    "certificado_vivienda",
+    "certificado_prepagada",
+    "certificado_voluntarios",
+    "certificado_cesantias",
+    "certificado_retencion",
+    "declaracion_anterior",
+    "predial",
+    "desconocido",
+]
+
+NOMBRE_TIPO: dict[str, str] = {
+    "exogena": "Reporte de información exógena",
+    "certificado_220": "Certificado de ingresos y retenciones (220)",
+    "certificado_bancario": "Certificado tributario del banco",
+    "certificado_vivienda": "Certificado de intereses de vivienda",
+    "certificado_prepagada": "Certificado de medicina prepagada",
+    "certificado_voluntarios": "Certificado de aportes voluntarios o AFC",
+    "certificado_cesantias": "Certificado del fondo de cesantías",
+    "certificado_retencion": "Certificado de retención en la fuente",
+    "declaracion_anterior": "Declaración de renta del año anterior",
+    "predial": "Recibo del impuesto predial",
+    "desconocido": "Documento",
+}
 
 
 class FilaExogena(BaseModel):
@@ -65,6 +93,9 @@ class FilaExogena(BaseModel):
     valor: float
     uso_sugerido: str | None = None
     info_adicional: str | None = None
+    # De qué documento salió la cifra (huella del archivo) y de qué tipo es
+    documento: str | None = None
+    fuente: str = "exogena"
 
 
 class DocumentoLeido(BaseModel):
@@ -77,6 +108,24 @@ class DocumentoLeido(BaseModel):
     topes: dict[str, float] = {}
     filas: list[FilaExogena] = []
     lineas_encabezado: list[str] = []
+    # Texto completo y tablas, para los certificados (que no traen el formato de la exógena)
+    lineas: list[str] = []
+    tablas: list[list[list[str]]] = []
+
+
+class DocumentoCargado(BaseModel):
+    """Un archivo que ya se leyó en esta sesión."""
+
+    id: str  # huella del contenido: el mismo archivo no se lee dos veces
+    nombre: str
+    tipo: str
+    etiqueta: str  # "Certificado tributario de BANCO EJEMPLO S.A."
+    entidad: str | None = None
+    nit: str | None = None
+    anio: int | None = None
+    cifras: int = 0
+    resumen: str = ""
+    pistas: list[str] = []  # lo que el documento deja ver sin ser una cifra (p. ej. "dependiente")
 
 
 Tratamiento = Literal["suma", "informativo", "revisar"]
@@ -100,6 +149,8 @@ class FilaInterpretada(FilaExogena):
     pregunta: str = ""
     ayuda: str = ""
     opciones: list[OpcionRevision] = []
+    # Documento cuya cifra reemplazó a esta (un certificado reemplaza lo que dice la exógena)
+    reemplazada_por: str | None = None
 
 
 class Perfil(BaseModel):
@@ -121,3 +172,4 @@ class Extraccion(BaseModel):
     resumen_campos: dict[str, float]
     datos_enmascarados: int = 0
     topes: dict[str, float] = {}
+    documentos: list[DocumentoCargado] = []

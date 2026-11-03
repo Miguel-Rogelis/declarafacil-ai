@@ -63,10 +63,12 @@ function FormularioMuestra() {
 }
 
 const AGENTES = [
-  { nombre: "Lector", tarea: "Lee el Excel o PDF de tu exógena.", ia: false },
+  { nombre: "Lector", tarea: "Lee el Excel o PDF de tu exógena y de tus certificados, varios a la vez.", ia: false },
   { nombre: "Anonimizador", tarea: "Quita tu cédula, nombre y cuentas antes de usar IA.", ia: false },
-  { nombre: "Clasificador", tarea: "Confirma que el archivo es una exógena y de qué año.", ia: true },
-  { nombre: "Intérprete", tarea: "Ubica cada concepto en la declaración y te lo explica. Nunca ve tus montos.", ia: true },
+  { nombre: "Clasificador", tarea: "Reconoce cada documento (exógena, certificado del empleador, del banco, de vivienda…) y de qué año es.", ia: true },
+  { nombre: "Intérprete", tarea: "Ubica cada concepto de la exógena en la declaración y te lo explica. Nunca ve tus montos.", ia: true },
+  { nombre: "Extractor", tarea: "Saca las cifras de tus certificados con reglas, sin IA.", ia: false },
+  { nombre: "Conciliador", tarea: "Cruza tus documentos para no contar nada dos veces y te avisa si no coinciden.", ia: false },
   { nombre: "Motor tributario", tarea: "Hace todos los cálculos con las reglas del año.", ia: false },
   { nombre: "Auditor", tarea: "Busca errores, datos faltantes y fechas vencidas.", ia: false },
   { nombre: "Explicador", tarea: "Resume el resultado en palabras simples, sin inventar cifras.", ia: true },
@@ -83,9 +85,9 @@ export default function Inicio() {
     setCargandoEjemplo(true);
     setError("");
     try {
-      const archivo = await api.exogenaDemo();
+      const archivos = await api.documentosDemo();
       if (extraccion) reiniciar();
-      setArchivoPendiente(archivo);
+      setArchivoPendiente(archivos);
       ir("declarar");
     } catch (e) {
       setError((e as Error).message);
@@ -101,7 +103,7 @@ export default function Inicio() {
           <h1 className="titular t-72">Tu declaración de renta, lista para revisar.</h1>
           <p className="lead">
             Un agente que te responde la renta sin enredos y arma el borrador del año gravable que elijas (2021 a 2025): adjunta tu
-            exógena de la DIAN o cuéntale tus ingresos con tus palabras. Cada cifra queda explicada antes de que firmes.
+            exógena de la DIAN y tus certificados, o cuéntale tus ingresos con tus palabras. Cada cifra queda explicada antes de que firmes.
           </p>
           <div className="acciones">
             <button className="boton" onClick={empezar}>Empezar</button>
@@ -112,7 +114,7 @@ export default function Inicio() {
           {error ? <p className="mensaje-estado error">{error}</p> : null}
           <p className="nota-privacidad">
             <Candado />
-            Tu archivo no se guarda. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y las cifras las calcula el código, no la IA.
+            Tus archivos no se guardan. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y las cifras las calcula el código, no la IA.
           </p>
         </div>
         <FormularioMuestra />
@@ -127,7 +129,7 @@ export default function Inicio() {
         <li className="paso">
           <span className="n">2</span>
           <h3>Cuéntale tus datos</h3>
-          <p>Adjunta tu exógena o escribe cosas como «gano 4 millones al mes» o «tengo dos hijos». El agente los anota y te muestra qué anotó.</p>
+          <p>Adjunta tu exógena y tus certificados, o escribe cosas como «gano 4 millones al mes» o «tengo dos hijos». El agente los anota y te muestra qué anotó.</p>
         </li>
         <li className="paso">
           <span className="n">3</span>
@@ -138,7 +140,7 @@ export default function Inicio() {
 
       <section className="agentes-portada" aria-labelledby="titulo-agentes">
         <div>
-          <h2 id="titulo-agentes" className="titular t-36">Ocho agentes, una tarea cada uno.</h2>
+          <h2 id="titulo-agentes" className="titular t-36">Diez agentes, una tarea cada uno.</h2>
           <p className="suave">
             Los cálculos los hacen reglas del Estatuto Tributario de cada año, de 2021 a 2025. La IA conversa, interpreta y explica, y cada
             cifra que escribe o anota se verifica contra lo que dijiste y contra el cálculo.

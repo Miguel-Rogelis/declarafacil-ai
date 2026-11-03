@@ -90,6 +90,13 @@ def _rol(campo: str | None, detalle: str) -> str | None:
     return None
 
 
+def _parecidas(a: str, b: str) -> bool:
+    from app.agents.conciliador import _palabras
+
+    pa, pb = _palabras(a), _palabras(b)
+    return bool(pa and pb and (pa <= pb or pb <= pa))
+
+
 def entidades(e: EstadoChat) -> dict[str, list[str]]:
     """Quién le reportó qué, agrupado por tipo (empleador, banco, crédito…)."""
     salida: dict[str, list[str]] = {}
@@ -97,12 +104,54 @@ def entidades(e: EstadoChat) -> dict[str, list[str]]:
         quien = (f.informante or "").strip()
         if not quien or _NO_ENTIDAD.search(norm(quien)) or f.tratamiento == "informativo":
             continue
-        rol = _rol(f.campo, f.detalle)
-        if rol and quien not in salida.setdefault(rol, []):
-            salida[rol].append(quien)
+        rol = "empleador" if f.fuente == "certificado_220" and (f.campo or "").startswith("laboral") else _rol(f.campo, f.detalle)
+        if not rol:
+            continue
+        lista = salida.setdefault(rol, [])
+        if quien not in lista and not any(_parecidas(quien, x) for x in lista):
+            lista.append(quien)
     # Un crédito de vivienda ya se nombra como tal
     salida["credito"] = [x for x in salida.get("credito", []) if x not in salida.get("vivienda", [])]
     return {k: v for k, v in salida.items() if v}
+
+
+def tipos(e: EstadoChat) -> set[str]:
+    return {d.tipo for d in e.documentos}
+
+
+def hay_certificados(e: EstadoChat) -> bool:
+    return any(d.tipo != "exogena" for d in e.documentos)
+
+
+def en_documentos(e: EstadoChat) -> str:
+    """Cómo nombrar lo que subió: "tu exógena" o "tus documentos"."""
+    return "tus documentos" if hay_certificados(e) else "tu exógena"
+
+
+def pista(e: EstadoChat, prefijo: str) -> str | None:
+    for d in e.documentos:
+        for p in d.pistas:
+            if p.startswith(prefijo):
+                return p.split(":", 1)[1] if ":" in p else p
+    return None
+
+
+def _ya_subido(e: EstadoChat, tipo: str, entidad: str | None = None) -> bool:
+    from app.agents.conciliador import _palabras
+
+    for d in e.documentos:
+        if d.tipo != tipo:
+            continue
+        if entidad is None:
+            return True
+        a, b = _palabras(d.entidad), _palabras(entidad)
+        if a and b and (a <= b or b <= a or len(a & b) >= 2):
+            return True
+    return False
+
+
+def ya_tengo(e: EstadoChat) -> list[str]:
+    return [d.etiqueta for d in e.documentos]
 
 
 def tiene_inmueble_en_exogena(e: EstadoChat) -> bool:
@@ -161,8 +210,10 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         return [Vacio("ingresos", "tus ingresos del año",
                       f"¿Cuánto recibiste en {anio}? Por ejemplo, tu salario mensual o lo que te pagaron por honorarios en el año.",
                       "Si no los tienes claros, tu exógena de la DIAN los trae.")]
-    ex = exogena(e) if e.tiene_exogena else {}
+    ex = exogena(e) if (e.tiene_exogena or e.filas) else {}
     con_exo = bool(e.tiene_exogena)
+    docs = tipos(e)
+    donde = en_documentos(e)
     impuesto = vp.resumen.impuesto_neto_renta if vp else 0
     sancion = vp.resumen.sancion if vp else 0
     p = perfil(e, r)
@@ -173,14 +224,17 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         if cond:
             salida.append(v)
 
-    agregar(not con_exo and not r.retenciones_no_reportadas and (r.salarios_no_reportados + r.honorarios_no_reportados) > 0, Vacio(
+    agregar(not con_exo and not r.retenciones_no_reportadas and not ex.get("pagos.retenciones_renta")
+            and (r.salarios_no_reportados + r.honorarios_no_reportados) > 0, Vacio(
         "retenciones", "cuánto te retuvieron en la fuente",
         f"¿Te hicieron retención en la fuente en {anio}? Si sí, ¿de cuánto fue en total? Sale en tu certificado de ingresos y retenciones.",
         "Certificado de ingresos y retenciones (formulario 220) de tu empleador, o el de quien te pagó.",
     ))
+    dependiente = pista(e, "dependiente")
     agregar(impuesto > 0 and not r.dependientes and trabajo, Vacio(
         "dependientes", "si alguien depende económicamente de ti",
-        "¿Alguien depende económicamente de ti, como hijos, tu pareja o tus papás?",
+        (f"Tu certificado de ingresos y retenciones registra un dependiente económico ({dependiente}). ¿Cuántas personas dependen económicamente de ti?"
+         if dependiente else "¿Alguien depende económicamente de ti, como hijos, tu pareja o tus papás?"),
         "Registro civil de tus hijos y, si tienen entre 18 y 23 años, certificado de estudio.",
     ))
     falta = []
@@ -191,11 +245,12 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
     if not (r.aportes_voluntarios_afc_fpv or _suma(ex, "deducciones.aportes_voluntarios")):
         falta.append("aportes voluntarios a pensión o AFC")
     ya_vienen = [x for x in ("medicina prepagada", "intereses de un crédito de vivienda", "aportes voluntarios a pensión o AFC") if x not in falta]
-    agregar(impuesto > 0 and falta and trabajo, Vacio(
-        "deducciones", "si pagas " + _lista(falta, "o"),
-        f"¿Pagas {_lista(falta, 'o')}?" + (f" Lo de {_lista(ya_vienen)} ya viene en tu exógena." if con_exo and ya_vienen else ""),
-        "Cada entidad te da un certificado de lo que pagaste en el año, en su portal o banca virtual.",
-    ))
+    if falta:
+        agregar(impuesto > 0 and trabajo, Vacio(
+            "deducciones", "si pagas " + _lista(falta, "o"),
+            f"¿Pagas {_lista(falta, 'o')}?" + (f" Lo de {_lista(ya_vienen)} ya viene en {donde}." if (con_exo or docs) and ya_vienen else ""),
+            "Cada entidad te da un certificado de lo que pagaste en el año, en su portal o banca virtual.",
+        ))
     honorarios = r.honorarios_no_reportados + _suma(ex, "independiente.honorarios")
     agregar(impuesto > 0 and honorarios and not r.costos_independiente, Vacio(
         "costos", "si tuviste costos de tu actividad como independiente",
@@ -203,11 +258,11 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         "Las facturas electrónicas a tu nombre las ves en el portal de facturación de la DIAN.",
     ))
     vehiculo = any(any(v in norm(b.concepto) for v in _VEHICULOS) for b in r.bienes_adicionales)
-    if con_exo:
-        cosas = "carro o moto" if tiene_inmueble_en_exogena(e) else "carro, moto, casa o lote"
+    if con_exo or "certificado_bancario" in docs:
+        cosas = "carro o moto" if tiene_inmueble_en_exogena(e) or "predial" in docs else "carro, moto, casa o lote"
         agregar(not vehiculo and not r.bienes_adicionales, Vacio(
             "bienes", f"si tienes {cosas}",
-            f"¿Tienes {cosas} a tu nombre? Tu exógena no los muestra y van en tu patrimonio. Si sí, dime cuánto pagaste.",
+            f"¿Tienes {cosas} a tu nombre? {donde[:1].upper() + donde[1:]} no {'los muestran' if donde.startswith('tus') else 'los muestra'} y van en tu patrimonio. Si sí, dime cuánto pagaste.",
             "Vehículos: factura o contrato de compra. Inmuebles: recibo del impuesto predial (avalúo catastral).",
         ))
     else:
@@ -222,7 +277,8 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
     if r.declaraciones_previas is None and p["declaro_antes"]:
         agregar(impuesto > 0, Vacio(
             "historial", "cuántas veces has declarado",
-            "Veo en tu exógena que ya habías declarado. ¿Esta es tu segunda declaración o ya llevas más? Eso cambia el anticipo.",
+            ("Veo tu declaración anterior. " if "declaracion_anterior" in docs else "Veo en tu exógena que ya habías declarado. ")
+            + "¿Esta es tu segunda declaración o ya llevas más? Eso cambia el anticipo.",
             "Tus declaraciones anteriores están en MUISCA, en «Consultar declaraciones».",
         ))
     else:
@@ -243,7 +299,7 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         "sanciones", "si te han sancionado por declarar tarde",
         "Como ya pasó tu fecha, hay sanción. ¿La DIAN te ha sancionado por declarar tarde en los últimos dos años? Si no, la sanción baja a la mitad.",
     ))
-    agregar(impuesto > 0 and p["declaro_antes"] and not r.impuesto_neto_anio_anterior, Vacio(
+    agregar(impuesto > 0 and p["declaro_antes"] and not r.impuesto_neto_anio_anterior and not ex.get("pagos.impuesto_neto_anio_anterior"), Vacio(
         "anterior", "tu impuesto del año pasado",
         "¿Cuánto fue el impuesto neto de renta en tu declaración del año pasado? Puede bajar el anticipo que te cobran.",
         "Está en tu declaración anterior (formulario 210), en MUISCA, «Consultar declaraciones».",
@@ -304,24 +360,29 @@ def documentos(e: EstadoChat, r: Respuestas) -> list[str]:
     p = perfil(e, r)
     docs = []
     for x in ent.get("empleador", []):
-        docs.append(f"Certificado de ingresos y retenciones (formulario 220) de {x}: lo pides en recursos humanos o en el portal de nómina.")
-    if p["empleado"] and not ent.get("empleador"):
+        if not _ya_subido(e, "certificado_220", x):
+            docs.append(f"Certificado de ingresos y retenciones (formulario 220) de {x}: lo pides en recursos humanos o en el portal de nómina.")
+    if p["empleado"] and not ent.get("empleador") and not _ya_subido(e, "certificado_220"):
         docs.append("Certificado de ingresos y retenciones (formulario 220) de tu empleador: lo pides en recursos humanos.")
     for x in ent.get("contratante", []):
         docs.append(f"Certificado de retenciones de {x}, si te retuvieron.")
     for x in ent.get("pension", []):
         docs.append(f"Certificado de ingresos y retenciones de tu pensión, de {x}.")
     for x in ent.get("cesantias", []):
-        docs.append(f"Certificado de cesantías de {x}: en el portal o la app del fondo.")
+        if not _ya_subido(e, "certificado_cesantias", x) and not _ya_subido(e, "certificado_220"):
+            docs.append(f"Certificado de cesantías de {x}: en el portal o la app del fondo.")
     for x in ent.get("banco", []):
-        docs.append(f"Certificado tributario de {x} (saldos al 31 de diciembre, intereses y retenciones): en la banca virtual, sección de certificados.")
+        if not _ya_subido(e, "certificado_bancario", x):
+            docs.append(f"Certificado tributario de {x} (saldos al 31 de diciembre, intereses y retenciones): en la banca virtual, sección de certificados.")
     for x in ent.get("vivienda", []):
-        docs.append(f"Certificado de intereses pagados y saldo del crédito de vivienda de {x}: en su banca virtual.")
+        if not (_ya_subido(e, "certificado_vivienda", x) or _ya_subido(e, "certificado_bancario", x)):
+            docs.append(f"Certificado de intereses pagados y saldo del crédito de vivienda de {x}: en su banca virtual.")
     for x in ent.get("credito", []):
         docs.append(f"Certificado o extracto con el saldo a 31 de diciembre de lo que debes en {x}.")
     for x in ent.get("prepagada", []):
-        docs.append(f"Certificado de pagos de {x}: en el portal de la entidad.")
-    if ent.get("inmueble"):
+        if not _ya_subido(e, "certificado_prepagada", x):
+            docs.append(f"Certificado de pagos de {x}: en el portal de la entidad.")
+    if ent.get("inmueble") and not _ya_subido(e, "predial"):
         docs.append("Recibo del impuesto predial de tu inmueble (ahí está el avalúo catastral).")
     for x in ent.get("dividendos", []):
         docs.append(f"Certificado de dividendos de {x}.")
@@ -329,7 +390,7 @@ def documentos(e: EstadoChat, r: Respuestas) -> list[str]:
         docs.append("Soportes de tus personas a cargo: registro civil y, para hijos de 18 a 23 años, certificado de estudio.")
     if any(any(v in norm(b.concepto) for v in _VEHICULOS) for b in r.bienes_adicionales):
         docs.append("Factura o contrato de compra de tu vehículo.")
-    if p["declaro_antes"]:
+    if p["declaro_antes"] and not _ya_subido(e, "declaracion_anterior"):
         docs.append("Tu declaración del año pasado: en MUISCA, «Consultar declaraciones».")
     if not e.tiene_exogena:
         docs.insert(0, "Tu reporte de información exógena: en MUISCA, «Consultar información exógena».")

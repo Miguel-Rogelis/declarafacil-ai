@@ -1,12 +1,15 @@
 """Orquestador: decide el orden de los agentes y emite la traza en tiempo real.
 
 Flujo fijo y trazable (no es un agente que decide solo):
-  Fase 1 · documento:  Lector → Anonimizador → Clasificador → Intérprete
+  Fase 1 · documentos (uno o varios a la vez):
+           Lector → Anonimizador → Clasificador → Intérprete (exógena) o Extractor (certificados)
+           y al final el Conciliador, que cruza todo para no contar nada dos veces
   Fase 2 · cálculo:    Motor tributario → Auditor → Explicador
 El Asistente atiende el chat en paralelo, fuera de este flujo.
 """
 
 import asyncio
+import hashlib
 import time
 from collections.abc import AsyncIterator
 from datetime import date
@@ -14,10 +17,31 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.agents import anonimizador, auditor, clasificador, explicador, interprete, lector
-from app.agents.base import EventoAgente, Extraccion, FilaInterpretada, Traza
+from app.agents import (
+    anonimizador,
+    auditor,
+    clasificador,
+    conciliador,
+    explicador,
+    extractor,
+    interprete,
+    lector,
+)
+from app.agents.base import (
+    NOMBRE_TIPO,
+    DocumentoCargado,
+    EventoAgente,
+    Extraccion,
+    FilaInterpretada,
+    Traza,
+)
 from app.tax import reglas as repo_reglas
-from app.tax.modelos import DatosDeclaracion, GananciasOcasionales, ItemPatrimonio, Liquidacion
+from app.tax.modelos import (
+    DatosDeclaracion,
+    GananciasOcasionales,
+    ItemPatrimonio,
+    Liquidacion,
+)
 from app.tax.motor import liquidar
 
 
@@ -58,9 +82,29 @@ class SolicitudLiquidacion(BaseModel):
     respuestas: Respuestas = Respuestas()
 
 
+class Previas(BaseModel):
+    """Lo que ya se había leído en la sesión: los documentos nuevos se cruzan con esto."""
+
+    filas: list[FilaInterpretada] = []
+    topes: dict[str, float] = {}
+    documentos: list[DocumentoCargado] = []
+    ultimos_dos_digitos_nit: str | None = None
+    anio: int | None = None
+    datos_enmascarados: int = 0
+
+
+class ErrorArchivo(BaseModel):
+    nombre: str
+    mensaje: str
+
+
 class ResultadoDocumento(BaseModel):
-    extraccion: Extraccion
-    clasificacion: dict[str, Any]
+    extraccion: Extraccion  # todo lo que hay, ya cruzado
+    nuevos: list[DocumentoCargado] = []
+    cruces: list[str] = []
+    errores: list[ErrorArchivo] = []
+    mensaje: str = ""
+    clasificacion: dict[str, Any] = {}
     traza: list[EventoAgente]
 
 
@@ -80,55 +124,166 @@ class ErrorFlujo(BaseModel):
 Salida = EventoAgente | ResultadoDocumento | ResultadoLiquidacion | ErrorFlujo
 
 
-async def procesar_documento(contenido: bytes, nombre: str, anio_esperado: int) -> AsyncIterator[Salida]:
+MAX_ARCHIVOS = 12
+
+
+def _corto(nombre: str) -> str:
+    return nombre if len(nombre) <= 34 else nombre[:22] + "…" + nombre[-10:]
+
+
+async def procesar_documentos(archivos: list[tuple[bytes, str]], anio_esperado: int, previas: Previas | None = None) -> AsyncIterator[Salida]:
+    """Lee uno o varios documentos (exógena y certificados), los cruza con lo que ya había y devuelve todo unido."""
+    previas = previas or Previas()
     traza = Traza()
+    vistos = {d.id for d in previas.documentos}
+    nuevas: list[FilaInterpretada] = []
+    nuevos: list[DocumentoCargado] = []
+    errores: list[ErrorArchivo] = []
+    topes, ultimos, anio_exogena = dict(previas.topes), previas.ultimos_dos_digitos_nit, previas.anio
+    enmascarados = previas.datos_enmascarados
+    clasificacion_exogena: dict[str, Any] = {}
+    modelos: list[str] = []
 
-    yield traza.inicio("lector", "Leyendo el archivo…")
-    t0 = time.perf_counter()
-    try:
-        doc = await asyncio.to_thread(lector.leer, contenido, nombre)
-    except lector.ArchivoNoSoportado as e:
-        yield traza.fin("lector", str(e), t0, "error")
-        yield ErrorFlujo(mensaje=str(e), agente="lector")
+    for contenido, nombre in archivos[:MAX_ARCHIVOS]:
+        corto = _corto(nombre)
+        huella = hashlib.sha256(contenido).hexdigest()[:12]
+        yield traza.inicio("lector", f"Leyendo {corto}…")
+        t0 = time.perf_counter()
+        if huella in vistos:
+            yield traza.fin("lector", f"{corto}: ya lo había leído", t0, "advertencia")
+            continue
+        vistos.add(huella)
+        try:
+            doc = await asyncio.to_thread(lector.leer, contenido, nombre)
+        except lector.ArchivoNoSoportado as e:
+            yield traza.fin("lector", f"{corto}: {e}", t0, "error")
+            errores.append(ErrorArchivo(nombre=nombre, mensaje=str(e)))
+            continue
+        if not doc.filas and not any(len(x) > 3 for x in doc.lineas):
+            msg = "no tiene texto que pueda leer (parece escaneado). Descárgalo en PDF desde el portal de la entidad"
+            yield traza.fin("lector", f"{corto}: {msg}", t0, "error")
+            errores.append(ErrorArchivo(nombre=nombre, mensaje=msg[:1].upper() + msg[1:]))
+            continue
+        yield traza.fin("lector", f"{corto}: " + (f"{len(doc.filas)} filas y {len(doc.topes)} topes" if doc.filas else f"{len(doc.lineas)} líneas de texto") + f" ({doc.formato.upper()})", t0)
+
+        yield traza.inicio("anonimizador", f"Quitando datos personales de {corto}…")
+        t0 = time.perf_counter()
+        anon, ult, n_exo = anonimizador.anonimizar(doc)
+        n_cert = 0
+        if not doc.filas:  # un certificado: su texto se limpia aparte
+            anon, n_cert = anonimizador.anonimizar_certificado(anon)
+        del doc  # el original con datos personales no sigue en el flujo
+        enmascarados += n_exo + n_cert
+        yield traza.fin("anonimizador", f"{corto}: {n_exo + n_cert} datos personales enmascarados", t0)
+
+        yield traza.inicio("clasificador", f"Identificando {corto}…")
+        t0 = time.perf_counter()
+        clas = await clasificador.clasificar(anon, nombre)
+        if clas.modelo:
+            modelos.append(clas.modelo)
+        tipo = "exogena" if clas.es_exogena else clas.tipo
+        msg = f"{corto}: {NOMBRE_TIPO.get(tipo, 'documento').lower() if tipo != 'desconocido' else 'no reconocí el tipo de documento'}"
+        msg += f" del año {clas.anio}" if clas.anio else ""
+        estado = "ok" if tipo != "desconocido" else "advertencia"
+        if clas.anio and clas.anio != anio_esperado and tipo != "declaracion_anterior":
+            estado, msg = "advertencia", msg + f". Ojo: elegiste el año {anio_esperado}"
+        yield traza.fin("clasificador", msg, t0, estado, clas.modelo)  # type: ignore[arg-type]
+
+        if tipo == "exogena":
+            yield traza.inicio("interprete", "Ubicando cada concepto de tu exógena en la declaración…")
+            t0 = time.perf_counter()
+            extraccion, modelo, enviados = await interprete.interpretar(anon, ult, 0)
+            for f in extraccion.filas:
+                f.documento, f.fuente = huella, "exogena"
+            sumadas = sum(1 for f in extraccion.filas if f.tratamiento == "suma")
+            revisar = sum(1 for f in extraccion.filas if f.tratamiento == "revisar")
+            msg = f"{sumadas} conceptos ubicados, {revisar} para revisar"
+            msg += f". {enviados} consultados a la IA, sin montos ni datos personales" if modelo else ". Todo resuelto con reglas"
+            yield traza.fin("interprete", msg, t0, "advertencia" if revisar else "ok", modelo)
+            nuevas = [f for f in nuevas if f.fuente != "exogena"] + extraccion.filas
+            topes = dict(anon.topes)
+            ultimos = ult or ultimos
+            anio_exogena = anon.anio
+            clasificacion_exogena = clas.model_dump()
+            nuevos.append(DocumentoCargado(
+                id=huella, nombre=nombre, tipo="exogena", etiqueta=f"Tu exógena {anon.anio}" if anon.anio else "Tu exógena",
+                anio=anon.anio, cifras=sumadas + revisar,
+                resumen=f"{len(extraccion.filas)} datos; ubiqué {sumadas} en tu declaración"
+                + (f" y {revisar} {'necesita' if revisar == 1 else 'necesitan'} tu confirmación" if revisar else ""),
+            ))
+            continue
+
+        yield traza.inicio("extractor", f"Sacando las cifras de {corto}…")
+        t0 = time.perf_counter()
+        filas, documento = extractor.extraer(anon, tipo, huella, nombre, clas.anio)
+        if not filas:
+            msg = "no encontré cifras que pueda usar en tu declaración"
+            yield traza.fin("extractor", f"{corto}: {msg}", t0, "advertencia")
+            errores.append(ErrorArchivo(nombre=nombre, mensaje=msg[:1].upper() + msg[1:]))
+            continue
+        revisar = sum(1 for f in filas if f.tratamiento == "revisar")
+        yield traza.fin("extractor", f"{corto}: {documento.cifras} cifras" + (f", {revisar} para confirmar" if revisar else ""), t0, "advertencia" if revisar else "ok")
+        nuevas.extend(filas)
+        nuevos.append(documento)
+
+    if not nuevos and errores:
+        yield ErrorFlujo(mensaje="; ".join(f"{e.nombre}: {e.mensaje}" for e in errores), agente="lector")
         return
-    if not doc.filas:
-        msg = "No encontré filas con conceptos y valores. ¿Es el reporte de información exógena de la DIAN?"
-        yield traza.fin("lector", msg, t0, "error")
-        yield ErrorFlujo(mensaje=msg, agente="lector")
+    if not nuevos:
+        # Solo llegaron archivos que ya estaban: no cambia nada
+        datos, perfil, resumen = interprete.construir_datos(previas.filas, previas.topes, previas.anio, previas.ultimos_dos_digitos_nit)
+        extraccion = Extraccion(
+            anio=previas.anio, ultimos_dos_digitos_nit=previas.ultimos_dos_digitos_nit, filas=previas.filas, datos=datos, perfil=perfil,
+            resumen_campos=resumen, datos_enmascarados=previas.datos_enmascarados, topes=previas.topes, documentos=previas.documentos,
+        )
+        yield ResultadoDocumento(extraccion=extraccion, mensaje="Ya había leído ese documento; no lo cuento dos veces.", traza=traza.eventos)
         return
-    yield traza.fin("lector", f"{len(doc.filas)} filas y {len(doc.topes)} topes leídos ({doc.formato.upper()})", t0)
 
-    yield traza.inicio("anonimizador", "Quitando datos personales…")
+    yield traza.inicio("conciliador", "Cruzando los documentos para no contar nada dos veces…")
     t0 = time.perf_counter()
-    anon, ultimos, enmascarados = anonimizador.anonimizar(doc)
-    del doc  # el original con datos personales no sigue en el flujo
-    yield traza.fin("anonimizador", f"{enmascarados} datos personales enmascarados antes de usar IA", t0)
+    documentos = [d for d in previas.documentos if not (d.tipo == "exogena" and any(n.tipo == "exogena" for n in nuevos))] + nuevos
+    filas, cruces = conciliador.conciliar([f.model_copy(deep=True) for f in previas.filas], nuevas, documentos)
+    reemplazadas = sum(1 for f in filas if f.reemplazada_por and f.documento not in {d.id for d in nuevos} | {None})
+    reemplazadas += sum(1 for f in nuevas if f.reemplazada_por)
+    yield traza.fin("conciliador", f"{len(documentos)} documentos cruzados" + (f", {reemplazadas} cifras de la exógena reemplazadas por certificados" if reemplazadas else ", sin cifras repetidas"), t0)
 
-    yield traza.inicio("clasificador", "Verificando que sea una exógena…")
-    t0 = time.perf_counter()
-    clas = await clasificador.clasificar(anon)
-    if not clas.es_exogena:
-        msg = f"El archivo no parece un reporte de exógena ({clas.motivo})."
-        yield traza.fin("clasificador", msg, t0, "error", clas.modelo)
-        yield ErrorFlujo(mensaje=msg, agente="clasificador")
-        return
-    estado = "ok"
-    msg = f"Exógena del año {clas.anio or '¿?'}, confianza {clas.confianza:.0%}" + (", decidido con reglas" if not clas.modelo else "")
-    if clas.anio and clas.anio != anio_esperado:
-        estado = "advertencia"
-        msg += f". Ojo: elegiste el año {anio_esperado}"
-    yield traza.fin("clasificador", msg, t0, estado, clas.modelo)  # type: ignore[arg-type]
+    anios = [d.anio for d in documentos if d.anio and d.tipo != "declaracion_anterior"]
+    anio = anio_exogena or (max(set(anios), key=anios.count) if anios else None)
+    datos, perfil, resumen = interprete.construir_datos(filas, topes, anio, ultimos)
+    extraccion = Extraccion(
+        anio=anio, ultimos_dos_digitos_nit=ultimos, filas=filas, datos=datos, perfil=perfil, resumen_campos=resumen,
+        datos_enmascarados=enmascarados, topes=topes, documentos=documentos,
+    )
+    yield ResultadoDocumento(
+        extraccion=extraccion, nuevos=nuevos, cruces=cruces, errores=errores, mensaje=mensaje_lectura(nuevos, cruces, errores, enmascarados - previas.datos_enmascarados),
+        clasificacion=clasificacion_exogena, traza=traza.eventos,
+    )
 
-    yield traza.inicio("interprete", "Ubicando cada concepto en la declaración…")
-    t0 = time.perf_counter()
-    extraccion, modelo, enviados = await interprete.interpretar(anon, ultimos, enmascarados)
-    sumadas = sum(1 for f in extraccion.filas if f.tratamiento == "suma")
-    revisar = sum(1 for f in extraccion.filas if f.tratamiento == "revisar")
-    msg = f"{sumadas} conceptos ubicados, {revisar} para revisar"
-    msg += f". {enviados} consultados a la IA, sin montos ni datos personales" if modelo else ". Todo resuelto con reglas"
-    yield traza.fin("interprete", msg, t0, "advertencia" if revisar else "ok", modelo)
 
-    yield ResultadoDocumento(extraccion=extraccion, clasificacion=clas.model_dump(), traza=traza.eventos)
+def mensaje_lectura(nuevos: list[DocumentoCargado], cruces: list[str], errores: list[ErrorArchivo], enmascarados: int) -> str:
+    """Lo que el agente cuenta apenas lee los documentos (escrito por el código, sin IA)."""
+    partes = []
+    if len(nuevos) == 1:
+        d = nuevos[0]
+        nombre = d.etiqueta[:1].lower() + d.etiqueta[1:]
+        partes.append(f"Leí {nombre if d.etiqueta.startswith('Tu ') else 'el ' + nombre}" + (f": {d.resumen}." if d.resumen else "."))
+    else:
+        partes.append(f"Leí {len(nuevos)} documentos:")
+        partes.extend(f"• {d.etiqueta}" + (f": {d.resumen}." if d.resumen else ".") for d in nuevos)
+    if cruces:
+        partes.append("Crucé tus documentos para no contar nada dos veces:")
+        partes.extend(f"• {c}" for c in cruces)
+    for e in errores:
+        partes.append(f"No pude usar {e.nombre}: {e.mensaje}.")
+    if enmascarados:
+        partes.append(f"Antes de usar IA quité {enmascarados} datos personales.")
+    return "\n".join(partes)
+
+
+async def procesar_documento(contenido: bytes, nombre: str, anio_esperado: int) -> AsyncIterator[Salida]:
+    """Un solo archivo (se mantiene por compatibilidad)."""
+    async for item in procesar_documentos([(contenido, nombre)], anio_esperado):
+        yield item
 
 
 def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
@@ -169,7 +324,7 @@ def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
         d.fuentes.setdefault("usuario", []).append(item.concepto)
     if r.declaraciones_previas is not None:
         d.pagos.declaraciones_previas = r.declaraciones_previas
-    d.pagos.impuesto_neto_anio_anterior = r.impuesto_neto_anio_anterior
+    d.pagos.impuesto_neto_anio_anterior = r.impuesto_neto_anio_anterior or d.pagos.impuesto_neto_anio_anterior
     d.pagos.anticipo_anio_anterior += r.anticipo_anio_anterior
     if r.ultimos_dos_digitos_nit:
         d.control.ultimos_dos_digitos_nit = r.ultimos_dos_digitos_nit

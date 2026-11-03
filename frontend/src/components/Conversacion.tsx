@@ -23,7 +23,7 @@ function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
 }
 
 function SubirExogena() {
-  const { procesarArchivo, usarEjemplo } = useSesion();
+  const { procesarArchivos, usarEjemplo } = useSesion();
   const input = useRef<HTMLInputElement>(null);
   const [arrastrando, setArrastrando] = useState(false);
   return (
@@ -42,30 +42,45 @@ function SubirExogena() {
         onDrop={(e) => {
           e.preventDefault();
           setArrastrando(false);
-          const f = e.dataTransfer.files[0];
-          if (f) void procesarArchivo(f);
+          const fs = Array.from(e.dataTransfer.files);
+          if (fs.length) void procesarArchivos(fs);
         }}
       >
-        <strong>Arrastra tu exógena o haz clic para elegirla</strong>
-        <span className="chico suave">Excel (.xlsx) o PDF. La leo en memoria y no la guardo.</span>
+        <strong>Arrastra tu exógena y tus certificados, o haz clic para elegirlos</strong>
+        <span className="chico suave">Puedes subir varios a la vez: exógena, certificado de ingresos y retenciones, del banco, de vivienda, de prepagada… En Excel o PDF. Los leo en memoria y no los guardo.</span>
       </div>
       <input
         ref={input}
         type="file"
         accept=".xlsx,.pdf"
+        multiple
         className="visualmente-oculto"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void procesarArchivo(f);
+          const fs = Array.from(e.target.files ?? []);
+          if (fs.length) void procesarArchivos(fs);
           e.target.value = "";
         }}
       />
       <p className="chico suave" style={{ margin: "0.5rem 0 0" }}>
-        Para probar sin datos reales: <button className="boton-texto chico" onClick={() => void usarEjemplo()}>usar una exógena ficticia</button>
+        Para probar sin datos reales: <button className="boton-texto chico" onClick={() => void usarEjemplo()}>usar documentos ficticios</button> (exógena, certificado del empleador y del banco)
       </p>
     </>
   );
 }
+
+const DE_DONDE: Record<string, string> = {
+  exogena: "de tu exógena",
+  certificado_220: "de tu certificado de ingresos",
+  certificado_bancario: "de tu certificado del banco",
+  certificado_vivienda: "de tu certificado de vivienda",
+  certificado_prepagada: "de tu certificado de prepagada",
+  certificado_voluntarios: "de tu certificado de aportes",
+  certificado_cesantias: "de tu certificado de cesantías",
+  certificado_retencion: "de tu certificado de retención",
+  declaracion_anterior: "de tu declaración anterior",
+  predial: "de tu predial",
+};
+const deDonde = (f: Fila) => DE_DONDE[f.fuente ?? "exogena"] ?? "de tus documentos";
 
 function opcionesDe(f: Fila): OpcionRevision[] {
   if (f.opciones?.length) return f.opciones;
@@ -117,9 +132,9 @@ function CuadroPregunta() {
     const recomendada = opciones.find((o) => o.recomendada);
     const elegir = (o: OpcionRevision | undefined, texto: string) => decidir(fila.id, o ? o.incluir : false, o?.campo ?? null, texto);
     return (
-      <div className="cuadro-pregunta" role="group" aria-label="Confirma un dato de tu exógena">
+      <div className="cuadro-pregunta" role="group" aria-label={`Confirma un dato ${deDonde(fila)}`}>
         <div className="cuadro-cabeza">
-          <span className="cuadro-titulo">Confirma un dato de tu exógena</span>
+          <span className="cuadro-titulo">Confirma un dato {deDonde(fila)}</span>
           <span className="chico suave">{porRevisar.length > 1 ? `Quedan ${porRevisar.length}` : "Último"}</span>
         </div>
         <p className="cuadro-texto">{fila.pregunta || `${fila.informante ?? "Una entidad"} reportó ${pesos(fila.valor)} por «${fila.detalle}». ¿Lo incluyo en tu declaración?`}</p>
@@ -292,7 +307,7 @@ function Widget({ m }: { m: Mensaje }) {
     case "revisar":
       return <Revisar />;
     case "traza_documento":
-      return <MesaAgentes fases={FASES_DOCUMENTO} eventos={m.eventos ?? []} compacta />;
+      return <MesaAgentes fases={FASES_DOCUMENTO} eventos={m.eventos ?? []} compacta soloActivos />;
     case "traza_calculo":
       return <MesaAgentes fases={FASES_CALCULO} eventos={m.eventos ?? []} compacta />;
     case "resultado":
@@ -308,7 +323,7 @@ function Widget({ m }: { m: Mensaje }) {
 
 /** El chat a pantalla completa. El usuario lleva la conversación de inicio a fin. */
 export default function Conversacion({ barra }: { barra?: ReactNode }) {
-  const { mensajes, enviar, escribiendo, calculando, procesarArchivo, archivoPendiente, setArchivoPendiente, extraccion, anio } = useSesion();
+  const { mensajes, enviar, escribiendo, calculando, procesarArchivos, archivoPendiente, setArchivoPendiente, extraccion, anio } = useSesion();
   const [texto, setTexto] = useState("");
   const lista = useRef<HTMLDivElement>(null);
   const adjuntar = useRef<HTMLInputElement>(null);
@@ -318,9 +333,9 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
     if (archivoPendiente && !extraccion) {
       const a = archivoPendiente;
       setArchivoPendiente(null);
-      void procesarArchivo(a);
+      void procesarArchivos(a);
     }
-  }, [archivoPendiente, extraccion, procesarArchivo, setArchivoPendiente]);
+  }, [archivoPendiente, extraccion, procesarArchivos, setArchivoPendiente]);
 
   useEffect(() => {
     const el = lista.current;
@@ -356,7 +371,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             <div className="chat-bienvenida">
               <Marca />
               <h1 className="titular t-36">¿En qué te ayudo con tu renta?</h1>
-              <p className="suave">Pregúntame lo que quieras, cuéntame tus ingresos o adjunta tu exógena con el clip. Uso las reglas del año gravable {anio}.</p>
+              <p className="suave">Pregúntame lo que quieras, cuéntame tus ingresos o adjunta con el clip tu exógena y tus certificados (puedes subir varios a la vez). Uso las reglas del año gravable {anio}.</p>
             </div>
           ) : null}
           {mensajes.filter((m) => !m.oculto).map((m) =>
@@ -381,17 +396,18 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             mandar(texto);
           }}
         >
-          <button type="button" className="adjuntar" aria-label="Adjuntar exógena" title="Adjuntar exógena (Excel o PDF)" onClick={() => adjuntar.current?.click()}>
+          <button type="button" className="adjuntar" aria-label="Adjuntar documentos" title="Adjuntar exógena o certificados (Excel o PDF, varios a la vez)" onClick={() => adjuntar.current?.click()}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.5l-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.3-8.3" /></svg>
           </button>
           <input
             ref={adjuntar}
             type="file"
             accept=".xlsx,.pdf"
+            multiple
             className="visualmente-oculto"
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void procesarArchivo(f);
+              const fs = Array.from(e.target.files ?? []);
+              if (fs.length) void procesarArchivos(fs);
               e.target.value = "";
             }}
           />

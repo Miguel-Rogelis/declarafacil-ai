@@ -5,7 +5,16 @@ from collections.abc import AsyncIterable
 from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.responses import Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel
@@ -48,17 +57,34 @@ def estado() -> Estado:
 
 
 @router.post("/documentos/analizar", response_class=EventSourceResponse)
-async def analizar_documento(
-    archivo: Annotated[UploadFile, File(description="Reporte de exógena en .xlsx o .pdf")],
+async def analizar_documentos(
+    archivos: Annotated[list[UploadFile] | None, File(description="Exógena y certificados en .xlsx o .pdf (uno o varios)")] = None,
+    archivo: Annotated[UploadFile | None, File(description="Un solo archivo (forma anterior)")] = None,
     anio_gravable: Annotated[int, Form()] = 2025,
+    previas: Annotated[str | None, Form(description="JSON con lo que ya se había leído: filas, topes y documentos")] = None,
 ) -> AsyncIterable[ServerSentEvent]:
-    contenido = await archivo.read(settings.max_upload_mb * 1024 * 1024 + 1)
-    if len(contenido) > settings.max_upload_mb * 1024 * 1024:
-        yield ServerSentEvent(data={"mensaje": f"El archivo supera {settings.max_upload_mb} MB", "agente": "lector"}, event="error")
+    subidos = [*(archivos or []), *([archivo] if archivo else [])]
+    if not subidos:
+        yield ServerSentEvent(data={"mensaje": "No llegó ningún archivo", "agente": "lector"}, event="error")
         return
-    async for item in orquestador.procesar_documento(contenido, archivo.filename or "archivo", anio_gravable):
+    if len(subidos) > orquestador.MAX_ARCHIVOS:
+        yield ServerSentEvent(data={"mensaje": f"Sube máximo {orquestador.MAX_ARCHIVOS} archivos a la vez", "agente": "lector"}, event="error")
+        return
+    limite = settings.max_upload_mb * 1024 * 1024
+    contenidos: list[tuple[bytes, str]] = []
+    for a in subidos:
+        contenido = await a.read(limite + 1)
+        if len(contenido) > limite:
+            yield ServerSentEvent(data={"mensaje": f"{a.filename} supera {settings.max_upload_mb} MB", "agente": "lector"}, event="error")
+            return
+        contenidos.append((contenido, a.filename or "archivo"))
+    try:
+        antes = orquestador.Previas.model_validate_json(previas) if previas else None
+    except ValueError:
+        antes = None
+    async for item in orquestador.procesar_documentos(contenidos, anio_gravable, antes):
         yield _evento(item)
-    del contenido
+    del contenidos
 
 
 @router.post("/declaracion/liquidar", response_class=EventSourceResponse)
@@ -163,6 +189,27 @@ async def probar_agente(agente: str) -> dict[str, Any]:
         return {"ok": True, "modelo": r.modelo, "respuesta": r.texto[:40]}
     except cliente.LLMNoDisponible as e:
         return {"ok": False, "detalle": str(e)}
+
+
+_DEMOS = {
+    "exogena_demo_2025.xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "certificado_220_demo_2025.pdf": "application/pdf",
+    "certificado_banco_demo_2025.pdf": "application/pdf",
+}
+
+
+@router.get("/demo/archivos")
+def demos() -> list[str]:
+    """Documentos ficticios para probar sin datos reales."""
+    return [n for n in _DEMOS if (settings.data_dir / "demo" / n).exists()]
+
+
+@router.get("/demo/archivo/{nombre}")
+def demo(nombre: str) -> Response:
+    ruta = settings.data_dir / "demo" / nombre
+    if nombre not in _DEMOS or not ruta.exists():
+        raise HTTPException(status_code=404, detail="No hay archivo de demostración con ese nombre")
+    return Response(content=ruta.read_bytes(), media_type=_DEMOS[nombre], headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
 
 
 @router.get("/demo/exogena")

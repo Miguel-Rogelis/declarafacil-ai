@@ -45,6 +45,7 @@ CAMPOS: dict[str, str] = {
     "pagos.retenciones_renta": "Retenciones en la fuente que te practicaron",
     "pagos.saldo_favor_anterior": "Saldo a favor del año anterior",
     "pagos.anticipo_anio_anterior": "Anticipo pagado el año anterior",
+    "pagos.impuesto_neto_anio_anterior": "Impuesto neto de renta del año anterior",
     "patrimonio.bienes": "Bienes (patrimonio bruto)",
     "patrimonio.deudas": "Deudas",
 }
@@ -193,7 +194,7 @@ def construir_datos(filas: list[FilaInterpretada], topes: dict[str, float], anio
     perfil = Perfil()
     for f in filas:
         det = _n(f.detalle)
-        if "patrimonio bruto declarado en el ano anterior" in det or "total saldo a favor" in det:
+        if "patrimonio bruto declarado en el ano anterior" in det or "total saldo a favor" in det or f.fuente == "declaracion_anterior":
             perfil.declaro_antes = True
         if f.tratamiento != "suma" or not f.campo:
             continue

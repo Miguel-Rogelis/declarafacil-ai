@@ -17,6 +17,24 @@ export interface Fila {
   pregunta?: string;
   ayuda?: string;
   opciones?: OpcionRevision[];
+  /** Documento del que salió la cifra (huella) y su tipo: "exogena", "certificado_220", "certificado_bancario"… */
+  documento?: string | null;
+  fuente?: string;
+  /** Si un certificado trae el mismo dato, esta fila queda como referencia. */
+  reemplazada_por?: string | null;
+}
+
+export interface DocumentoCargado {
+  id: string;
+  nombre: string;
+  tipo: string;
+  etiqueta: string;
+  entidad: string | null;
+  nit: string | null;
+  anio: number | null;
+  cifras: number;
+  resumen: string;
+  pistas: string[];
 }
 
 export interface OpcionRevision {
@@ -45,6 +63,7 @@ export interface Extraccion {
   resumen_campos: Record<string, number>;
   datos_enmascarados: number;
   topes: Record<string, number>;
+  documentos?: DocumentoCargado[];
 }
 
 export interface EventoAgente {
@@ -193,7 +212,12 @@ export const respuestasIniciales = (): Respuestas => ({
 
 export interface ResultadoDocumento {
   extraccion: Extraccion;
-  clasificacion: { es_exogena: boolean; anio: number | null; confianza: number; motivo: string; modelo: string | null };
+  nuevos: DocumentoCargado[];
+  cruces: string[];
+  errores: { nombre: string; mensaje: string }[];
+  /** Lo que el agente cuenta apenas lee los documentos (lo escribe el código). */
+  mensaje: string;
+  clasificacion: Partial<{ es_exogena: boolean; anio: number | null; confianza: number; motivo: string; modelo: string | null }>;
   traza: EventoAgente[];
 }
 
@@ -241,6 +265,8 @@ export interface EstadoChat {
   resultado: Record<string, unknown> | null;
   pregunta_pendiente: PreguntaPendiente | null;
   ya_preguntado: string[];
+  documentos: DocumentoCargado[];
+  recien: string[];
 }
 
 export interface PreguntaPendiente {
@@ -350,10 +376,21 @@ async function flujo<R>(url: string, init: RequestInit, m: Manejadores<R>): Prom
   }
 }
 
-export function analizarDocumento(archivo: File, anio: number, m: Manejadores<ResultadoDocumento>) {
+/** Lo que ya se había leído: los documentos nuevos se cruzan con esto en el servidor. */
+export interface Previas {
+  filas: Fila[];
+  topes: Record<string, number>;
+  documentos: DocumentoCargado[];
+  ultimos_dos_digitos_nit: string | null;
+  anio: number | null;
+  datos_enmascarados: number;
+}
+
+export function analizarDocumentos(archivos: File[], anio: number, previas: Previas | null, m: Manejadores<ResultadoDocumento>) {
   const fd = new FormData();
-  fd.append("archivo", archivo);
+  archivos.forEach((a) => fd.append("archivos", a));
   fd.append("anio_gravable", String(anio));
+  if (previas) fd.append("previas", JSON.stringify(previas));
   return flujo("/api/documentos/analizar", { method: "POST", body: fd }, m);
 }
 
@@ -420,5 +457,17 @@ export const api = {
     if (!r.ok) throw new Error("No se pudo descargar el ejemplo");
     const b = await r.blob();
     return new File([b], "exogena_demo_2025.xlsx", { type: b.type });
+  },
+  /** Exógena y certificados ficticios, para probar sin datos reales. */
+  documentosDemo: async (): Promise<File[]> => {
+    const nombres = await json<string[]>("/api/demo/archivos");
+    return Promise.all(
+      nombres.map(async (n) => {
+        const r = await fetch(`/api/demo/archivo/${encodeURIComponent(n)}`);
+        if (!r.ok) throw new Error("No se pudo descargar el ejemplo");
+        const b = await r.blob();
+        return new File([b], n, { type: b.type });
+      }),
+    );
   },
 };

@@ -79,7 +79,7 @@ def test_flujo_completo_por_api():
     assert r.status_code == 200
     eventos = _sse(r.text)
     agentes = [d["agente"] for t, d in eventos if t == "agente" and d["estado"] != "inicio"]
-    assert agentes == ["lector", "anonimizador", "clasificador", "interprete"]
+    assert agentes == ["lector", "anonimizador", "clasificador", "interprete", "conciliador"]
     extraccion = next(d for t, d in eventos if t == "resultado")["extraccion"]
     assert CEDULA not in json.dumps(extraccion)
 

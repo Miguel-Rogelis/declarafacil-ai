@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  analizarDocumento,
+  analizarDocumentos,
   api,
   liquidar,
   respuestasIniciales,
   type Anotacion,
   type AnioDisponible,
+  type DocumentoCargado,
   type EstadoChat,
   type EventoAgente,
   type Extraccion,
@@ -70,10 +71,12 @@ interface Sesion {
   enviar: (texto: string) => Promise<void>;
   deshacer: (id: number) => void;
   procesarArchivo: (f: File) => Promise<void>;
+  procesarArchivos: (f: File[]) => Promise<void>;
+  documentos: DocumentoCargado[];
   usarEjemplo: () => Promise<void>;
   calcular: (opciones?: { silencioso?: boolean }) => Promise<void>;
-  archivoPendiente: File | null;
-  setArchivoPendiente: (f: File | null) => void;
+  archivoPendiente: File[] | null;
+  setArchivoPendiente: (f: File[] | null) => void;
   reiniciar: () => void;
   porRevisar: Fila[];
   hayDatos: boolean;
@@ -88,7 +91,7 @@ const leerRuta = (): Ruta => {
 };
 
 const porRevisarDe = (f: Fila[], d: Record<string, boolean>) =>
-  f.filter((x) => (x.tratamiento === "revisar" || x.origen_mapeo === "ia") && !(x.id in d));
+  f.filter((x) => (x.tratamiento === "revisar" || x.origen_mapeo === "ia") && !x.reemplazada_por && !(x.id in d));
 
 const tieneDatos = (ex: Extraccion | null, r: Respuestas) =>
   !!ex ||
@@ -111,9 +114,10 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [errorCalculo, setErrorCalculo] = useState("");
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [escribiendo, setEscribiendo] = useState(false);
-  const [archivoPendiente, setArchivoPendiente] = useState<File | null>(null);
+  const [archivoPendiente, setArchivoPendiente] = useState<File[] | null>(null);
   const contador = useRef(1);
   const conversacion = useRef<{ pregunta: PreguntaPendiente | null; ya: string[] }>({ pregunta: null, ya: [] });
+  const recien = useRef<string[]>([]);
   const [pregunta, setPregunta] = useState<PreguntaPendiente | null>(null);
   const [elecciones, setElecciones] = useState<Record<string, string>>({});
   const ponerPregunta = useCallback((p: PreguntaPendiente | null, ya: string[]) => {
@@ -157,10 +161,11 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const estadoChat = useCallback((): EstadoChat => {
     const s = ref.current;
     const r = s.resultado?.liquidacion;
+    const docs = s.extraccion?.documentos ?? [];
     return {
       pantalla: s.ruta,
       anio_gravable: s.anio,
-      tiene_exogena: !!s.extraccion,
+      tiene_exogena: docs.length ? docs.some((d) => d.tipo === "exogena") : !!s.extraccion,
       anio_exogena: s.extraccion?.anio ?? null,
       perfil: s.extraccion?.perfil ?? {},
       resumen_exogena: s.extraccion?.resumen_campos ?? {},
@@ -170,6 +175,8 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       respuestas: s.respuestas,
       pregunta_pendiente: conversacion.current.pregunta,
       ya_preguntado: conversacion.current.ya,
+      documentos: docs,
+      recien: recien.current,
       resultado: r
         ? {
             anio_gravable: r.anio_gravable,
@@ -236,50 +243,70 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     ref.current.anio = a;
   }, []);
 
-  const procesarArchivo = useCallback(
-    async (archivo: File) => {
-      agregar({ rol: "usuario", texto: `📎 ${archivo.name}` });
+  /** Lee uno o varios documentos (exógena y certificados) y los cruza con lo que ya había. */
+  const procesarArchivos = useCallback(
+    async (archivos: File[]) => {
+      if (!archivos.length) return;
+      agregar({ rol: "usuario", texto: archivos.map((a) => `📎 ${a.name}`).join("\n") });
       const idTraza = agregar({ rol: "asistente", widget: "traza_documento", eventos: [] });
       const acumulado: EventoAgente[] = [];
       let leida = false;
-      await analizarDocumento(archivo, ref.current.anio, {
+      const s0 = ref.current;
+      const previas = s0.extraccion
+        ? {
+            filas: s0.filas,
+            topes: s0.extraccion.topes ?? {},
+            documentos: s0.extraccion.documentos ?? [],
+            ultimos_dos_digitos_nit: s0.extraccion.ultimos_dos_digitos_nit,
+            anio: s0.extraccion.anio,
+            datos_enmascarados: s0.extraccion.datos_enmascarados,
+          }
+        : null;
+      await analizarDocumentos(archivos, ref.current.anio, previas, {
         onAgente: (e) => {
           acumulado.push(e);
           actualizar(idTraza, { eventos: [...acumulado] });
         },
         onResultado: (r) => {
+          if (!r.nuevos.length) {
+            agregar({ rol: "asistente", texto: r.mensaje });
+            return;
+          }
           const ex = r.extraccion;
+          // Las decisiones que ya se tomaron siguen valiendo para las filas que siguen ahí
+          const vivas = new Set(ex.filas.filter((f) => !f.reemplazada_por).map((f) => f.id));
+          const decididas = Object.fromEntries(Object.entries(ref.current.decididas).filter(([id]) => vivas.has(id)));
+          const habia = !!ref.current.resultado;
           setExtraccion(ex);
           setFilas(ex.filas);
-          setDecididas({});
+          setDecididas(decididas);
           setTrazaDocumento(r.traza);
           setResultado(null);
-          ref.current = { ...ref.current, extraccion: ex, filas: ex.filas, decididas: {}, resultado: null };
+          ref.current = { ...ref.current, extraccion: ex, filas: ex.filas, decididas, resultado: null };
           const conDigitos = { ...ref.current.respuestas, ultimos_dos_digitos_nit: ref.current.respuestas.ultimos_dos_digitos_nit ?? ex.ultimos_dos_digitos_nit };
           setRespuestas(conDigitos);
           ref.current.respuestas = conDigitos;
+          recien.current = r.nuevos.map((d) => d.id);
           leida = true;
-          const suma = ex.filas.filter((f) => f.tratamiento === "suma").length;
-          const rev = porRevisarDe(ex.filas, {}).length;
-          const partes = [`Leí ${ex.filas.length} datos de tu exógena: ubiqué ${suma} en tu declaración${rev ? ` y ${rev} necesitan tu confirmación` : ""}.`];
-          partes.push(`Antes de usar IA quité ${ex.datos_enmascarados} datos personales.`);
+          const partes = [r.mensaje];
           const vigentes = anios.filter((a) => a.estado === "vigente").map((a) => a.anio_gravable);
           if (ex.anio && ex.anio !== ref.current.anio) {
             if (vigentes.includes(ex.anio)) {
               ponerAnio(ex.anio);
-              partes.push(`Como es del año ${ex.anio}, cambié a las reglas de ese año.`);
+              partes.push(`Como tus documentos son del año ${ex.anio}, cambié a las reglas de ese año.`);
             } else {
-              partes.push(`Ojo: el archivo es del año ${ex.anio} y no tengo reglas vigentes para ese año; sigo con ${ref.current.anio}.`);
+              partes.push(`Ojo: tus documentos son del año ${ex.anio} y no tengo reglas vigentes para ese año; sigo con ${ref.current.anio}.`);
             }
           }
-          agregar({ rol: "asistente", texto: partes.join(" ") });
+          agregar({ rol: "asistente", texto: partes.filter(Boolean).join("\n") });
+          if (habia) ref.current.resultado = null;
         },
         onError: (m) => {
-          agregar({ rol: "asistente", texto: `No pude leer el archivo: ${m}` });
+          agregar({ rol: "asistente", texto: `No pude leer ${archivos.length > 1 ? "los archivos" : "el archivo"}: ${m}` });
         },
       });
       if (!leida) return;
-      // El agente dice qué dedujo de la exógena y pregunta lo que ella no muestra
+      // El agente dice qué dedujo y pregunta lo que los documentos no muestran
       setEscribiendo(true);
       try {
         const d = await api.diagnostico(estadoChat());
@@ -290,19 +317,21 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       } catch {
         if (porRevisarDe(ref.current.filas, {}).length) agregar({ rol: "asistente", widget: "revisar" });
       } finally {
+        recien.current = [];
         setEscribiendo(false);
       }
     },
     [agregar, actualizar, anios, ponerAnio, estadoChat, ponerPregunta],
   );
+  const procesarArchivo = useCallback((f: File) => procesarArchivos([f]), [procesarArchivos]);
 
   const usarEjemplo = useCallback(async () => {
     try {
-      await procesarArchivo(await api.exogenaDemo());
+      await procesarArchivos(await api.documentosDemo());
     } catch (e) {
       agregar({ rol: "asistente", texto: (e as Error).message });
     }
-  }, [procesarArchivo, agregar]);
+  }, [procesarArchivos, agregar]);
 
   const enviar = useCallback(
     async (texto: string) => {
@@ -409,7 +438,11 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         agregar({
           rol: "asistente",
           aviso: true,
-          texto: `Ahora uso las reglas del año gravable ${a}.` + (ex?.anio && ex.anio !== a ? ` Tu exógena es del ${ex.anio}; para un cálculo correcto necesitas la del ${a}.` : ""),
+          texto: `Ahora uso las reglas del año gravable ${a}.` + (ex?.anio && ex.anio !== a
+              ? (ex.documentos ?? []).some((d) => d.tipo !== "exogena")
+                ? ` Tus documentos son del ${ex.anio}; para un cálculo correcto necesitas los del ${a}.`
+                : ` Tu exógena es del ${ex.anio}; para un cálculo correcto necesitas la del ${a}.`
+              : ""),
         });
       }
       recalcularSiHabia(habia);
@@ -427,6 +460,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setEventosCalculo([]);
     setMensajes([]);
     conversacion.current = { pregunta: null, ya: [] };
+    recien.current = [];
     setPregunta(null);
     setElecciones({});
     ref.current = { ...ref.current, extraccion: null, filas: [], decididas: {}, respuestas: respuestasIniciales(), resultado: null, mensajes: [] };
@@ -438,7 +472,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const valor: Sesion = {
     ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
-    procesarArchivo, usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
+    procesarArchivo, procesarArchivos, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

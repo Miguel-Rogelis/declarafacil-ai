@@ -1,6 +1,6 @@
 # DeclaraFácil AI
 
-Asistente agéntico que convierte el reporte de **información exógena** de la DIAN en un **borrador de la declaración de renta** de personas naturales en Colombia (años gravables 2021 a 2025), explicado en lenguaje simple y con cada cifra trazable hasta su origen.
+Asistente agéntico que convierte el reporte de **información exógena** de la DIAN y los **certificados** de cada persona (ingresos y retenciones, banco, vivienda, prepagada…) en un **borrador de la declaración de renta** de personas naturales residentes en Colombia (formulario 210, años gravables 2021 a 2025), explicado en lenguaje simple y con cada cifra trazable hasta su origen.
 
 Proyecto del curso *Problem Discovery & Solution Design with AI*, Ingeniería de Sistemas, Universidad Católica de Colombia.
 
@@ -26,7 +26,9 @@ Todo pasa en un **chat a pantalla completa** con un agente. El usuario lleva la 
 - Simula escenarios sin tocar los datos: "¿y si pagara prepagada de 400 mil al mes?" → cuánto cambia el impuesto.
 - Corrige: "quita la moto", "me equivoqué, no son 2 hijos" y cada cambio se puede deshacer.
 - Si pregunta por su caso ("¿tengo que declarar?", "¿cuándo vence?") y ya hay datos, responde con su caso: la obligación la decide el motor con sus cifras y la fecha sale de su cédula.
-- Puede adjuntar la exógena con el clip en cualquier momento. Si es de otro año, el agente cambia a las reglas de ese año.
+- **Varios documentos a la vez**: con el clip (o arrastrando) sube de una vez la exógena y sus certificados, y puede agregar más en cualquier momento. El agente reconoce cada uno: exógena, certificado de ingresos y retenciones (220), certificado tributario del banco, intereses de vivienda, medicina prepagada, aportes voluntarios o AFC, cesantías, retenciones de independientes, predial y la declaración del año anterior. Si no reconoce un documento, propone sus cifras y las pregunta una por una.
+- **Cruza los documentos para no contar nada dos veces**: si un certificado y la exógena traen el mismo dato de la misma entidad, usa el del certificado (la fuente directa) y avisa si no coinciden ("Retención de tu empleador: la exógena dice $2.100.000 y el certificado $2.350.000"). También dice qué trajo el certificado que la exógena no tenía, no vuelve a leer un archivo repetido y usa lo que el documento deja ver: el dependiente que registra el 220, el impuesto y el anticipo de la declaración anterior.
+- Si los documentos son de otro año, el agente cambia a las reglas de ese año.
 - Puede cambiar de año gravable (2021 a 2025) desde el selector de arriba o pidiéndolo en el chat.
 - "Tus datos" abre un panel con cada cifra y de dónde sale.
 
@@ -38,11 +40,14 @@ Cubre la cédula general (trabajo, honorarios, capital y no laborales), pensione
 
 ```mermaid
 flowchart LR
-    U([Usuario]) -->|exógena .xlsx/.pdf| L
-    subgraph F1[Fase 1: documento]
-        L[Lector<br/>reglas] --> A[Anonimizador<br/>reglas] --> C[Clasificador<br/>reglas + IA si hay duda] --> I[Intérprete<br/>reglas + IA]
+    U([Usuario]) -->|exógena y certificados .xlsx/.pdf| L
+    subgraph F1[Fase 1: documentos, uno o varios]
+        L[Lector<br/>reglas] --> A[Anonimizador<br/>reglas] --> C[Clasificador<br/>reglas + IA si no lo reconoce]
+        C -->|exógena| I[Intérprete<br/>reglas + IA]
+        C -->|certificados| X[Extractor<br/>reglas]
+        I & X --> CO[Conciliador<br/>reglas]
     end
-    I -->|filas ubicadas| AS
+    CO -->|filas cruzadas| AS
     AS -->|datos validados| M
     subgraph F2[Fase 2: cálculo]
         M[Motor tributario<br/>reglas por año] --> AU[Auditor<br/>reglas] --> E[Explicador<br/>IA verificada]
@@ -54,10 +59,12 @@ flowchart LR
 
 | Agente | Usa IA | Responsabilidad única |
 |---|---|---|
-| Lector | No | Lee el Excel o PDF y lo convierte en filas (detalle, valor, renglón sugerido). |
-| Anonimizador | No | Enmascara cédula, nombres y cuentas antes de que algo salga del servidor. |
-| Clasificador | Solo si hay duda | Confirma que el archivo es una exógena y de qué año. |
-| Intérprete | Sí, acotada | Ubica cada concepto en la declaración y lo explica. **Nunca recibe montos**: elige una casilla de una lista cerrada y el código copia la cifra de la fila original. |
+| Lector | No | Lee cada Excel o PDF: las filas de la exógena (detalle, valor, renglón sugerido) y el texto y las tablas de los certificados. |
+| Anonimizador | No | Enmascara cédula, nombres, direcciones y cuentas de cada documento antes de que algo salga del servidor. Del dependiente del 220 solo queda el parentesco. |
+| Clasificador | Solo si no lo reconoce | Identifica qué documento es y de qué año. Si las reglas no lo reconocen, le envía al modelo solo títulos, sin cifras ni datos personales. |
+| Intérprete | Sí, acotada | Ubica cada concepto de la exógena en la declaración y lo explica. **Nunca recibe montos**: elige una casilla de una lista cerrada y el código copia la cifra de la fila original. |
+| Extractor | No | Saca las cifras de los certificados con reglas por tipo: las casillas del 220 por su título; en banco, vivienda, prepagada, aportes y cesantías, el concepto (saldo, intereses, retención, 4x1000…) y el producto (cuenta, CDT, crédito, tarjeta). No cuenta totales encima del detalle. |
+| Conciliador | No | Cruza todos los documentos: el certificado reemplaza a la exógena en el mismo dato de la misma entidad (por NIT o nombre), las cesantías del 220 reemplazan las del fondo, un CDT por confirmar se resuelve con los saldos del banco y un predial igual al avalúo de la exógena no se suma dos veces. Avisa cada diferencia. |
 | Motor tributario | No | Liquida la declaración con las reglas del año (UVT, topes, art. 241, límite del 40 % / 1.340 UVT, etc.). |
 | Auditor | No | Detecta datos por confirmar, ingresos menores a los reportados, patrimonio, vencimientos y beneficios no usados. |
 | Explicador | Sí | Redacta el resumen. Cada cifra que escribe se compara contra el cálculo; si inventa una, se descarta y se usa la plantilla. |
@@ -68,8 +75,9 @@ El **orquestador** (`backend/app/orquestador.py`) es un flujo fijo y trazable: c
 ### Decisiones de diseño (ética y riesgo)
 
 - **La IA no calcula.** El mayor riesgo identificado en la evaluación ética era que la IA inventara un valor y el usuario lo firmara. Por eso todas las cifras salen de reglas y de las filas originales.
-- **Privacidad (Ley 1581).** El archivo se procesa en memoria y no se guarda. A los modelos solo llegan descripciones de conceptos sin montos ni datos personales. Los proveedores gratuitos de OpenRouter pueden entrenar con lo que reciben; por eso el Anonimizador va antes de cualquier llamada.
+- **Privacidad (Ley 1581).** Los archivos se procesan en memoria y no se guardan. A los modelos solo llegan descripciones de conceptos sin montos ni datos personales. Los proveedores gratuitos de OpenRouter pueden entrenar con lo que reciben; por eso el Anonimizador va antes de cualquier llamada.
 - **Revisión humana obligatoria.** Lo que las reglas no reconocen o lo que ubica la IA queda marcado para que el usuario lo confirme.
+- **El certificado manda.** Cuando dos documentos traen el mismo dato, se usa la fuente directa (el certificado de la entidad) y la exógena queda como referencia; las diferencias se muestran, no se esconden.
 - **Reglas por año, no en el código.** `backend/data/reglas/agAAAA.json` guarda UVT, topes, tablas, límites, tarifas, calendario de vencimientos y sanciones. Para un año nuevo se clona el anterior desde la pantalla *Reglas y agentes*.
 - **Modelos intercambiables.** `backend/data/agentes.json` define los modelos de cada agente en orden de preferencia. Si uno falla o llega al límite, pasa al siguiente. Se cambian desde la pantalla sin volver a desplegar.
 
@@ -86,9 +94,9 @@ backend/
   data/uvt.json     UVT de cada año (para la sanción según el año en que se presenta)
   data/agentes.json modelos y temperatura por agente
   data/conocimiento base de conocimiento del Asistente
-  data/demo/        exógena ficticia para probar
-  tests/            103 pruebas (motor por año, agentes, conversaciones del chat, API, ruta con IA simulada)
-  scripts/          generadores de la exógena demo y de las reglas 2021-2024
+  data/demo/        exógena y certificados ficticios (220 y banco) para probar
+  tests/            119 pruebas (motor por año, agentes, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada)
+  scripts/          generadores de la exógena y los certificados demo y de las reglas 2021-2024
 frontend/           React + Vite + TypeScript, animaciones con Motion
 Dockerfile          construye el front y lo sirve desde FastAPI
 render.yaml         despliegue gratuito en Render
@@ -139,6 +147,8 @@ Límites a tener en cuenta:
 - Deducciones y rentas exentas se agregan para toda la cédula general (no se reparten por subcédula como en el formulario).
 - La sanción se estima con la reducción del art. 640 si el usuario indica que no ha sido sancionado en los últimos dos años; no incluye intereses de mora.
 - Los renglones R29, R30, R32 y R132 que se mencionan vienen de la columna *Uso declaración sugerida* de la propia exógena.
+- El borrador sigue el contenido del formulario 210 (el de 2023 y siguientes sirve también para el año gravable 2025), pero lo muestra por secciones y no renglón por renglón. La DIAN no recibe archivos de terceros para el 210: se diligencia en su formulario virtual en MUISCA y se firma ahí.
+- Los certificados se leen con reglas sobre su texto: funcionan con los PDF que descargan las entidades (con texto), no con fotos ni escaneos. Los formatos de cada banco varían; lo que no se reconoce con seguridad se pregunta antes de usarlo. Los certificados de ejemplo son ficticios y se generan con `scripts/demo_certificados.py`.
 
 ## Fuentes normativas
 

@@ -1,5 +1,8 @@
-"""Agente Lector: convierte el reporte de exógena (Excel o PDF) en filas estructuradas.
+"""Agente Lector: convierte un archivo (Excel o PDF) en filas y texto estructurados.
 
+- Si es el reporte de exógena, saca sus filas (informante, concepto, valor, uso sugerido).
+- Para cualquier documento guarda además el texto línea por línea y las tablas, que es lo
+  que usa el Extractor con los certificados (banco, 220, vivienda, prepagada…).
 Responsabilidad única: leer. No interpreta conceptos ni toca montos.
 """
 
@@ -142,6 +145,19 @@ def _filas_tabulares(doc: DocumentoLeido, filas: list[list[Any]]) -> None:
         )
 
 
+_MAX_LINEAS = 1500
+
+
+def _celda_texto(c: Any) -> str:
+    if c is None:
+        return ""
+    if isinstance(c, float) and c.is_integer():
+        c = int(c)
+    if isinstance(c, datetime):
+        return c.date().isoformat()
+    return re.sub(r"\s+", " ", str(c)).strip()
+
+
 def _leer_xlsx(contenido: bytes) -> DocumentoLeido:
     import openpyxl
 
@@ -150,9 +166,12 @@ def _leer_xlsx(contenido: bytes) -> DocumentoLeido:
     doc = DocumentoLeido(formato="xlsx")
     for ws in wb.worksheets:
         filas = [list(r) for r in ws.iter_rows(values_only=True)]
-        _filas_tabulares(doc, filas)
-        if doc.filas:
-            break
+        if not doc.filas:
+            _filas_tabulares(doc, filas)
+        tabla = [[_celda_texto(c) for c in f] for f in filas if any(c not in (None, "") for c in f)]
+        if len(doc.lineas) < _MAX_LINEAS:
+            doc.lineas.extend(" ".join(c for c in f if c) for f in tabla[:_MAX_LINEAS])
+            doc.tablas.append(tabla[:400])
     wb.close()
     return doc
 
@@ -165,11 +184,16 @@ def _leer_pdf(contenido: bytes) -> DocumentoLeido:
     with pdfplumber.open(io.BytesIO(contenido)) as pdf:
         for pagina in pdf.pages[:40]:
             texto = pagina.extract_text() or ""
-            for linea in texto.splitlines()[:15]:
+            lineas = [x.strip() for x in texto.splitlines() if x.strip()]
+            for linea in lineas[:15]:
                 filas.append([linea.split(":")[0] + ":" if ":" in linea else linea, linea.split(":", 1)[1].strip() if ":" in linea else None])
+            if len(doc.lineas) < _MAX_LINEAS:
+                doc.lineas.extend(lineas)
             for tabla in pagina.extract_tables():
                 filas.extend([list(f) for f in tabla])
+                doc.tablas.append([[_celda_texto(c) for c in f] for f in tabla])
     _filas_tabulares(doc, filas)
+    doc.lineas = doc.lineas[:_MAX_LINEAS]
     return doc
 
 
@@ -185,4 +209,6 @@ def leer(contenido: bytes, nombre_archivo: str) -> DocumentoLeido:
             return _leer_pdf(contenido)
         except Exception as e:  # noqa: BLE001
             raise ArchivoNoSoportado(f"No pude abrir el PDF: {e}") from e
-    raise ArchivoNoSoportado("Sube el reporte de exógena en Excel (.xlsx) o PDF")
+    if re.search(r"\.(jpe?g|png|heic|webp|gif)$", nombre):
+        raise ArchivoNoSoportado("Por ahora leo PDF y Excel, no fotos. Descarga el certificado en PDF desde el portal de la entidad")
+    raise ArchivoNoSoportado("Sube tus documentos en Excel (.xlsx) o PDF")

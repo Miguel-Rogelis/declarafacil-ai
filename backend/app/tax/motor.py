@@ -63,6 +63,10 @@ def _meses_o_fraccion(desde: date, hasta: date) -> int:
     return max(meses, 1)
 
 
+def _uvt(n: float) -> str:
+    return f"{n:,.0f}".replace(",", ".")
+
+
 class _Calculo:
     """Una liquidación completa para una opción de independiente dada."""
 
@@ -114,7 +118,7 @@ class _Calculo:
         ingresos_trabajo = ingresos_lab + ingresos_ind
         hay_trabajo = ingresos_trabajo > 0
 
-        # Deducciones y rentas exentas sujetas al límite del 40 % / 1.340 UVT
+        # Deducciones y rentas exentas sujetas al límite del 40 % (1.340 UVT desde 2023; 5.040 UVT antes)
         dep_387 = 0.0
         if ded.dependientes >= 1 and hay_trabajo:
             dep_387 = min(ingresos_trabajo * cg["dependiente_art387_pct"], self.u(cg["dependiente_art387_tope_uvt"]))
@@ -145,7 +149,7 @@ class _Calculo:
                     titulo="Tus beneficios superan el límite legal",
                     detalle=(
                         f"Sumaste {cop(sujetas)} en rentas exentas y deducciones, pero la ley solo deja restar "
-                        f"{cop(aceptadas)} (40 % del ingreso neto, máximo 1.340 UVT). La diferencia no reduce tu impuesto."
+                        f"{cop(aceptadas)} (40 % del ingreso neto, máximo {_uvt(cg['limite_rentas_exentas_deducciones_uvt'])} UVT). La diferencia no reduce tu impuesto."
                     ),
                 )
             )
@@ -182,8 +186,8 @@ class _Calculo:
             Linea(clave="gmf", concepto="50 % del gravamen a los movimientos financieros (4x1000)", valor=gmf, norma="Art. 115 ET", campos=["deducciones.gmf_pagado"]),
             Linea(clave="afc_fpv", concepto="Aportes voluntarios a pensión y cuentas AFC", valor=afc, norma="Arts. 126-1 y 126-4 ET", campos=["deducciones.aportes_voluntarios_afc_fpv"]),
             Linea(clave="cesantias_exentas", concepto=f"Cesantías exentas ({pct_ces:.0%})", valor=cesantias_exentas, norma="Num. 4 art. 206 ET", campos=["laboral.cesantias_e_intereses", "laboral.salario_promedio_mensual_6m"]),
-            Linea(clave="exenta_25", concepto="Renta exenta del 25 % (máx. 790 UVT)", valor=exenta_25, norma="Num. 10 art. 206 ET"),
-            Linea(clave="limite_40", concepto="Límite legal de exentas y deducciones (40 % o 1.340 UVT)", valor=limite, norma="Art. 336 ET"),
+            Linea(clave="exenta_25", concepto=f"Renta exenta del 25 % (máx. {_uvt(cg['renta_exenta_laboral_tope_uvt'])} UVT al año)", valor=exenta_25, norma="Num. 10 art. 206 ET"),
+            Linea(clave="limite_40", concepto=f"Límite legal de exentas y deducciones (40 % o {_uvt(cg['limite_rentas_exentas_deducciones_uvt'])} UVT)", valor=limite, norma="Art. 336 ET"),
             Linea(clave="aceptadas", concepto="Rentas exentas y deducciones que sí se restan", valor=aceptadas, norma="Art. 336 ET"),
             Linea(clave="dep_72", concepto=f"Deducción adicional por {n_72} dependiente(s) (72 UVT c/u)", valor=dep_72, norma="Num. 3 art. 336 ET", campos=["deducciones.dependientes"]),
             Linea(clave="factura_1", concepto="1 % de compras con factura electrónica (máx. 240 UVT)", valor=factura, norma="Num. 5 art. 336 ET", campos=["deducciones.compras_factura_electronica"]),

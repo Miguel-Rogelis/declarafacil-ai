@@ -3,6 +3,10 @@ import type { EventoAgente } from "../lib/api";
 
 const TEXTO_SELLO: Record<string, string> = { ok: "Listo", advertencia: "Revisar", error: "Falló" };
 
+/** Si un archivo falló pero otros no, el agente queda en "Revisar"; si todos fallaron, "Falló". */
+const PEOR = (estados: EventoAgente["estado"][]): EventoAgente["estado"] =>
+  estados.every((e) => e === "error") ? "error" : estados.some((e) => e !== "ok") ? "advertencia" : "ok";
+
 export interface Fase {
   agente: string;
   nombre: string;
@@ -11,12 +15,20 @@ export interface Fase {
 }
 
 /** Cada agente estampa su sello cuando termina. Es la animación central de la app. */
-export function MesaAgentes({ fases, eventos, compacta = false }: { fases: Fase[]; eventos: EventoAgente[]; compacta?: boolean }) {
+export function MesaAgentes({ fases, eventos, compacta = false, soloActivos = false }: { fases: Fase[]; eventos: EventoAgente[]; compacta?: boolean; soloActivos?: boolean }) {
   const ultimo = (agente: string) => [...eventos].reverse().find((e) => e.agente === agente);
+  // Con varios documentos no todos los agentes trabajan (el Intérprete es para la exógena, el Extractor para los certificados)
+  const visibles = soloActivos ? fases.filter((f) => eventos.some((e) => e.agente === f.agente)) : fases;
   return (
     <ol className={`mesa${compacta ? " compacta" : ""}`} aria-live="polite">
-      {fases.map((f) => {
-        const ev = ultimo(f.agente);
+      {visibles.map((f) => {
+        const ultimoEv = ultimo(f.agente);
+        // Con varios archivos un agente trabaja varias veces: se muestra una línea por archivo y el peor estado
+        const hechos = eventos.filter((e) => e.agente === f.agente && e.estado !== "inicio");
+        const ev =
+          ultimoEv && ultimoEv.estado !== "inicio" && hechos.length > 1
+            ? { ...ultimoEv, mensaje: hechos.map((e) => e.mensaje).join("\n"), estado: PEOR(hechos.map((e) => e.estado)) }
+            : ultimoEv;
         const terminado = ev && ev.estado !== "inicio";
         const trabajando = ev?.estado === "inicio";
         return (
@@ -55,8 +67,10 @@ export function MesaAgentes({ fases, eventos, compacta = false }: { fases: Fase[
 export const FASES_DOCUMENTO: Fase[] = [
   { agente: "lector", nombre: "Lector", descripcion: "Lee tu archivo y lo convierte en filas.", usa_ia: false },
   { agente: "anonimizador", nombre: "Anonimizador", descripcion: "Quita tu cédula, tu nombre y tus números de cuenta.", usa_ia: false },
-  { agente: "clasificador", nombre: "Clasificador", descripcion: "Confirma que es una exógena y de qué año.", usa_ia: true },
-  { agente: "interprete", nombre: "Intérprete", descripcion: "Ubica cada dato en tu declaración y lo explica.", usa_ia: true },
+  { agente: "clasificador", nombre: "Clasificador", descripcion: "Reconoce cada documento y de qué año es.", usa_ia: true },
+  { agente: "interprete", nombre: "Intérprete", descripcion: "Ubica cada dato de la exógena en tu declaración.", usa_ia: true },
+  { agente: "extractor", nombre: "Extractor", descripcion: "Saca las cifras de tus certificados.", usa_ia: false },
+  { agente: "conciliador", nombre: "Conciliador", descripcion: "Cruza tus documentos para no contar nada dos veces.", usa_ia: false },
 ];
 
 export const FASES_CALCULO: Fase[] = [

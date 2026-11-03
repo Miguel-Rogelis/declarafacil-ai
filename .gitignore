@@ -14,5 +14,6 @@ data-in/
 !backend/data/demo/*.xlsx
 *.pdf
 !backend/tests/fixtures/*.pdf
+!backend/data/demo/*.pdf
 .env
 *.tsbuildinfo

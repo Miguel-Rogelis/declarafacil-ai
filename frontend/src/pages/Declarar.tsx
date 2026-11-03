@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import Conversacion from "../components/Conversacion";
-import type { Fila, Respuestas } from "../lib/api";
+import type { DocumentoCargado, Fila, Respuestas } from "../lib/api";
 import { useSesion } from "../lib/estado";
 import { GRUPOS, NOMBRES_CAMPO, pesos } from "../lib/formato";
 
@@ -38,7 +38,21 @@ function extrasDeRespuestas(r: Respuestas): { concepto: string; valor: number | 
   return salida;
 }
 
-function HojaTrabajo({ filas, respuestas }: { filas: Fila[]; respuestas: Respuestas }) {
+const FUENTE_CORTA: Record<string, string> = {
+  exogena: "exógena",
+  certificado_220: "certificado de ingresos",
+  certificado_bancario: "certificado del banco",
+  certificado_vivienda: "certificado de vivienda",
+  certificado_prepagada: "certificado de prepagada",
+  certificado_voluntarios: "certificado de aportes",
+  certificado_cesantias: "certificado de cesantías",
+  certificado_retencion: "certificado de retención",
+  declaracion_anterior: "declaración anterior",
+  predial: "predial",
+  desconocido: "documento",
+};
+
+function HojaTrabajo({ filas, respuestas, documentos }: { filas: Fila[]; respuestas: Respuestas; documentos: DocumentoCargado[] }) {
   const grupos = useMemo(
     () =>
       GRUPOS.map((g) => ({
@@ -51,7 +65,19 @@ function HojaTrabajo({ filas, respuestas }: { filas: Fila[]; respuestas: Respues
   return (
     <div className="hoja-trabajo-cuerpo">
       {!filas.length && !extras.length ? (
-        <p className="vacio">Aquí verás cada dato de tu declaración y de dónde sale: lo que traiga tu exógena y lo que me cuentes en el chat.</p>
+        <p className="vacio">Aquí verás cada dato de tu declaración y de dónde sale: lo que traigan tu exógena y tus certificados, y lo que me cuentes en el chat.</p>
+      ) : null}
+      {documentos.length ? (
+        <div className="grupo">
+          <h3>Documentos que leí</h3>
+          {documentos.map((d) => (
+            <div key={d.id} className="fila-hoja">
+              <span className="concepto">{d.etiqueta}</span>
+              <span className="monto" />
+              <span className="origen">{d.nombre}</span>
+            </div>
+          ))}
+        </div>
       ) : null}
       {grupos.map((g) => (
         <div className="grupo" key={g.titulo}>
@@ -61,7 +87,7 @@ function HojaTrabajo({ filas, respuestas }: { filas: Fila[]; respuestas: Respues
               <span className="concepto">{NOMBRES_CAMPO[f.campo!] ?? f.detalle}</span>
               <span className="monto">{pesos(f.valor)}</span>
               <span className="origen">
-                {f.informante ?? "Reportado"}
+                {f.informante ?? "Reportado"} · {FUENTE_CORTA[f.fuente ?? "exogena"] ?? "documento"}
                 {f.tratamiento === "revisar" ? ", falta tu confirmación" : f.origen_mapeo === "ia" ? ", ubicado por IA" : ""}
               </span>
             </div>
@@ -84,7 +110,7 @@ function HojaTrabajo({ filas, respuestas }: { filas: Fila[]; respuestas: Respues
 }
 
 export default function Declarar() {
-  const { filas, respuestas, anio, mensajes, reiniciar, porRevisar } = useSesion();
+  const { filas, respuestas, anio, mensajes, reiniciar, porRevisar, documentos } = useSesion();
   const [abierto, setAbierto] = useState(false);
   const cantidad = filas.filter((f) => f.campo && f.tratamiento !== "informativo").length + extrasDeRespuestas(respuestas).length;
   const barra = (
@@ -120,11 +146,11 @@ export default function Declarar() {
               <header>
                 <div>
                   <h2 className="titular t-21">Tus datos, año {anio}</h2>
-                  <span className="chico suave">Lo que trae tu exógena y lo que me contaste. Cada cifra muestra de dónde sale.</span>
+                  <span className="chico suave">Lo que traen tus documentos y lo que me contaste. Cada cifra muestra de dónde sale.</span>
                 </div>
                 <button className="boton-texto" onClick={() => setAbierto(false)} autoFocus>Cerrar</button>
               </header>
-              <HojaTrabajo filas={filas} respuestas={respuestas} />
+              <HojaTrabajo filas={filas} respuestas={respuestas} documentos={documentos} />
             </motion.aside>
           </>
         ) : null}

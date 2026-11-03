@@ -149,7 +149,7 @@ export default function Resultado() {
         <aside>
           <h2 className="titular t-24">Cómo se hizo</h2>
           <p className="chico suave">Cada agente hizo una sola tarea. La IA no hizo ningún cálculo.</p>
-          <MesaAgentes fases={[...(trazaDocumento.length ? FASES_DOCUMENTO : []), ...FASES_CALCULO]} eventos={[...trazaDocumento, ...resultado.traza]} compacta />
+          <MesaAgentes fases={[...(trazaDocumento.length ? FASES_DOCUMENTO : []), ...FASES_CALCULO]} eventos={[...trazaDocumento, ...resultado.traza]} compacta soloActivos />
 
           <h2 className="titular t-24" style={{ marginTop: "2rem" }}>Topes de obligación</h2>
           <table className="tabla" style={{ marginTop: "0.6rem" }}>

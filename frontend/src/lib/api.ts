@@ -359,6 +359,9 @@ type Manejadores<R> = {
   onError: (mensaje: string) => void;
 };
 
+/** Raíz de la API. Vacía en el mismo servidor; en GitHub Pages apunta al backend de Render (VITE_API_URL). */
+const API = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
 /** Lee una respuesta Server-Sent Events de un POST y despacha cada evento. */
 async function flujo<R>(url: string, init: RequestInit, m: Manejadores<R>): Promise<void> {
   let resp: Response;
@@ -420,14 +423,14 @@ export function analizarDocumentos(archivos: File[], anio: number, previas: Prev
   archivos.forEach((a) => fd.append("archivos", a));
   fd.append("anio_gravable", String(anio));
   if (previas) fd.append("previas", JSON.stringify(previas));
-  return flujo("/api/documentos/analizar", { method: "POST", body: fd }, m);
+  return flujo(`${API}/api/documentos/analizar`, { method: "POST", body: fd }, m);
 }
 
 export function liquidar(
   cuerpo: { anio_gravable: number; filas: Fila[]; topes: Record<string, number>; ultimos_dos_digitos_nit: string | null; respuestas: Respuestas; fecha_presentacion?: string },
   m: Manejadores<ResultadoLiquidacion>,
 ) {
-  return flujo("/api/declaracion/liquidar", { method: "POST", body: JSON.stringify(cuerpo), headers: { "Content-Type": "application/json" } }, m);
+  return flujo(`${API}/api/declaracion/liquidar`, { method: "POST", body: JSON.stringify(cuerpo), headers: { "Content-Type": "application/json" } }, m);
 }
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
@@ -456,53 +459,53 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  estado: () => json<Estado>("/api/estado"),
-  reglas: (anio: number) => json<Record<string, unknown>>(`/api/reglas/${anio}`),
+  estado: () => json<Estado>(`${API}/api/estado`),
+  reglas: (anio: number) => json<Record<string, unknown>>(`${API}/api/reglas/${anio}`),
   guardarReglas: (anio: number, datos: Record<string, unknown>, token: string) =>
-    json<Record<string, unknown>>(`/api/reglas/${anio}`, {
+    json<Record<string, unknown>>(`${API}/api/reglas/${anio}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Admin-Token": token },
       body: JSON.stringify(datos),
     }),
   clonarReglas: (anio: number, destino: number, uvt: number | null, token: string) =>
-    json<Record<string, unknown>>(`/api/reglas/${anio}/clonar`, {
+    json<Record<string, unknown>>(`${API}/api/reglas/${anio}/clonar`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Admin-Token": token },
       body: JSON.stringify({ destino, uvt }),
     }),
-  agentes: () => json<Record<string, AgenteConfig>>("/api/agentes"),
+  agentes: () => json<Record<string, AgenteConfig>>(`${API}/api/agentes`),
   guardarAgente: (id: string, cambios: Partial<AgenteConfig>, token: string) =>
-    json<AgenteConfig>(`/api/agentes/${id}`, {
+    json<AgenteConfig>(`${API}/api/agentes/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Admin-Token": token },
       body: JSON.stringify(cambios),
     }),
-  probarAgente: (id: string) => json<{ ok: boolean; modelo?: string; detalle?: string }>(`/api/agentes/${id}/probar`, { method: "POST" }),
-  modelosGratis: () => json<{ id: string; nombre: string; contexto: number }[]>("/api/agentes/modelos-gratis"),
+  probarAgente: (id: string) => json<{ ok: boolean; modelo?: string; detalle?: string }>(`${API}/api/agentes/${id}/probar`, { method: "POST" }),
+  modelosGratis: () => json<{ id: string; nombre: string; contexto: number }[]>(`${API}/api/agentes/modelos-gratis`),
   diagnostico: (estado: EstadoChat) =>
-    json<RespuestaChat>("/api/chat/diagnostico", {
+    json<RespuestaChat>(`${API}/api/chat/diagnostico`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(estado),
     }),
   chat: (mensaje: string, historial: { rol: string; texto: string }[], estado: EstadoChat) =>
-    json<RespuestaChat>("/api/chat", {
+    json<RespuestaChat>(`${API}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mensaje, historial, estado }),
     }),
   exogenaDemo: async (): Promise<File> => {
-    const r = await fetch("/api/demo/exogena");
+    const r = await fetch(`${API}/api/demo/exogena`);
     if (!r.ok) throw new Error("No se pudo descargar el ejemplo");
     const b = await r.blob();
     return new File([b], "exogena_demo_2025.xlsx", { type: b.type });
   },
   /** Exógena y certificados ficticios, para probar sin datos reales. */
   documentosDemo: async (): Promise<File[]> => {
-    const nombres = await json<string[]>("/api/demo/archivos");
+    const nombres = await json<string[]>(`${API}/api/demo/archivos`);
     return Promise.all(
       nombres.map(async (n) => {
-        const r = await fetch(`/api/demo/archivo/${encodeURIComponent(n)}`);
+        const r = await fetch(`${API}/api/demo/archivo/${encodeURIComponent(n)}`);
         if (!r.ok) throw new Error("No se pudo descargar el ejemplo");
         const b = await r.blob();
         return new File([b], n, { type: b.type });

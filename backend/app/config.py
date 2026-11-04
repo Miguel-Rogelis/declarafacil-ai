@@ -21,6 +21,12 @@ class Settings:
     frontend_dir: Path = field(
         default_factory=lambda: Path(os.getenv("FRONTEND_DIR", BASE_DIR.parent / "frontend" / "dist"))
     )
+    # Orígenes que pueden llamar la API desde otro dominio (la demo en GitHub Pages), separados por coma
+    cors_origins: list[str] = field(
+        default_factory=lambda: [
+            o.strip() for o in os.getenv("CORS_ORIGINS", "https://suntzz.github.io,https://miguel-rogelis.github.io").split(",") if o.strip()
+        ]
+    )
     max_upload_mb: int = 5
 
     @property

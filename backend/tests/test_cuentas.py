@@ -46,3 +46,9 @@ def test_token_malo_o_sin_sesion_no_da_usuario(supabase):
 def test_sin_supabase_configurado_no_consulta(monkeypatch):
     monkeypatch.setattr(settings, "supabase_url", "")
     assert asyncio.run(cuentas.usuario_de("Bearer bueno")) is None
+
+
+@pytest.mark.parametrize("pegada", ["https://abc.supabase.co/rest/v1/", "https://abc.supabase.co/", " https://abc.supabase.co"])
+def test_la_url_de_supabase_queda_en_la_raiz(pegada):
+    from app.config import _solo_dominio
+    assert _solo_dominio(pegada) == "https://abc.supabase.co"

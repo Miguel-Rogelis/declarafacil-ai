@@ -1,10 +1,17 @@
 """Configuración leída de variables de entorno."""
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _solo_dominio(url: str) -> str:
+    """«https://x.supabase.co/rest/v1/» → «https://x.supabase.co»: el cliente necesita la raíz del proyecto."""
+    m = re.match(r"\s*(https?://[^/\s]+)", url)
+    return m.group(1) if m else ""
 
 
 @dataclass
@@ -28,7 +35,7 @@ class Settings:
         ]
     )
     # Cuentas (opcional): proyecto de Supabase. La clave «anon» es pública: la usa el navegador para iniciar sesión
-    supabase_url: str = field(default_factory=lambda: os.getenv("SUPABASE_URL", ""))
+    supabase_url: str = field(default_factory=lambda: _solo_dominio(os.getenv("SUPABASE_URL", "")))
     supabase_anon_key: str = field(default_factory=lambda: os.getenv("SUPABASE_ANON_KEY", ""))
     max_upload_mb: int = 5
 

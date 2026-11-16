@@ -614,6 +614,11 @@ main { padding-bottom: 6rem; }
 @media (max-width: 440px) {
   .encabezado { gap: 0.25rem; padding-inline: 0.4rem; }
   .oculto-celular { display: none; }
+  .nav a { padding: 0.3rem 0.45rem; }
+  .avatar, .boton-entrar { flex: none; }
+  .encabezado-derecha { gap: 0.3rem; }
+  .selector-anio { padding: 0; border-color: transparent; background: transparent; box-shadow: none; }
+  .selector-anio select { padding: 0.2rem 0.1rem; }
   .nav { gap: 0.1rem; padding: 0.2rem; }
   .nav ul { gap: 0; }
   .nav a { padding: 0.3rem 0.45rem; font-size: var(--fs-xs); min-height: 2rem; }

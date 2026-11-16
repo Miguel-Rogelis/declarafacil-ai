@@ -87,19 +87,10 @@ export default function Presentar() {
     if (todasCopiadas && !hechos.has("p4")) poner("p4", true);
   }, [todasCopiadas]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!liq) {
-    return (
-      <div className="contenedor procesando-vacio">
-        <h1 className="titular t-48">Primero arma tu borrador.</h1>
-        <p className="lead">Cuéntale tus datos al agente o sube tus documentos; cuando calcules, aquí te llevo paso a paso a presentarla en la DIAN.</p>
-        <div className="acciones-resultado"><button className="boton" onClick={() => ir("declarar")}>Ir al chat</button></div>
-      </div>
-    );
-  }
-
-  const r = liq.resumen;
-  const pagar = r.total_a_pagar > 0;
-  const favor = !pagar && r.saldo_favor > 0;
+  const r = liq?.resumen;
+  const pagar = !!r && r.total_a_pagar > 0;
+  const favor = !!r && !pagar && r.saldo_favor > 0;
+  const anioG = liq?.anio_gravable ?? anio;
   const copiadas = casillas.filter((c) => hechos.has(`c${c.numero}`)).length;
 
   const pasos: { id: string; titulo: string; cuerpo: ReactNode }[] = [
@@ -108,38 +99,33 @@ export default function Presentar() {
       titulo: "Entra a MUISCA",
       cuerpo: (
         <>
-          <p>Abre <Enlace href={DIAN.muisca}>MUISCA</Enlace> y elige <strong>Persona natural</strong>, con tu cédula y tu contraseña.</p>
-          <p className="suave">¿Nunca has entrado? Toca «Habilitar cuenta»: la DIAN te manda un código al correo que tienes en el RUT. ¿Olvidaste la clave? «¿Olvidó su contraseña?» la cambia con ese mismo correo.</p>
+          <p>Abre <Enlace href={DIAN.muisca}>MUISCA</Enlace> y elige <strong>Persona natural</strong>.</p>
+          <p className="suave">¿Primera vez? Usa «Habilitar cuenta»: te llega un código al correo de tu RUT.</p>
         </>
       ),
     },
     {
       id: "p2",
-      titulo: "Ten lista tu firma electrónica",
-      cuerpo: (
-        <>
-          <p>En el menú de MUISCA busca <strong>Firma electrónica</strong>. Si no la tienes, «Solicitar» y la activas con un código que llega a tu correo.</p>
-          <p className="suave">Es personal: con ella firmas la declaración. Nadie más, ni esta app, debe usarla por ti.</p>
-        </>
-      ),
+      titulo: "Activa tu firma electrónica",
+      cuerpo: <p>En el menú, <strong>Firma electrónica</strong>. Si no la tienes, «Solicitar» y la activas con un código del correo.</p>,
     },
     {
       id: "p3",
-      titulo: `Abre el formulario 210 del año ${liq.anio_gravable}`,
-      cuerpo: (
-        <>
-          <p>Menú <strong>Diligenciar y presentar</strong> → <strong>Formulario 210</strong> → año gravable {liq.anio_gravable}. Elige la versión para expertos: así ves todas las casillas.</p>
-          <p className="suave">La DIAN te muestra una declaración sugerida. No la firmes tal cual: compárala con tu borrador en el paso siguiente.</p>
-        </>
-      ),
+      titulo: `Abre el formulario 210 de ${anioG}`,
+      cuerpo: <p><strong>Diligenciar y presentar</strong> → <strong>Formulario 210</strong> → año {anioG}, versión para expertos.</p>,
     },
     {
       id: "p4",
-      titulo: "Copia casilla por casilla",
-      cuerpo: casillas.length ? (
+      titulo: "Copia tus casillas",
+      cuerpo: !liq ? (
         <>
-          <p>Escribe en cada casilla el valor de tu borrador. Al copiar, la casilla queda marcada. Las que no salen aquí las calcula la DIAN sola.</p>
-          <div className="progreso-casillas" aria-hidden="true"><span style={{ transform: `scaleX(${casillas.length ? copiadas / casillas.length : 0})` }} /></div>
+          <p>Primero arma tu borrador en el chat; aquí aparecen tus casillas listas para copiar.</p>
+          <button type="button" className="boton chico secundario" onClick={() => ir("declarar")}>Armar mi borrador</button>
+        </>
+      ) : casillas.length ? (
+        <>
+          <p>Escribe cada valor en su casilla. Las demás las calcula la DIAN.</p>
+          <div className="progreso-casillas" aria-hidden="true"><span style={{ transform: `scaleX(${copiadas / casillas.length})` }} /></div>
           <p className="chico suave" aria-live="polite">{copiadas} de {casillas.length} casillas listas</p>
           <ul className="casillas-dian">
             {casillas.map((c) => (
@@ -148,46 +134,19 @@ export default function Presentar() {
           </ul>
         </>
       ) : (
-        <p>Para este año la DIAN usaba otra numeración; copia los valores desde <button className="boton-texto" onClick={() => ir("resultado")}>tu borrador por secciones</button>.</p>
+        <p>Para este año copia los valores de <button className="boton-texto" onClick={() => ir("resultado")}>tu borrador por secciones</button>.</p>
       ),
     },
     {
       id: "p5",
       titulo: "Firma y presenta",
-      cuerpo: (
-        <>
-          <p>Revisa el resumen, toca <strong>Firmar</strong> y escribe la clave de tu firma electrónica. Luego <strong>Presentar</strong>.</p>
-          <p className="suave">Descarga el PDF que te da la DIAN con el número de formulario: es tu comprobante.{liq.vencimiento ? ` Tu fecha límite es el ${fechaLarga(liq.vencimiento.fecha)}.` : ""}</p>
-        </>
-      ),
+      cuerpo: <p><strong>Firmar</strong> con tu clave de firma y luego <strong>Presentar</strong>. Guarda el PDF: es tu comprobante.{liq?.vencimiento ? ` Plazo: ${fechaLarga(liq.vencimiento.fecha)}.` : ""}</p>,
     },
     pagar
-      ? {
-          id: "p6",
-          titulo: `Genera el recibo 490 y paga ${pesos(r.total_a_pagar)}`,
-          cuerpo: (
-            <>
-              <p>En MUISCA, <strong>Recibo de pago (490)</strong>, con el valor a pagar de tu declaración. Pagas por PSE o en un banco autorizado.</p>
-              <p className="suave">Paga a más tardar en tu fecha límite; después corren intereses de mora.</p>
-            </>
-          ),
-        }
+      ? { id: "p6", titulo: `Paga ${pesos(r!.total_a_pagar)}`, cuerpo: <p>Genera el <strong>recibo 490</strong> en MUISCA y paga por PSE o en el banco.</p> }
       : favor
-        ? {
-            id: "p6",
-            titulo: `Pide tu saldo a favor de ${pesos(r.saldo_favor)}`,
-            cuerpo: (
-              <>
-                <p>En MUISCA, <strong>Solicitud de devolución y/o compensación</strong>, con tu declaración ya presentada y una cuenta bancaria a tu nombre.</p>
-                <p className="suave">Si no lo pides, lo puedes usar en tu declaración del próximo año.</p>
-              </>
-            ),
-          }
-        : {
-            id: "p6",
-            titulo: "Guarda tu comprobante",
-            cuerpo: <p>No tienes saldo a pagar. Guarda el PDF de la declaración presentada; con eso terminaste.</p>,
-          },
+        ? { id: "p6", titulo: `Pide tu saldo a favor de ${pesos(r!.saldo_favor)}`, cuerpo: <p>En MUISCA, <strong>Solicitud de devolución</strong>, o déjalo para el próximo año.</p> }
+        : { id: "p6", titulo: "Paga o pide tu devolución", cuerpo: <p>Si te toca pagar: <strong>recibo 490</strong> y PSE. Si te queda saldo a favor: <strong>Solicitud de devolución</strong>.</p> },
   ];
   const listos = pasos.filter((p) => hechos.has(p.id)).length;
   const siguiente = pasos.find((p) => !hechos.has(p.id))?.id;
@@ -195,11 +154,9 @@ export default function Presentar() {
   return (
     <div className="contenedor presentar">
       <FadeIn>
-        <p className="suave sin-margen">Año gravable {liq.anio_gravable}</p>
+        <p className="suave sin-margen">Año gravable {anioG}</p>
         <h1 className="titular t-48 mt-1">Presenta tu declaración en la DIAN.</h1>
-        <p className="lead">
-          La DIAN exige que la presentes tú, con tu usuario y tu firma electrónica, así que ninguna app puede enviarla por ti. Lo demás ya está listo: sigue estos pasos con MUISCA abierto en otra pestaña.
-        </p>
+        <p className="lead">Seis pasos, con MUISCA abierto en otra pestaña. La firma es tuya.</p>
         <div className="avance-pasos" role="status">
           <div className="barra" aria-hidden="true"><motion.span initial={false} animate={{ scaleX: listos / pasos.length }} transition={{ duration: 0.35, ease: CURVA }} /></div>
           <span>{listos === pasos.length ? "¡Listo! Terminaste todos los pasos." : `${listos} de ${pasos.length} pasos`}</span>
@@ -242,7 +199,7 @@ export default function Presentar() {
 
       <div className="acciones-resultado">
         <a className="boton sello" href={DIAN.muisca} target="_blank" rel="noopener noreferrer">Abrir MUISCA<span className="visualmente-oculto"> (se abre en otra pestaña)</span></a>
-        <button className="boton secundario" onClick={() => ir("resultado")}>Volver a mi resultado</button>
+        {liq ? <button className="boton secundario" onClick={() => ir("resultado")}>Volver a mi resultado</button> : null}
         <button className="boton-texto" onClick={() => ir("declarar")}>Preguntarle algo al agente</button>
       </div>
     </div>

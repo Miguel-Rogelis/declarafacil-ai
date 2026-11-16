@@ -86,22 +86,22 @@ function FormularioMuestra() {
 }
 
 const AGENTES = [
-  { nombre: "Lector", tarea: "Lee el Excel o PDF de tu exógena y de tus certificados, varios a la vez.", ia: false },
-  { nombre: "Anonimizador", tarea: "Quita tu cédula, nombre y cuentas antes de usar IA.", ia: false },
-  { nombre: "Clasificador", tarea: "Reconoce cada documento (exógena, certificado del empleador, del banco, de vivienda…) y de qué año es.", ia: true },
-  { nombre: "Intérprete", tarea: "Ubica cada concepto de la exógena en la declaración y te lo explica. Nunca ve tus montos.", ia: true },
-  { nombre: "Extractor", tarea: "Saca las cifras de tus certificados con reglas, sin IA.", ia: false },
-  { nombre: "Conciliador", tarea: "Cruza tus documentos para no contar nada dos veces y te avisa si no coinciden.", ia: false },
-  { nombre: "Motor tributario", tarea: "Hace todos los cálculos con las reglas del año.", ia: false },
-  { nombre: "Auditor", tarea: "Busca errores, datos faltantes y fechas vencidas.", ia: false },
-  { nombre: "Explicador", tarea: "Resume el resultado en palabras simples, sin inventar cifras.", ia: true },
-  { nombre: "Asistente", tarea: "Te responde y hace lo que le pides: anota tus datos, calcula o cambia de año. Tú llevas la conversación.", ia: true },
+  { nombre: "Lector", tarea: "Lee tu exógena y tus certificados.", ia: false },
+  { nombre: "Anonimizador", tarea: "Quita tus datos personales antes de usar IA.", ia: false },
+  { nombre: "Clasificador", tarea: "Reconoce cada documento y su año.", ia: true },
+  { nombre: "Intérprete", tarea: "Ubica cada concepto en la declaración, sin ver tus montos.", ia: true },
+  { nombre: "Extractor", tarea: "Saca las cifras de tus certificados.", ia: false },
+  { nombre: "Conciliador", tarea: "Cruza tus documentos para no contar nada dos veces.", ia: false },
+  { nombre: "Motor tributario", tarea: "Hace los cálculos con las reglas del año.", ia: false },
+  { nombre: "Auditor", tarea: "Busca errores y datos faltantes.", ia: false },
+  { nombre: "Explicador", tarea: "Resume el resultado en palabras simples.", ia: true },
+  { nombre: "Asistente", tarea: "Te responde, anota tus datos y calcula.", ia: true },
 ];
 
 const PASOS = [
-  { titulo: "Pregunta lo que quieras", texto: "Qué es la DIAN, si te toca declarar, qué pasa si no lo haces. Ninguna pregunta es tonta." },
-  { titulo: "Cuéntale tus datos", texto: "Adjunta tu exógena y tus certificados, o escribe cosas como «gano 4 millones al mes» o «tengo dos hijos». El agente los anota y te muestra qué anotó." },
-  { titulo: "Pídele el cálculo", texto: "Escribe «calcula» y ves cuánto pagas o te devuelven, por qué y qué revisar. La firma en la DIAN siempre es tuya." },
+  { titulo: "Cuéntale tus datos", texto: "Sube tu exógena o escribe «gano 4 millones al mes»." },
+  { titulo: "Pide el cálculo", texto: "Escribe «calcula» y ves cuánto pagas o te devuelven." },
+  { titulo: "Preséntala en la DIAN", texto: "Te guiamos en MUISCA, casilla por casilla." },
 ];
 
 /** El Stepper trae su propia paleta gris; la reemplazamos por los tokens de la casa (sirven en claro y en oscuro). */
@@ -116,7 +116,7 @@ const COLORES_STEPPER = {
 } as CSSProperties;
 
 export default function Inicio() {
-  const { ir } = useSesion();
+  const { ir, cuenta } = useSesion();
   const tema = useTemaActual();
   const demo = useDemo();
 
@@ -130,8 +130,7 @@ export default function Inicio() {
             <TituloPortada />
           </h1>
           <p className="lead">
-            Pregúntale lo que quieras sobre la renta y arma contigo el borrador del año que elijas (2021 a 2025). Adjunta tu exógena de la
-            DIAN y tus certificados, o cuéntale tus ingresos con tus palabras: cada cifra queda explicada antes de que firmes.
+            Sube tu exógena o cuéntale tus ingresos. Te arma el borrador y te guía para presentarlo en la DIAN.
           </p>
           <div className="acciones">
             <button className="boton" onClick={empezar}>Empezar</button>
@@ -140,10 +139,12 @@ export default function Inicio() {
               Ver la demo guiada
             </button>
           </div>
-          <p className="nota-privacidad">
-            <Candado />
-            Sin cuenta, tus archivos no se guardan; con cuenta, quedan en tu carpeta privada. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y las cifras las calcula el código.
-          </p>
+          {cuenta ? null : (
+            <p className="nota-privacidad">
+              <Candado />
+              Tus datos personales nunca llegan a la IA. Las cifras las calcula el código.
+            </p>
+          )}
         </FadeIn>
         <ScaleUnblur delay={0.15}>
           <FormularioMuestra />
@@ -152,7 +153,7 @@ export default function Inicio() {
 
       <Revelar className="seccion-debo">
         <h2 id="titulo-debo" className="titular t-36">¿Tengo que declarar? Averígualo en 30 segundos.</h2>
-        <p className="suave">Cuatro cifras aproximadas y te digo si llegas a algún tope de la DIAN. No se guarda nada.</p>
+        <p className="suave">Cuatro cifras y te digo si llegas a un tope.</p>
         <DeboDeclarar />
       </Revelar>
 
@@ -185,8 +186,7 @@ export default function Inicio() {
         <Revelar>
           <h2 id="titulo-agentes" className="titular t-36">Diez agentes, una tarea cada uno.</h2>
           <p className="suave">
-            Los cálculos los hacen reglas del Estatuto Tributario de cada año, de 2021 a 2025. La IA conversa, interpreta y explica, y cada
-            cifra que escribe o anota se verifica contra lo que dijiste y contra el cálculo.
+            El código hace los cálculos con las reglas de cada año. La IA conversa y explica, y cada cifra se verifica.
           </p>
         </Revelar>
         <Revelar>

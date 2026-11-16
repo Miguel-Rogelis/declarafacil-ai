@@ -72,7 +72,7 @@ function HojaTrabajo({ filas, respuestas, documentos }: { filas: Fila[]; respues
   return (
     <div className="hoja-trabajo-cuerpo">
       {!filas.length && !extras.length ? (
-        <p className="vacio">Aquí verás cada dato de tu declaración y de dónde sale: lo que traigan tu exógena y tus certificados, y lo que me cuentes en el chat.</p>
+        <p className="vacio">Aquí aparece cada dato de tu declaración y de dónde sale.</p>
       ) : null}
       {documentos.length ? (
         <div className="grupo">

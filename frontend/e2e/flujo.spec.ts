@@ -52,3 +52,10 @@ test("«¿Tengo que declarar?» responde con los topes del año", async ({ page 
   await debo.getByLabel(/Cuánto recibiste en/).fill("20000000");
   await expect(debo.getByText(/No tienes que declarar/)).toBeVisible();
 });
+
+test("la guía de la DIAN se ve siempre en el menú, aunque no haya borrador", async ({ page }) => {
+  await page.goto("/#/inicio");
+  await page.locator(".nav").getByRole("link", { name: /DIAN/ }).click();
+  await expect(page.getByRole("heading", { name: "Presenta tu declaración en la DIAN." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Armar mi borrador" })).toBeVisible();
+});

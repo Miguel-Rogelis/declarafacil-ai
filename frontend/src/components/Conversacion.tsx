@@ -137,7 +137,7 @@ function SubirExogena() {
         }}
       />
       <p className="chico suave sin-margen mt-1">
-        Para probar sin datos reales: <button className="boton-texto chico" onClick={() => void usarEjemplo()}>usar documentos ficticios</button> (exógena, certificado del empleador y del banco)
+        ¿Sin documentos a mano? <button className="boton-texto chico" onClick={() => void usarEjemplo()}>Prueba con unos de ejemplo</button>
       </p>
     </>
   );
@@ -478,7 +478,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             <FadeIn className="chat-bienvenida">
               <Marca />
               <h1 className="titular t-36">¿En qué te ayudo con tu renta?</h1>
-              <p className="suave">Pregúntame lo que quieras, cuéntame tus ingresos o adjunta con el clip tu exógena y tus certificados. Uso las reglas del año gravable {anio}.</p>
+              <p className="suave">Cuéntame tus ingresos o adjunta tu exógena con el clip. Año gravable {anio}.</p>
               <div className="sugerencias">
                 {["¿Me toca declarar renta?", "Gano 4 millones al mes", "¿Qué es la exógena?"].map((s) => (
                   <button key={s} type="button" className="sugerencia" disabled={ocupado} onClick={() => mandar(s)}>{s}</button>

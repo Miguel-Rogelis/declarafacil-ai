@@ -72,7 +72,8 @@ export function Encabezado() {
   const items: { ruta: Ruta; texto: string; corto?: string }[] = [
     { ruta: "inicio", texto: "Inicio" },
     { ruta: "declarar", texto: "Chat" },
-    ...(resultado ? [{ ruta: "resultado" as Ruta, texto: "Resultado" }, { ruta: "presentar" as Ruta, texto: "Presentar", corto: "DIAN" }] : []),
+    ...(resultado ? [{ ruta: "resultado" as Ruta, texto: "Resultado" }] : []),
+    { ruta: "presentar", texto: "Presentar en la DIAN", corto: "DIAN" },
     { ruta: "configuracion", texto: "Reglas y agentes", corto: "Reglas" },
   ];
   const lista = useRef<HTMLUListElement>(null);
@@ -110,7 +111,7 @@ export function Encabezado() {
             />
           ) : null}
           {items.map((i) => (
-            <li key={i.ruta} className={i.ruta === "inicio" ? "solo-ancho-item" : i.ruta === "configuracion" && resultado ? "oculto-celular" : undefined}>
+            <li key={i.ruta} className={i.ruta === "inicio" ? "solo-ancho-item" : i.ruta === "configuracion" ? "oculto-celular" : undefined}>
               <a href={`#/${i.ruta}`} aria-current={ruta === i.ruta ? "page" : undefined}>
                 {i.corto ? <><span className="solo-ancho">{i.texto}</span><span className="solo-angosto">{i.corto}</span></> : i.texto}
               </a>

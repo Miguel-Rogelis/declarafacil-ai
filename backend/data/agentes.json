@@ -17,8 +17,9 @@
     "usa_ia": true,
     "activo": true,
     "modelos": [
-      "nvidia/nemotron-3.5-lightning:free",
       "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "nvidia/nemotron-3.5-super-vl:free",
+      "nvidia/nemotron-3.5-lightning:free",
       "openrouter/free"
     ],
     "temperatura": 0,

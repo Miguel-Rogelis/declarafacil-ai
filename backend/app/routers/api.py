@@ -1,6 +1,7 @@
 """Endpoints HTTP. Los flujos largos responden con Server-Sent Events para mostrar
 en vivo qué agente está trabajando."""
 
+import asyncio
 from collections.abc import AsyncIterable
 from typing import Annotated, Any
 
@@ -23,7 +24,7 @@ from app import orquestador
 from app.agents import asistente, configuracion
 from app.agents.base import EventoAgente
 from app.config import settings
-from app.llm import cliente
+from app.llm import cliente, cupo
 from app.tax import reglas as repo_reglas
 
 router = APIRouter(prefix="/api")
@@ -49,11 +50,13 @@ class Estado(BaseModel):
     modo_llm: str
     anios: list[dict[str, Any]]
     admin_protegido: bool
+    ia_restante_hoy: int
 
 
 @router.get("/estado")
 def estado() -> Estado:
-    return Estado(modo_llm=settings.modo_llm, anios=repo_reglas.anios_disponibles(), admin_protegido=bool(settings.admin_token))
+    return Estado(modo_llm=settings.modo_llm, anios=repo_reglas.anios_disponibles(), admin_protegido=bool(settings.admin_token),
+                  ia_restante_hoy=cupo.restante_hoy())
 
 
 @router.post("/documentos/analizar", response_class=EventSourceResponse)
@@ -105,6 +108,35 @@ async def chat(turno: asistente.TurnoChat) -> asistente.RespuestaChat:
         raise HTTPException(status_code=422, detail="Escribe un mensaje")
     turno.mensaje = turno.mensaje[:1000]
     return await asistente.responder(turno)
+
+
+@router.post("/chat/en-vivo", response_class=EventSourceResponse)
+async def chat_en_vivo(turno: asistente.TurnoChat) -> AsyncIterable[ServerSentEvent]:
+    """Igual que /chat, pero el texto del modelo llega por partes («texto») y al final la respuesta validada («final»)."""
+    if not turno.mensaje.strip():
+        yield ServerSentEvent(data={"mensaje": "Escribe un mensaje"}, event="error")
+        return
+    turno.mensaje = turno.mensaje[:1000]
+    cola: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+    async def al_texto(parte: str) -> None:
+        await cola.put(("texto", parte))
+
+    async def trabajar() -> None:
+        try:
+            await cola.put(("final", await asistente.responder(turno, al_texto)))
+        except Exception as ex:  # noqa: BLE001 - el front muestra el error en el chat
+            await cola.put(("error", {"mensaje": f"No pude responder: {ex}"}))
+
+    tarea = asyncio.create_task(trabajar())
+    try:
+        while True:
+            tipo, dato = await cola.get()
+            yield ServerSentEvent(data={"texto": dato} if tipo == "texto" else dato, event=tipo)
+            if tipo != "texto":
+                break
+    finally:
+        tarea.cancel()
 
 
 # ---------- Reglas por año ----------

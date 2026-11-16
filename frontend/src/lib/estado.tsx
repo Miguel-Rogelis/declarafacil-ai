@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { borrarLocal, guardarLocal, leerLocal, sinAnimar, type Instantanea } from "./guardado";
 import {
   analizarDocumentos,
   api,
@@ -44,6 +45,8 @@ export interface Mensaje {
   aviso?: boolean;
   /** Foto del resultado cuando se calculó (los mensajes viejos no cambian si se recalcula). */
   resultado?: ResultadoLiquidacion;
+  /** Respuesta nueva de esta sesión: el texto se revela mientras llega (las restauradas aparecen quietas). */
+  nuevo?: boolean;
 }
 
 interface Sesion {
@@ -104,29 +107,33 @@ const tieneDatos = (ex: Extraccion | null, r: Respuestas) =>
   r.bienes_adicionales.length > 0;
 
 export function ProveedorSesion({ children }: { children: ReactNode }) {
+  // La conversación guardada en este navegador: se retoma tal como quedó
+  const [guardada] = useState(leerLocal);
   const [ruta, setRuta] = useState<Ruta>(leerRuta);
-  const [anio, setAnio] = useState(2025);
+  const [anio, setAnio] = useState(guardada?.anio ?? 2025);
   const [anios, setAnios] = useState<AnioDisponible[]>([]);
   const [modoLlm, setModoLlm] = useState("");
   const [servidor, setServidor] = useState<EstadoServidor>("conectando");
-  const [extraccion, setExtraccion] = useState<Extraccion | null>(null);
-  const [filas, setFilas] = useState<Fila[]>([]);
-  const [decididas, setDecididas] = useState<Record<string, boolean>>({});
-  const [trazaDocumento, setTrazaDocumento] = useState<EventoAgente[]>([]);
-  const [respuestas, setRespuestas] = useState<Respuestas>(respuestasIniciales);
-  const [resultado, setResultado] = useState<ResultadoLiquidacion | null>(null);
+  const [extraccion, setExtraccion] = useState<Extraccion | null>(guardada?.extraccion ?? null);
+  const [filas, setFilas] = useState<Fila[]>(guardada?.filas ?? []);
+  const [decididas, setDecididas] = useState<Record<string, boolean>>(guardada?.decididas ?? {});
+  const [trazaDocumento, setTrazaDocumento] = useState<EventoAgente[]>(guardada?.trazaDocumento ?? []);
+  const [respuestas, setRespuestas] = useState<Respuestas>(() => ({ ...respuestasIniciales(), ...guardada?.respuestas }));
+  const [resultado, setResultado] = useState<ResultadoLiquidacion | null>(guardada?.resultado ?? null);
   const [eventosCalculo, setEventosCalculo] = useState<EventoAgente[]>([]);
   const [calculando, setCalculando] = useState(false);
   const [errorCalculo, setErrorCalculo] = useState("");
-  const [mensajes, setMensajes] = useState<Mensaje[]>([]);
+  const [mensajes, setMensajes] = useState<Mensaje[]>(() => sinAnimar(guardada?.mensajes ?? []));
   const [escribiendo, setEscribiendo] = useState(false);
   const [archivoPendiente, setArchivoPendiente] = useState<File[] | null>(null);
-  const contador = useRef(1);
-  const conversacion = useRef<{ pregunta: PreguntaPendiente | null; ya: string[]; descartados: string[] }>({ pregunta: null, ya: [], descartados: [] });
-  const [ficha, setFicha] = useState<ItemFicha[]>([]);
+  const contador = useRef(Math.max(0, ...(guardada?.mensajes ?? []).map((m) => m.id)) + 1);
+  const conversacion = useRef<{ pregunta: PreguntaPendiente | null; ya: string[]; descartados: string[] }>(
+    guardada?.conversacion ?? { pregunta: null, ya: [], descartados: [] },
+  );
+  const [ficha, setFicha] = useState<ItemFicha[]>(guardada?.ficha ?? []);
   const recien = useRef<string[]>([]);
-  const [pregunta, setPregunta] = useState<PreguntaPendiente | null>(null);
-  const [elecciones, setElecciones] = useState<Record<string, string>>({});
+  const [pregunta, setPregunta] = useState<PreguntaPendiente | null>(guardada?.conversacion.pregunta?.partes?.length ? guardada.conversacion.pregunta : null);
+  const [elecciones, setElecciones] = useState<Record<string, string>>(guardada?.elecciones ?? {});
   const ponerPregunta = useCallback((p: PreguntaPendiente | null, ya: string[], extra?: { ficha?: ItemFicha[]; descartados?: string[] }) => {
     conversacion.current = { pregunta: p, ya, descartados: extra?.descartados ?? conversacion.current.descartados };
     if (extra?.ficha?.length) setFicha(extra.ficha);
@@ -175,6 +182,15 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const actualizar = useCallback((id: number, cambios: Partial<Mensaje>) => {
     setMensajes((x) => x.map((m) => (m.id === id ? { ...m, ...cambios } : m)));
   }, []);
+  /** Para poner lo anotado antes de la respuesta que ya se estaba escribiendo en vivo. */
+  const insertarAntes = useCallback((id: number, m: Omit<Mensaje, "id">) => {
+    const nuevo = contador.current++;
+    setMensajes((x) => {
+      const i = x.findIndex((y) => y.id === id);
+      return i < 0 ? [...x, { ...m, id: nuevo }] : [...x.slice(0, i), { ...m, id: nuevo }, ...x.slice(i)];
+    });
+  }, []);
+  const avisoCupo = useRef(false);
 
   const estadoChat = useCallback((): EstadoChat => {
     const s = ref.current;
@@ -363,15 +379,35 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       try {
         const antes = s.respuestas;
         const habia = !!s.resultado;
-        const r = await api.chat(t, historial, estadoChat());
+        // La respuesta del modelo aparece mientras llega; al final se reemplaza por la validada por el código
+        let enVivo: number | null = null;
+        let acumulado = "";
+        const r = await api.chatEnVivo(t, historial, estadoChat(), (parte) => {
+          acumulado += parte;
+          if (enVivo === null) {
+            setEscribiendo(false);
+            enVivo = agregar({ rol: "asistente", texto: acumulado, nuevo: true });
+          } else actualizar(enVivo, { texto: acumulado });
+        });
         setRespuestas(r.respuestas);
         ref.current.respuestas = r.respuestas;
         ponerPregunta(r.pregunta, r.ya_preguntado, r);
         const cambiaron = r.anotaciones.length > 0 || r.quitadas.length > 0;
-        if (cambiaron) agregar({ rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, quitadas: r.quitadas, antes });
+        const anotado: Omit<Mensaje, "id"> = { rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, quitadas: r.quitadas, antes };
         // La pregunta va en su propio cuadro arriba de la barra; en el hilo queda el resto de la respuesta
         const visible = r.texto_visible ?? r.respuesta;
-        agregar({ rol: "asistente", texto: visible || undefined, historial: r.respuesta, oculto: !visible, fuentes: r.fuentes, conIa: r.con_ia });
+        const final = { texto: visible || undefined, historial: r.respuesta, oculto: !visible, fuentes: r.fuentes, conIa: r.con_ia };
+        if (enVivo !== null) {
+          if (cambiaron) insertarAntes(enVivo, anotado);
+          actualizar(enVivo, final);
+        } else {
+          if (cambiaron) agregar(anotado);
+          agregar({ rol: "asistente", ...final, nuevo: true });
+        }
+        if (r.limite_ia && !avisoCupo.current) {
+          avisoCupo.current = true;
+          agregar({ rol: "asistente", aviso: true, texto: "Por ahora sigo sin IA porque se llenó el cupo de mensajes con IA. Igual anoto tus datos y calculo con las reglas del Estatuto." });
+        }
         if (r.simulacion) agregar({ rol: "asistente", widget: "simulacion", simulacion: r.simulacion });
         if (r.cambiar_anio && r.cambiar_anio !== ref.current.anio) ponerAnio(r.cambiar_anio);
         r.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
@@ -389,7 +425,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setEscribiendo(false);
       }
     },
-    [agregar, estadoChat, calcular, recalcularSiHabia, ponerAnio, ponerPregunta],
+    [agregar, actualizar, insertarAntes, estadoChat, calcular, recalcularSiHabia, ponerAnio, ponerPregunta],
   );
 
   const deshacer = useCallback(
@@ -480,10 +516,37 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setMensajes([]);
     conversacion.current = { pregunta: null, ya: [], descartados: [] };
     setFicha([]);
+    borrarLocal();
     recien.current = [];
     setPregunta(null);
     setElecciones({});
     ref.current = { ...ref.current, extraccion: null, filas: [], decididas: {}, respuestas: respuestasIniciales(), resultado: null, mensajes: [] };
+  }, []);
+
+  const instantanea = useCallback(
+    (): Instantanea => ({
+      v: 1, guardada: new Date().toISOString(), anio, extraccion, filas, decididas, elecciones, trazaDocumento, respuestas, resultado,
+      mensajes, conversacion: conversacion.current, ficha,
+    }),
+    [anio, extraccion, filas, decididas, elecciones, trazaDocumento, respuestas, resultado, mensajes, ficha],
+  );
+  // Se guarda poco después de cada cambio y, sí o sí, al recargar o cerrar la página
+  const ultima = useRef(instantanea);
+  ultima.current = instantanea;
+  useEffect(() => {
+    if (escribiendo || calculando) return;
+    const t = window.setTimeout(() => guardarLocal(instantanea()), 250);
+    return () => window.clearTimeout(t);
+  }, [instantanea, escribiendo, calculando]);
+  useEffect(() => {
+    const guardarYa = () => guardarLocal(ultima.current());
+    const alOcultar = () => document.visibilityState === "hidden" && guardarYa();
+    window.addEventListener("pagehide", guardarYa);
+    document.addEventListener("visibilitychange", alOcultar);
+    return () => {
+      window.removeEventListener("pagehide", guardarYa);
+      document.removeEventListener("visibilitychange", alOcultar);
+    };
   }, []);
 
   const porRevisar = useMemo(() => porRevisarDe(filas, decididas), [filas, decididas]);

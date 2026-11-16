@@ -1,12 +1,12 @@
 import { motion } from "motion/react";
-import { Fragment, useState, type CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import { Candado, LetraD } from "../components/piezas";
 import { FadeIn, Revelar, ScaleUnblur } from "../components/Movimiento";
 import { selloHex, useTemaActual } from "../components/Navegacion";
 import SpotlightCard from "../components/reactbits/SpotlightCard";
 import Stepper, { Step } from "../components/reactbits/Stepper";
 import CountUp from "../components/reactbits/CountUp";
-import { api } from "../lib/api";
+import { useDemo } from "../lib/demo";
 import { useSesion } from "../lib/estado";
 
 const RENGLONES = [
@@ -115,26 +115,11 @@ const COLORES_STEPPER = {
 } as CSSProperties;
 
 export default function Inicio() {
-  const { ir, reiniciar, setArchivoPendiente, extraccion } = useSesion();
+  const { ir } = useSesion();
   const tema = useTemaActual();
-  const [cargandoEjemplo, setCargandoEjemplo] = useState(false);
-  const [error, setError] = useState("");
+  const demo = useDemo();
 
   const empezar = () => ir("declarar");
-  const probarEjemplo = async () => {
-    setCargandoEjemplo(true);
-    setError("");
-    try {
-      const archivos = await api.documentosDemo();
-      if (extraccion) reiniciar();
-      setArchivoPendiente(archivos);
-      ir("declarar");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setCargandoEjemplo(false);
-    }
-  };
 
   return (
     <div className="contenedor">
@@ -149,11 +134,11 @@ export default function Inicio() {
           </p>
           <div className="acciones">
             <button className="boton" onClick={empezar}>Empezar</button>
-            <button className="boton secundario" onClick={probarEjemplo} disabled={cargandoEjemplo}>
-              {cargandoEjemplo ? "Cargando ejemplo…" : "Probar con un ejemplo ficticio"}
+            <button className="boton secundario" onClick={demo.iniciar}>
+              <svg className="icono-boton" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5v9l7-4.5z" /></svg>
+              Ver la demo guiada
             </button>
           </div>
-          {error ? <p className="mensaje-estado error" role="alert">No pude cargar el ejemplo: {error}</p> : null}
           <p className="nota-privacidad">
             <Candado />
             Tus archivos no se guardan. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y las cifras las calcula el código, no la IA.

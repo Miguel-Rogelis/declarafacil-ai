@@ -26,6 +26,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import date
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -44,7 +45,7 @@ from app.agents.conocimiento import (
     puntajes,
     valores_anio,
 )
-from app.llm import cliente
+from app.llm import cliente, cupo
 from app.orquestador import Respuestas, SolicitudLiquidacion, construir_declaracion
 from app.tax.modelos import ItemPatrimonio, Liquidacion, Obligacion
 from app.tax.motor import liquidar
@@ -222,6 +223,7 @@ class RespuestaChat(BaseModel):
     con_ia: bool = False
     ficha: list[ItemFicha] = []
     descartados: list[str] = []
+    limite_ia: bool = False  # se acabó el cupo de IA: esta respuesta salió con reglas
 
 
 @dataclass
@@ -1027,6 +1029,7 @@ ACCIONES (las ejecuta el sistema después de validar)
 - Si corrige una cifra ("no, eran 4 millones no 5"), anota la cifra nueva en el mismo campo y con el mismo periodo de la que corrige.
 - Si dice que no tiene algo ("no me hicieron retención", "no tengo nada a mi nombre"), confírmalo en una frase corta y no lo vuelvas a preguntar.
 - Antes de calcular, el sistema pregunta lo que falta; tú no listes lo que falta salvo que te lo pidan.
+- Cuando solo anotas datos, responde corto ("Listo, lo anoté." o una frase que diga qué anotaste) y no pidas aclaraciones de algo que ya está claro: "gano" es salario, "facturé" son honorarios.
 - "anotar": cuando la persona te da un dato suyo. Usa SOLO las claves de CAMPOS. En "valor" copia la cifra como la escribió ("4 millones", "350000"). "periodo": "mensual" o "anual" solo si lo dijo; si no está claro, NO lo anotes: pregunta. Si dice que no tiene algo ("no tengo hijos"), anota 0. Para "bien" y "deuda" agrega "concepto".
 - Si vendió un bien, no lo anotes como bien: anota {{"campo": "venta", "concepto": "carro", "precio_venta": "...", "precio_compra": "..."}} con las cifras que dijo; si no dijo en cuánto lo compró, deja "precio_compra" vacío y el sistema lo pregunta. La ganancia la calcula el sistema.
 - "quitar": [{{"campo": "...", "concepto": "..."}}] si pide borrar o corregir un dato que ya no aplica. Para corregir una cifra basta con anotar la nueva.
@@ -1231,7 +1234,41 @@ def _base_relevante(t: TurnoChat, base: list[SeccionKB]) -> str:
     )
 
 
-async def _con_ia(t: TurnoChat, vp: Liquidacion | None) -> tuple[_Plan, str]:
+class _LectorRespuesta:
+    """Saca, mientras llega, el texto del campo "respuesta" del JSON que escribe el modelo."""
+
+    def __init__(self) -> None:
+        self.crudo = ""
+        self.enviado = 0
+
+    def nuevo_texto(self, delta: str) -> str:
+        self.crudo += delta
+        m = re.search(r'"respuesta"\s*:\s*"', self.crudo)
+        if not m:
+            return ""
+        texto, i, escapado = [], m.end(), False
+        while i < len(self.crudo):
+            c = self.crudo[i]
+            if escapado:
+                texto.append({"n": " ", "t": " ", '"': '"', "\\": "\\", "/": "/"}.get(c, c))
+                escapado = False
+            elif c == "\\":
+                escapado = True
+            elif c == '"':
+                break
+            else:
+                texto.append(c)
+            i += 1
+        completo = "".join(texto)
+        nuevo = completo[self.enviado:]
+        self.enviado = len(completo)
+        return nuevo
+
+
+AlTexto = Callable[[str], Awaitable[None]]
+
+
+async def _con_ia(t: TurnoChat, vp: Liquidacion | None, al_texto: AlTexto | None = None) -> tuple[_Plan, str]:
     e = t.estado
     base = base_del_anio(e.anio_gravable)
     sistema = (
@@ -1243,7 +1280,15 @@ async def _con_ia(t: TurnoChat, vp: Liquidacion | None) -> tuple[_Plan, str]:
     historial = "\n".join(f"{'Usuario' if m.rol == 'usuario' else 'Tú'}: {m.texto[:500]}" for m in t.historial[-10:])
     usuario = f"ESTADO:\n{_estado_texto(e, vp)}\n\nCONVERSACIÓN RECIENTE:\n{historial or '(es el primer mensaje)'}\n\nMENSAJE DEL USUARIO: {t.mensaje}"
 
-    r = await cliente.completar("asistente", sistema, usuario, json_mode=True, max_tokens=1800)
+    al_escribir = None
+    if al_texto is not None:
+        lector = _LectorRespuesta()
+
+        async def al_escribir(delta: str) -> None:
+            if nuevo := lector.nuevo_texto(delta):
+                await al_texto(nuevo)
+
+    r = await cliente.completar("asistente", sistema, usuario, json_mode=True, max_tokens=1800, al_escribir=al_escribir)
     try:
         j = cliente.extraer_json(r.texto)
         if not isinstance(j, dict):
@@ -1342,8 +1387,9 @@ def ficha(e: EstadoChat, r: Respuestas, vp: Liquidacion | None, ya: list[str], d
             estado = "tengo"
         elif no_tiene:
             estado, detalle = "no_aplica", "no tienes"
-        elif tema in faltan:
-            estado = "omitido" if (tema in ya and tema not in preguntando) else "falta"
+        elif tema in faltan or not tengo["ingresos"][0]:
+            # Sin ingresos todavía no se sabe qué cambia el resultado: todo queda pendiente, nada «no aplica»
+            estado = "omitido" if (tema in ya and tema not in preguntando and tema in faltan) else "falta"
             detalle = "sin respuesta" if estado == "omitido" else ("te lo pregunto ahora" if tema in preguntando else "")
         else:
             estado, detalle = "no_aplica", "no cambia tu resultado"
@@ -1444,7 +1490,9 @@ def diagnosticar(e: EstadoChat) -> RespuestaChat:
     )
 
 
-async def responder(t: TurnoChat) -> RespuestaChat:
+async def responder(t: TurnoChat, al_texto: AlTexto | None = None) -> RespuestaChat:
+    """Un turno del chat. Con al_texto, el texto del modelo se va enviando mientras lo escribe;
+    la respuesta final (validada por el código) siempre llega completa al terminar."""
     e = t.estado
     p = e.pregunta_pendiente
     vp_inicial = vista_previa(e)
@@ -1452,7 +1500,7 @@ async def responder(t: TurnoChat) -> RespuestaChat:
     modelo, con_ia = None, False
     if cliente.disponible():
         try:
-            plan, modelo = await _con_ia(t, vp_inicial)
+            plan, modelo = await _con_ia(t, vp_inicial, al_texto)
             con_ia = True
         except Exception as ex:  # noqa: BLE001 - si el modelo falla, responde la ruta sin IA
             log.warning("Asistente sin IA en este turno: %s", ex)
@@ -1658,4 +1706,5 @@ async def responder(t: TurnoChat) -> RespuestaChat:
         con_ia=con_ia,
         ficha=ficha(e2, r, vista_previa(e2, r), ya, todos_descartados, pregunta.temas if pregunta else []),
         descartados=todos_descartados,
+        limite_ia=cupo.limitado.get(),
     )

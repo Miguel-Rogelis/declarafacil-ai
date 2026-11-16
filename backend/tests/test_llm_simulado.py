@@ -77,7 +77,7 @@ def test_explicador_descarta_texto_con_cifras_inventadas(con_llm):
     assert con_ia and texto == bueno.strip()
 
 
-def test_asistente_recibe_toda_la_base_y_responde_directo(con_llm):
+def test_asistente_recibe_la_base_relevante_y_responde_directo(con_llm):
     falso = con_llm(_Falso(lambda m: json.dumps({"respuesta": "Es un pago adelantado del impuesto del año siguiente. ¿Quieres que te explique cómo se calcula?",
                                                  "anotar": [], "calcular": False, "fuente": "¿Qué es el anticipo de renta?"})))
     r = asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="¿Qué es el anticipo de renta?")))
@@ -85,9 +85,10 @@ def test_asistente_recibe_toda_la_base_y_responde_directo(con_llm):
     assert r.fuentes == ["¿Qué es el anticipo de renta?"]
     llamada = falso.llamadas[0]
     sistema = llamada["messages"][0]["content"]
-    assert "BASE DE CONOCIMIENTO" in sistema and "¿Puedo ir a la cárcel" in sistema  # toda la base, no solo coincidencias
+    assert "### ¿Qué es el anticipo de renta?" in sistema  # la sección que responde va completa
+    assert "OTRAS SECCIONES" in sistema and "### ¿Puedo ir a la cárcel" not in sistema  # el resto solo por título
     assert "$69.718.600" in sistema  # topes del año elegido
-    assert llamada["extra_body"]["reasoning"]["exclude"] is True  # razonamiento corto y oculto
+    assert llamada["extra_body"]["reasoning"]["enabled"] is False  # el chat responde sin razonar: ~6 veces más rápido
 
 
 def test_asistente_descarta_cifras_inventadas(con_llm):

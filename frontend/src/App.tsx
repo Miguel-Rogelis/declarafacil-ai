@@ -1,5 +1,7 @@
 import { MotionConfig } from "motion/react";
 import { AvisoServidor } from "./components/AvisoServidor";
+import { ControlDemo } from "./components/ControlDemo";
+import { ProveedorDemo } from "./lib/demo";
 import { Encabezado } from "./components/Navegacion";
 import Noise from "./components/reactbits/Noise";
 import { ShaderFlow } from "./components/ShaderFlow";
@@ -35,6 +37,7 @@ function Marco() {
       <Fondo ruta={ruta} />
       <Encabezado />
       <AvisoServidor />
+      <ControlDemo />
       <Paginas />
     </div>
   );
@@ -60,7 +63,9 @@ export default function App() {
   return (
     <MotionConfig reducedMotion="user">
       <ProveedorSesion>
-        <Marco />
+        <ProveedorDemo>
+          <Marco />
+        </ProveedorDemo>
       </ProveedorSesion>
     </MotionConfig>
   );

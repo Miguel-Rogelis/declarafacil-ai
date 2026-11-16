@@ -481,3 +481,24 @@ def test_cesantias_del_chat_tienen_su_exencion():
     liq = liquidar(construir_declaracion(sol))
     lineas = {l.clave: l.valor for s in liq.secciones for l in s.lineas}
     assert lineas["cesantias_exentas"] > 0
+
+
+# ---------- Respuestas en vivo ----------
+
+
+def test_lector_saca_la_respuesta_mientras_llega():
+    lector = asistente._LectorRespuesta()
+    crudo = '{"respuesta": "Listo, anoté \\"4 millones\\" al mes.", "anotar": []}'
+    salida = "".join(lector.nuevo_texto(crudo[i:i + 3]) for i in range(0, len(crudo), 3))
+    assert salida == 'Listo, anoté "4 millones" al mes.'
+
+
+def test_chat_en_vivo_termina_con_la_respuesta_validada():
+    r = c.post("/api/chat/en-vivo", json={"mensaje": "gano 4 millones al mes", "estado": {"anio_gravable": 2025}})
+    assert r.status_code == 200
+    assert "event: final" in r.text and "Salarios del año" in r.text
+
+
+def test_ficha_sin_ingresos_no_da_nada_por_listo():
+    j = Charla()("hola, ¿tengo que declarar renta?")
+    assert all(i["estado"] == "falta" for i in j["ficha"])

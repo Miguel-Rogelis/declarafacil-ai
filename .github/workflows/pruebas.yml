@@ -1,0 +1,62 @@
+# En cada cambio: las pruebas del backend, la construcción del front y la prueba de punta a punta
+# en un navegador (escritorio y celular), con el backend en modo simulado (sin IA ni llave).
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Backend · dependencias
+        run: pip install -r backend/requirements-dev.txt
+      - name: Backend · pruebas
+        working-directory: backend
+        run: python -m pytest -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Front · dependencias
+        working-directory: frontend
+        run: npm ci
+      - name: Front · tipos y construcción
+        working-directory: frontend
+        run: npm run build
+
+      - name: Navegador para la prueba de punta a punta
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Prueba de punta a punta (escritorio y celular)
+        working-directory: frontend
+        env:
+          PYTHON: python
+        run: npx playwright test
+      - name: Rastro de la prueba si falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rastro-playwright
+          path: frontend/test-results
+          retention-days: 7

@@ -17,3 +17,5 @@ data-in/
 !backend/data/demo/*.pdf
 .env
 *.tsbuildinfo
+test-results/
+playwright-report/

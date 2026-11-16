@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Conversacion from "../components/Conversacion";
+import { BorrarDatos } from "../components/BorrarDatos";
 import { Ficha } from "../components/Ficha";
 import type { DocumentoCargado, Fila, Respuestas } from "../lib/api";
 import { useSesion } from "../lib/estado";
@@ -151,9 +152,7 @@ export default function Declarar() {
   const barra = (
     <div className="chat-barra">
       <div className="chat-columna fila-barra">
-        {mensajes.length ? (
-          <button className="boton-texto chico" onClick={() => reiniciar()}>Empezar de nuevo</button>
-        ) : <span />}
+        {mensajes.length ? <BorrarDatos onBorrar={reiniciar} /> : <span />}
         <button ref={boton} className="boton secundario chico" onClick={() => setAbierto(true)} aria-expanded={abierto} aria-controls="panel-datos">
           Tus datos{cantidad ? ` (${cantidad})` : ""}{porRevisar.length ? ` · ${porRevisar.length} por confirmar` : ""}
         </button>

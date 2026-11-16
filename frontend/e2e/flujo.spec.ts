@@ -1,0 +1,37 @@
+import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+});
+
+test("el chat anota los datos, los guarda en el navegador y se pueden borrar", async ({ page }) => {
+  await page.goto("/#/declarar");
+  await page.locator("#mensaje").fill("gano 4 millones al mes, me retienen 150 mil cada mes y tengo 2 hijos");
+  await page.locator("#mensaje").press("Enter");
+  await expect(page.getByText("Salarios del año")).toBeVisible();
+  await expect(page.locator(".anotado").getByText("$1.800.000", { exact: true })).toBeVisible();
+  await expect(page.locator(".ficha-item.tengo")).toHaveCount(3);
+
+  await page.reload();
+  await expect(page.getByText("me retienen 150 mil cada mes")).toBeVisible();
+  await expect(page.locator(".ficha-item.tengo")).toHaveCount(3);
+
+  await page.getByRole("button", { name: "Borrar mis datos" }).click();
+  await page.getByRole("button", { name: "Sí, borrar todo" }).click();
+  await expect(page.getByRole("heading", { name: /En qué te ayudo/ })).toBeVisible();
+});
+
+test("la demo guiada llega sola hasta el borrador y se puede pausar", async ({ page }) => {
+  await page.goto("/#/inicio");
+  await page.getByRole("button", { name: "Ver la demo guiada" }).click();
+  await expect(page.getByText("Demo · paso 1 de 8")).toBeVisible();
+  await page.getByRole("button", { name: "Pausar la demo" }).click();
+  const escrito = await page.locator("#mensaje").inputValue();
+  await page.waitForTimeout(1500);
+  expect(await page.locator("#mensaje").inputValue()).toBe(escrito);
+  await page.getByRole("button", { name: "Seguir la demo" }).click();
+  await expect(page).toHaveURL(/#\/resultado/, { timeout: 120_000 });
+  await expect(page.getByText(/saldo a favor|Te toca pagar/).first()).toBeVisible();
+  await expect(page.getByText("Ya viste el caso completo")).toBeVisible();
+});

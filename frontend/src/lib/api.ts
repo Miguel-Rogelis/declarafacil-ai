@@ -364,22 +364,31 @@ export interface RespuestaChat {
   con_ia: boolean;
   ficha?: ItemFicha[];
   descartados?: string[];
+  limite_ia?: boolean;
 }
 
 type Manejadores<R> = {
   onAgente: (e: EventoAgente) => void;
   onResultado: (r: R) => void;
   onError: (mensaje: string) => void;
+  onEvento?: (tipo: string, datos: unknown) => void;
 };
 
 /** Raíz de la API. Vacía en el mismo servidor; en GitHub Pages apunta al backend de Render (VITE_API_URL). */
 const API = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
+/** En el modo demo las respuestas salen sin IA: no gastan el cupo del día y son siempre iguales. */
+let sinIa = false;
+export const usarSinIa = (v: boolean) => {
+  sinIa = v;
+};
+const cabeceras = (h?: HeadersInit): HeadersInit => ({ ...(sinIa ? { "X-Sin-IA": "1" } : {}), ...(h as Record<string, string>) });
+
 /** Lee una respuesta Server-Sent Events de un POST y despacha cada evento. */
 async function flujo<R>(url: string, init: RequestInit, m: Manejadores<R>): Promise<void> {
   let resp: Response;
   try {
-    resp = await fetch(url, { ...init, headers: { Accept: "text/event-stream", ...(init.headers || {}) } });
+    resp = await fetch(url, { ...init, headers: cabeceras({ Accept: "text/event-stream", ...(init.headers as Record<string, string>) }) });
   } catch {
     m.onError("No hay conexión con el servidor. Si acaba de despertar, espera unos segundos y vuelve a intentar.");
     return;
@@ -417,6 +426,7 @@ async function flujo<R>(url: string, init: RequestInit, m: Manejadores<R>): Prom
       if (tipo === "agente") m.onAgente(payload);
       else if (tipo === "resultado") m.onResultado(payload);
       else if (tipo === "error") m.onError(payload.mensaje ?? "Algo falló en el proceso.");
+      else m.onEvento?.(tipo, payload);
     }
   }
 }
@@ -449,7 +459,7 @@ export function liquidar(
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   let r: Response;
   try {
-    r = await fetch(url, init);
+    r = await fetch(url, { ...init, headers: cabeceras(init?.headers) });
   } catch {
     throw new Error("No hay conexión con el servidor. Si acaba de despertar, espera unos segundos y vuelve a intentar.");
   }
@@ -506,6 +516,24 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mensaje, historial, estado }),
+    }),
+  /** El chat con la respuesta del modelo llegando mientras la escribe; resuelve con la respuesta validada. */
+  chatEnVivo: (mensaje: string, historial: { rol: string; texto: string }[], estado: EstadoChat, onTexto: (parte: string) => void) =>
+    new Promise<RespuestaChat>((resolver, rechazar) => {
+      let final: RespuestaChat | null = null;
+      void flujo<never>(
+        `${API}/api/chat/en-vivo`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mensaje, historial, estado }) },
+        {
+          onAgente: () => {},
+          onResultado: () => {},
+          onError: (m) => rechazar(new Error(m)),
+          onEvento: (tipo, datos) => {
+            if (tipo === "texto") onTexto((datos as { texto: string }).texto);
+            if (tipo === "final") final = datos as RespuestaChat;
+          },
+        },
+      ).then(() => (final ? resolver(final) : rechazar(new Error("La respuesta llegó incompleta"))));
     }),
   exogenaDemo: async (): Promise<File> => {
     const r = await fetch(`${API}/api/demo/exogena`);

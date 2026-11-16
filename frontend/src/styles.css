@@ -709,3 +709,48 @@ main { padding-bottom: 6rem; }
 .aviso-icono.listo { background: var(--sello); }
 .aviso-icono svg { width: 0.8rem; height: 0.8rem; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .app-chat .aviso-servidor { bottom: 5.5rem; }
+
+/* ---------- Guardado y borrar datos ---------- */
+.borrar-datos { display: flex; align-items: center; gap: 0.7rem; min-height: 2.25rem; }
+.guardado-en { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--fs-xs); color: var(--tinta-suave); }
+.guardado-en svg { width: 0.85rem; height: 0.85rem; fill: none; stroke: var(--sello); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.confirmar-borrar { display: inline-flex; align-items: center; gap: 0.5rem; }
+.boton.peligro { background: var(--lacre); border-color: var(--lacre); color: var(--papel); }
+.boton.peligro:hover:not([disabled]) { background: color-mix(in srgb, var(--lacre) 88%, var(--tinta)); }
+.boton:active:not([disabled]), .boton-texto:active, .opcion:active:not(:disabled), .sugerencia:active, .boton-tema:active { transform: scale(0.97); }
+.boton-texto, .sugerencia, .opcion, .boton-tema { transition: transform 160ms var(--curva), background-color 0.2s, border-color 0.2s, color 0.2s; }
+@media (max-width: 640px) { .guardado-en { display: none; } }
+
+/* ---------- Demo guiada ---------- */
+.control-demo { position: fixed; left: 0; right: 0; margin-inline: auto; width: min(94vw, 40rem); bottom: 1rem; z-index: 46; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; gap: 0.55rem 0.9rem; padding: 0.7rem 0.75rem 0.65rem 1rem; border-radius: var(--radio-tarjeta); background: color-mix(in srgb, var(--tinta) 94%, transparent); color: var(--papel); box-shadow: var(--sombra-elevada), 0 0 0 1px color-mix(in srgb, var(--papel) 10%, transparent); backdrop-filter: blur(14px); }
+.app-chat .control-demo { bottom: 5.4rem; }
+.demo-info { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.demo-punto { flex: none; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--sello-claro); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sello) 35%, transparent); animation: latido 1.6s ease-in-out infinite; }
+.demo-punto.pausada { animation: none; background: color-mix(in srgb, var(--papel) 55%, transparent); box-shadow: none; }
+@keyframes latido { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--sello) 10%, transparent); } }
+.demo-textos { display: grid; min-width: 0; }
+.demo-etiqueta { font-size: var(--fs-xs); color: color-mix(in srgb, var(--papel) 70%, transparent); font-variant-numeric: tabular-nums; }
+.demo-titulo { font-weight: 600; font-size: var(--fs-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.demo-botones { display: flex; align-items: center; gap: 0.35rem; }
+.demo-boton { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.5rem; min-width: 2.5rem; justify-content: center; padding: 0 0.8rem; border-radius: var(--radio-pastilla); border: 1px solid color-mix(in srgb, var(--papel) 22%, transparent); background: transparent; color: var(--papel); font: inherit; font-size: var(--fs-sm); font-weight: 500; cursor: pointer; transition: transform 160ms var(--curva), background-color 0.2s; }
+.demo-boton.destacado { background: var(--papel); color: var(--tinta); border-color: var(--papel); }
+.demo-boton svg, .demo-cerrar svg { width: 0.95rem; height: 0.95rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.demo-boton svg path[d^="M5 3.5v9"] { fill: currentColor; }
+.demo-cerrar { width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 0; background: transparent; color: var(--papel); display: grid; place-items: center; cursor: pointer; transition: transform 160ms var(--curva), background-color 0.2s; }
+.demo-boton:active, .demo-cerrar:active { transform: scale(0.96); }
+@media (hover: hover) and (pointer: fine) {
+  .demo-boton:hover { background: color-mix(in srgb, var(--papel) 12%, transparent); }
+  .demo-boton.destacado:hover { background: color-mix(in srgb, var(--papel) 88%, var(--sello)); }
+  .demo-cerrar:hover { background: color-mix(in srgb, var(--papel) 12%, transparent); }
+}
+.demo-progreso { grid-column: 1 / -1; height: 3px; border-radius: var(--radio-pastilla); background: color-mix(in srgb, var(--papel) 16%, transparent); overflow: hidden; }
+.demo-relleno { display: block; height: 100%; background: var(--sello-claro); transform-origin: left; }
+.sugerencia.demo { border-color: var(--sello); color: var(--sello); }
+.chat-entrada textarea[readonly] { caret-color: transparent; }
+@media (max-width: 560px) {
+  .control-demo { grid-template-columns: 1fr; }
+  .demo-botones { justify-content: space-between; }
+  .demo-boton.destacado { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .demo-punto { animation: none; } }
+.icono-boton { width: 0.85rem; height: 0.85rem; fill: currentColor; }

@@ -1,11 +1,45 @@
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Fila, OpcionRevision, Respuestas, ResultadoLiquidacion, Simulacion } from "../lib/api";
 import { useSesion, type Mensaje } from "../lib/estado";
 import { pesos } from "../lib/formato";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "./MesaAgentes";
+import { useDemo } from "../lib/demo";
 import { FadeIn } from "./Movimiento";
 import { Marca } from "./piezas";
+
+/** Revela el texto de una respuesta nueva mientras llega: rápido (máximo ~0,7 s) y quieto con «reducir movimiento». */
+function TextoRevelado({ texto }: { texto: string }) {
+  const reducido = useReducedMotion();
+  const [visibles, setVisibles] = useState(reducido ? texto.length : 0);
+  const cuenta = useRef(visibles);
+  useEffect(() => {
+    if (reducido) {
+      setVisibles(texto.length);
+      return;
+    }
+    let raf = 0;
+    let antes = performance.now();
+    const porSegundo = Math.max(260, texto.length / 0.7);
+    const paso = (ahora: number) => {
+      cuenta.current = Math.min(texto.length, cuenta.current + Math.max(1, Math.round(((ahora - antes) / 1000) * porSegundo)));
+      antes = ahora;
+      setVisibles(cuenta.current);
+      if (cuenta.current < texto.length) raf = requestAnimationFrame(paso);
+    };
+    raf = requestAnimationFrame(paso);
+    return () => cancelAnimationFrame(raf);
+  }, [texto, reducido]);
+  const mostrado = texto.slice(0, visibles);
+  return (
+    <>
+      <span className="visualmente-oculto">{texto}</span>
+      <span aria-hidden="true">
+        {mostrado.split(/\n+/).map((p, i) => <p key={i}>{p}</p>)}
+      </span>
+    </>
+  );
+}
 
 function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
   if (m.rol === "usuario") return <div className="burbuja usuario">{m.texto}</div>;
@@ -14,9 +48,9 @@ function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
       className={`burbuja bot${m.aviso ? " aviso" : ""}${m.widget ? " con-widget" : ""}`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
     >
-      {m.texto ? m.texto.split(/\n+/).map((p, i) => <p key={i}>{p}</p>) : null}
+      {m.texto && m.nuevo ? <TextoRevelado texto={m.texto} /> : m.texto ? m.texto.split(/\n+/).map((p, i) => <p key={i}>{p}</p>) : null}
       {children}
       {m.fuentes?.length ? <div className="fuentes">Fuente: {m.fuentes.join("; ")}</div> : null}
     </motion.div>
@@ -349,7 +383,10 @@ function Widget({ m }: { m: Mensaje }) {
 /** El chat a pantalla completa. El usuario lleva la conversación de inicio a fin. */
 export default function Conversacion({ barra }: { barra?: ReactNode }) {
   const { mensajes, enviar, escribiendo, calculando, procesarArchivos, archivoPendiente, setArchivoPendiente, extraccion, anio, usarEjemplo } = useSesion();
-  const [texto, setTexto] = useState("");
+  const demo = useDemo();
+  const [propio, setTexto] = useState("");
+  // Durante la demo guiada la caja muestra lo que «escribe» la demo y no se puede editar
+  const texto = demo.activa ? demo.escrito : propio;
   const lista = useRef<HTMLDivElement>(null);
   const adjuntar = useRef<HTMLInputElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
@@ -386,7 +423,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
 
   const ocupado = escribiendo || calculando;
   const mandar = (t: string) => {
-    if (!t.trim() || ocupado) return;
+    if (!t.trim() || ocupado || demo.activa) return;
     setTexto("");
     void enviar(t);
   };
@@ -407,6 +444,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
                   <button key={s} type="button" className="sugerencia" disabled={ocupado} onClick={() => mandar(s)}>{s}</button>
                 ))}
                 <button type="button" className="sugerencia ejemplo" disabled={ocupado} onClick={() => void usarEjemplo()}>Probar con documentos ficticios</button>
+                <button type="button" className="sugerencia demo" disabled={ocupado} onClick={demo.iniciar}>Ver la demo guiada</button>
               </div>
             </FadeIn>
           ) : null}
@@ -454,6 +492,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             className="entrada"
             rows={1}
             value={texto}
+            readOnly={demo.activa}
             placeholder="Pregunta algo"
             onChange={(e) => setTexto(e.target.value)}
             onKeyDown={(e) => {

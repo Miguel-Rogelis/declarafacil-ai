@@ -88,6 +88,6 @@
       "openrouter/free"
     ],
     "temperatura": 0.2,
-    "razonamiento": "low"
+    "razonamiento": "no"
   }
 }

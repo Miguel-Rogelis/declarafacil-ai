@@ -135,7 +135,7 @@ p { max-width: 38em; }
 .nav { display: flex; align-items: center; gap: 0.25rem; padding: 0.35rem; border-radius: var(--radio-pastilla); background: color-mix(in srgb, var(--hoja) 86%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--marco); box-shadow: var(--sombra-tarjeta); }
 .nav ul { position: relative; display: flex; align-items: center; gap: 0.15rem; list-style: none; margin: 0; padding: 0; }
 .nav li { position: relative; }
-.nav-indicador { position: absolute; top: 0; bottom: 0; left: 0; border-radius: var(--radio-pastilla); background: color-mix(in srgb, var(--tinta) 6%, transparent); box-shadow: inset 0 0 0 1px var(--marco); }
+.nav .nav-indicador { position: absolute; top: 0; bottom: 0; left: 0; border-radius: var(--radio-pastilla); background: color-mix(in srgb, var(--tinta) 6%, transparent); box-shadow: inset 0 0 0 1px var(--marco); }
 .nav a { position: relative; z-index: 1; display: inline-flex; align-items: center; min-height: 2.25rem; text-decoration: none; color: var(--tinta-suave); padding: 0.35rem 0.95rem; border-radius: var(--radio-pastilla); font-size: var(--fs-md); font-weight: 500; transition: color 0.25s; white-space: nowrap; }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--tinta); }
 .solo-angosto { display: none; }
@@ -604,8 +604,14 @@ main { padding-bottom: 6rem; }
   .boton-tema { width: 2rem; height: 2rem; }
   .principal { padding-top: 4.4rem; }
 }
-@media (max-width: 400px) {
-  .nav a { padding-inline: 0.45rem; }
+@media (max-width: 440px) {
+  .encabezado { gap: 0.25rem; padding-inline: 0.4rem; }
+  .nav { gap: 0.1rem; padding: 0.2rem; }
+  .nav ul { gap: 0; }
+  .nav a { padding: 0.3rem 0.45rem; font-size: var(--fs-xs); min-height: 2rem; }
+  .boton-tema { width: 1.85rem; height: 1.85rem; }
+  .selector-anio select { padding: 0.15rem 0.2rem; font-size: var(--fs-xs); }
+  .marca { padding: 0.3rem 0.35rem; font-size: 1.3rem; }
 }
 
 /* ---------- Acabados de la plantilla: tarjetas con marco, botones en píldora, entradas suaves ---------- */

@@ -17,7 +17,8 @@ concurrency:
 
 jobs:
   pruebas:
-    runs-on: ubuntu-latest
+    # 24.04 fijo: Playwright todavía no instala sus navegadores en Ubuntu 26.04 (el nuevo ubuntu-latest)
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

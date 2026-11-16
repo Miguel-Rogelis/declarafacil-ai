@@ -53,7 +53,8 @@ function Paginas() {
       {ruta === "configuracion" ? <Configuracion /> : null}
       {ruta === "declarar" ? null : <footer className="pie contenedor">
         DeclaraFácil prepara un borrador con fines educativos. No reemplaza la asesoría de un contador ni presenta la declaración por ti.
-        Proyecto del curso Problem Discovery &amp; Solution Design with AI, Universidad Católica de Colombia.
+        Proyecto del curso Problem Discovery &amp; Solution Design with AI, Universidad Católica de Colombia.{" "}
+        <a href={`${import.meta.env.BASE_URL}privacidad.html`}>Privacidad</a>
       </footer>}
     </main>
   );

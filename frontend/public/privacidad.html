@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacidad · DeclaraFácil</title>
+    <meta name="description" content="Qué datos guarda DeclaraFácil, para qué y cómo borrarlos." />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Geist:wght@400..600&display=swap" rel="stylesheet" />
+    <style>
+      :root { --papel: #faf9f6; --tinta: #123b33; --suave: #4b625b; --sello: #5a3bc0; --reticula: #e2dfd7; color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) { :root { --papel: #0c1311; --tinta: #e6eee9; --suave: #9db1a8; --sello: #b3a2ff; --reticula: #26332f; } }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--papel); color: var(--tinta); font: 17px/1.6 "Geist", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+      main { width: min(44rem, 100% - 2.5rem); margin: 0 auto; padding: 4rem 0 5rem; }
+      a { color: var(--sello); text-underline-offset: 3px; }
+      h1, h2 { font-family: "Fraunces", Georgia, serif; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+      h1 { font-size: clamp(2.2rem, 6vw, 3rem); margin: 0.6rem 0 0.4rem; }
+      h2 { font-size: 1.35rem; margin: 2.4rem 0 0.4rem; }
+      p, li { color: var(--suave); }
+      strong { color: var(--tinta); font-weight: 600; }
+      .volver { font-size: 0.9rem; }
+      .fecha { margin: 0; font-size: 0.9rem; }
+      footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--reticula); font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="volver" href="./">← Volver a DeclaraFácil</a>
+      <h1>Privacidad</h1>
+      <p class="fecha">Actualizada el 16 de noviembre de 2026</p>
+
+      <p>DeclaraFácil es un proyecto educativo del curso Problem Discovery &amp; Solution Design with AI (Universidad Católica de Colombia). Te ayuda a armar un borrador de tu declaración de renta. Aquí te contamos, en simple, qué datos usa y qué hace con ellos.</p>
+
+      <h2>Lo que no guardamos</h2>
+      <ul>
+        <li><strong>Tus archivos.</strong> La exógena y los certificados que subes se leen en memoria para sacar las cifras y se descartan: no quedan guardados en el servidor.</li>
+        <li><strong>Tu cédula, tu nombre y tus cuentas en la IA.</strong> Antes de enviar algo a un modelo de IA los quitamos de los documentos. Las cifras de tu declaración las calcula el código, no la IA.</li>
+      </ul>
+
+      <h2>Lo que se guarda y dónde</h2>
+      <ul>
+        <li><strong>Sin iniciar sesión:</strong> la conversación y los datos que anotaste se guardan solo en tu navegador, para que no se pierdan si recargas. No salen de tu dispositivo.</li>
+        <li><strong>Si inicias sesión con Google o con tu correo:</strong> guardamos tu nombre, tu correo y tu foto de perfil (los da Google al entrar), y una copia de tu borrador (lo que contaste en el chat y las cifras que leímos de tus documentos) para que lo sigas desde cualquier dispositivo. Esa copia la puedes ver solo tú.</li>
+        <li><strong>Mensajes del chat:</strong> se envían a modelos de IA a través de OpenRouter para responderte. No los usamos para nada más.</li>
+      </ul>
+
+      <h2>Para qué usamos tus datos</h2>
+      <p>Solo para armar tu borrador, responderte y darte un cupo de mensajes con IA. No los vendemos, no hacemos publicidad y no los compartimos con nadie distinto a los servicios que hacen funcionar la app: Render (servidor), Supabase (cuentas y guardado) y OpenRouter (modelos de IA).</p>
+
+      <h2>Cómo borrarlos</h2>
+      <p>En el chat, el botón <strong>Borrar mis datos</strong> borra tu conversación de este navegador y, si iniciaste sesión, también la copia de tu cuenta. Para borrar tu cuenta por completo, escríbenos (abajo está cómo) y la eliminamos.</p>
+
+      <h2>Importante</h2>
+      <p>DeclaraFácil prepara un borrador con fines educativos. No reemplaza la asesoría de un contador ni presenta la declaración por ti: la firma en la DIAN siempre es tuya.</p>
+
+      <footer>Contacto: abre un mensaje en <a href="https://github.com/suntzz/declarafacil-ai/issues">github.com/suntzz/declarafacil-ai/issues</a>.</footer>
+    </main>
+  </body>
+</html>

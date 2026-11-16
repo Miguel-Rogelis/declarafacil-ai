@@ -547,3 +547,27 @@ def test_mas_de_2000_uvt_afuera_pide_formulario_160():
     d = construir_declaracion(SolicitudLiquidacion(respuestas=r))
     liq = liquidar(d, reglas.cargar(2025))
     assert any("160" in a.titulo for a in auditor.auditar(d, liq, []))
+
+
+def test_preguntar_por_entrar_por_primera_vez_no_es_su_historial():
+    j = Charla()("¿cómo entro a muisca por primera vez?")
+    assert not _anotado(j, "declaraciones_previas")
+    assert "historial" not in j["descartados"]
+    assert _anotado(Charla()("es la primera vez que declaro"), "declaraciones_previas")
+
+
+def test_bitcoin_de_la_ia_queda_como_criptomonedas():
+    r, hechas, _ = asistente.aplicar(Respuestas(), [{"campo": "bien", "concepto": "Bitcoin", "valor": "10 millones"}], "tengo 10 millones en bitcoin")
+    assert r.bienes_adicionales[0].concepto == "Criptomonedas" and hechas
+
+
+def test_el_160_no_se_menciona_por_debajo_del_tope(monkeypatch):
+    async def falso(t, vp, al_texto=None):
+        plan = asistente._Plan()
+        plan.respuesta = "Listo, lo anoté. Como tienes más de 2.000 UVT afuera, debes presentar el formulario 160."
+        plan.anotar = [{"campo": "bien", "concepto": "Bitcoin", "valor": "10 millones"}]
+        return plan, "falso"
+    monkeypatch.setattr(asistente.cliente, "disponible", lambda: True)
+    monkeypatch.setattr(asistente, "_con_ia", falso)
+    j = Charla()("tengo 10 millones en bitcoin")
+    assert "160" not in j["respuesta"] and j["respuesta"].startswith("Listo")

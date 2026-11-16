@@ -23,7 +23,10 @@ const aCuenta = (u: User): Cuenta => ({
 /** El token de la sesión, para que el servidor sepa quién pregunta (cupo de IA propio). */
 export const tokenActual = () => sesion?.access_token ?? null;
 
-export async function iniciarNube(url: string, clave: string, alCambiar: (c: Cuenta | null) => void): Promise<void> {
+let googleId: string | null = null;
+
+export async function iniciarNube(url: string, clave: string, alCambiar: (c: Cuenta | null) => void, idGoogle?: string | null): Promise<void> {
+  googleId = idGoogle || null;
   if (cliente) return;
   const { createClient } = await import("@supabase/supabase-js");
   cliente = createClient(url, clave, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
@@ -43,6 +46,82 @@ export async function entrarConGoogle(): Promise<void> {
   if (!cliente) throw new Error("Las cuentas no están activas");
   const { error } = await cliente.auth.signInWithOAuth({ provider: "google", options: { redirectTo: regreso() } });
   if (error) throw new Error(error.message);
+}
+
+// ---------- Botón oficial de Google (Google Identity Services) ----------
+// Google inicia sesión directo en esta página y le pasa a Supabase el token: la ventana y el correo
+// de aviso dicen «DeclaraFácil» y esta dirección, no la de Supabase.
+
+interface CredencialGoogle {
+  credential: string;
+}
+interface GoogleId {
+  initialize: (o: Record<string, unknown>) => void;
+  renderButton: (el: HTMLElement, o: Record<string, unknown>) => void;
+}
+declare global {
+  interface Window {
+    google?: { accounts: { id: GoogleId } };
+  }
+}
+
+export const googleDirecto = () => !!googleId;
+
+let gis: Promise<GoogleId> | null = null;
+function cargarGis(): Promise<GoogleId> {
+  if (window.google?.accounts?.id) return Promise.resolve(window.google.accounts.id);
+  gis ??= new Promise<GoogleId>((ok, mal) => {
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.onload = () => (window.google?.accounts?.id ? ok(window.google.accounts.id) : mal(new Error("Google no cargó")));
+    s.onerror = () => mal(new Error("Google no cargó"));
+    document.head.appendChild(s);
+    window.setTimeout(() => mal(new Error("Google tardó demasiado")), 8000);
+  }).catch((e) => {
+    gis = null;
+    throw e;
+  });
+  return gis;
+}
+
+async function nonce(): Promise<[string, string]> {
+  const crudo = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24)))).replace(/[+/=]/g, "");
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(crudo));
+  return [crudo, [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("")];
+}
+
+/** Pone el botón de Google en «el». Devuelve false si no se pudo (entonces se usa el botón de siempre). */
+export async function botonGoogle(el: HTMLElement, o: { oscuro: boolean; alFallar: (m: string) => void }): Promise<boolean> {
+  if (!googleId || !cliente) return false;
+  try {
+    const id = await cargarGis();
+    const [crudo, conHash] = await nonce();
+    id.initialize({
+      client_id: googleId,
+      nonce: conHash,
+      ux_mode: "popup",
+      use_fedcm_for_button: true,
+      callback: async ({ credential }: CredencialGoogle) => {
+        const { error } = await cliente!.auth.signInWithIdToken({ provider: "google", token: credential, nonce: crudo });
+        if (error) o.alFallar("Google respondió, pero no pude abrir tu sesión. Intenta de nuevo o entra con tu correo.");
+      },
+    });
+    el.replaceChildren();
+    id.renderButton(el, {
+      type: "standard",
+      theme: o.oscuro ? "filled_black" : "outline",
+      size: "large",
+      text: "continue_with",
+      shape: "pill",
+      logo_alignment: "left",
+      locale: "es",
+      width: Math.min(400, Math.max(220, Math.round(el.getBoundingClientRect().width))),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function entrarConCorreo(correo: string): Promise<void> {

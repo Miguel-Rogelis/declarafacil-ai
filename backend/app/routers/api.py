@@ -49,6 +49,7 @@ def _evento(item: orquestador.Salida) -> ServerSentEvent:
 class Supabase(BaseModel):
     url: str
     anon_key: str
+    google_client_id: str | None = None
 
 
 class Estado(BaseModel):
@@ -63,7 +64,7 @@ class Estado(BaseModel):
 def estado() -> Estado:
     return Estado(modo_llm=settings.modo_llm, anios=repo_reglas.anios_disponibles(), admin_protegido=bool(settings.admin_token),
                   ia_restante_hoy=cupo.restante_hoy(),
-                  supabase=Supabase(url=settings.supabase_url, anon_key=settings.supabase_anon_key) if cuentas.activas() else None)
+                  supabase=Supabase(url=settings.supabase_url, anon_key=settings.supabase_anon_key, google_client_id=settings.google_client_id or None) if cuentas.activas() else None)
 
 
 @router.post("/documentos/analizar", response_class=EventSourceResponse)

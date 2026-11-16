@@ -47,6 +47,7 @@ from app.agents.conocimiento import (
 )
 from app.llm import cliente, cupo
 from app.orquestador import Respuestas, SolicitudLiquidacion, construir_declaracion
+from app.tax import reglas as repo_reglas
 from app.tax.modelos import ItemPatrimonio, Liquidacion, Obligacion
 from app.tax.motor import liquidar
 
@@ -330,6 +331,13 @@ def aplicar(
             hechas.append(Anotacion(clave=clave, etiqueta=etiqueta, valor="Sí" if b else "No"))
         elif tipo == "item":
             concepto = str(item.get("concepto") or "").strip()[:80]
+            if clave == "bien" and concepto:
+                # Lo que la IA llame «Bitcoin» o «Cuenta en Miami» queda con un nombre que el auditor reconoce
+                nc = norm(concepto)
+                if re.search(r"cripto|bitcoin|\bbtc\b|usdt|binance|ethereum", nc):
+                    concepto = "Criptomonedas"
+                elif _RE_EXTERIOR.search(nc) and "exterior" not in nc:
+                    concepto += " en el exterior"
             v = _a_float(item.get("valor"))
             if not concepto or v is None:
                 continue
@@ -708,7 +716,7 @@ _DESCARTES = {
     "patrimonio": r"no tengo (nada(?! de (eso|esos|esas|esto))|bienes|propiedades|casa ni carro|carro ni casa)( a mi nombre)?|nada a mi nombre|no tengo (ni )?(casa|carro|bienes)",
     "bienes": r"no tengo (nada(?! de (eso|esos|esas|esto))|bienes|propiedades|casa ni carro|carro ni casa|ni casa|ni carro|carro|moto|vehiculo)( a mi nombre)?|nada a mi nombre",
     "costos": r"no tuve (costos|gastos)|sin (costos|gastos)|no tengo (costos|gastos|facturas)",
-    "historial": r"primera vez|nunca (he|habia) declarado|nunca declare",
+    "historial": r"(es|sera|seria) (la |mi )?primera vez|primera vez (que|en) (declar|hago)|mi primera declaracion|nunca (he|habia) declarado|nunca declare",
     "factura": r"no (pido|pedi|pedia) factura|no (tengo|tuve) (compras con )?factura|sin factura",
     "rendimientos": r"no (me )?(dio|dieron|genero|generaron|dan|pagan) (nada de )?interes|no tengo (cdt|inversiones|ahorros)|no (tuve|tengo) rendimientos",
     "exterior": r"no tengo (nada )?(afuera|en el exterior|fuera del pais|cripto\w*|bitcoin)|nada (afuera|en el exterior)",
@@ -787,7 +795,7 @@ def _extraer_datos(mensaje: str) -> list[dict[str, Any]]:
         familia = _familiares_a_cargo(msg)
         if hijos or familia:
             anotar.append({"campo": "dependientes", "valor": hijos + familia})
-    if re.search(r"primera vez|nunca (he|habia) declarado|nunca declare", msg):
+    if re.search(r"(es|sera|seria) (la |mi )?primera vez|primera vez (que|en) (declar|hago)|mi primera declaracion|nunca (he|habia) declarado|nunca declare", msg):
         anotar.append({"campo": "declaraciones_previas", "valor": 0})
     elif re.search(r"(he declarado|declare|declaro)\b.{0,20}(una vez|el ano pasado)", msg):
         anotar.append({"campo": "declaraciones_previas", "valor": 1})
@@ -1049,7 +1057,7 @@ CÓMO RESPONDES
 - Si pregunta qué le falta, usa LO QUE FALTA y dile de dónde sale cada dato.
 - Si hay una PREGUNTA PENDIENTE y el mensaje la responde (aunque sea corto: "2", "al mes", "no", "termina en 21"), interprétalo en ese contexto y anótalo.
 - Si la pregunta es sobre su caso y el ESTADO ya tiene el dato (su obligación, su fecha límite, la vista previa, su resultado), contéstale con su caso concreto.
-- Usa solo la BASE DE CONOCIMIENTO, los DATOS DEL AÑO y el ESTADO. No inventes normas, cifras ni fechas, y no hagas cálculos: las cifras las calcula el sistema. Si no lo sabes, dilo en una frase y remite a la DIAN o a un contador.
+- Usa solo la BASE DE CONOCIMIENTO, los DATOS DEL AÑO y el ESTADO. No inventes normas, cifras ni fechas, y no hagas cálculos: las cifras las calcula el sistema. Tampoco decidas si le aplica un tope (por ejemplo, el del formulario 160): eso lo revisa el sistema al calcular. Si no lo sabes, dilo en una frase y remite a la DIAN o a un contador.
 - Si el mensaje no tiene que ver con impuestos ni con la app, di en una frase que solo ayudas con la declaración de renta.
 
 ACCIONES (las ejecuta el sistema después de validar)
@@ -1618,6 +1626,15 @@ async def responder(t: TurnoChat, al_texto: AlTexto | None = None) -> RespuestaC
             partes.append("No tenía eso anotado.")
         if hechas and not respuesta.startswith("Listo"):
             partes.append("Listo, lo anoté.")
+    if con_ia and "160" in respuesta:
+        # El modelo no decide si aplica el formulario 160: solo se menciona si de verdad pasa de 2.000 UVT
+        try:
+            uvt = float(repo_reglas.cargar(e.anio_gravable)["uvt"])
+        except Exception:  # noqa: BLE001
+            uvt = 0
+        if not uvt or bienes_exterior(r) <= 2000 * uvt:
+            frases = [f for f in re.split(r"(?<=[.!?])\s+", respuesta) if "160" not in f]
+            respuesta = " ".join(frases) or ("Listo, lo anoté en tu patrimonio." if hechas else "")
     if pregunta_codigo and con_ia:
         respuesta = ("Anoté lo demás." if hechas else "")  # la pregunta del código reemplaza lo que dijo el modelo
     partes.append(respuesta)

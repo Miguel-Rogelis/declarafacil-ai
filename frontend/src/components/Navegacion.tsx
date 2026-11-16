@@ -110,7 +110,7 @@ export function Encabezado() {
             />
           ) : null}
           {items.map((i) => (
-            <li key={i.ruta} className={i.ruta === "inicio" ? "solo-ancho-item" : undefined}>
+            <li key={i.ruta} className={i.ruta === "inicio" ? "solo-ancho-item" : i.ruta === "configuracion" && resultado ? "oculto-celular" : undefined}>
               <a href={`#/${i.ruta}`} aria-current={ruta === i.ruta ? "page" : undefined}>
                 {i.corto ? <><span className="solo-ancho">{i.texto}</span><span className="solo-angosto">{i.corto}</span></> : i.texto}
               </a>

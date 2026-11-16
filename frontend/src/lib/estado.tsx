@@ -178,7 +178,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setServidor("listo");
         if (e.supabase) {
           setNubeActiva(true);
-          void iniciarNube(e.supabase.url, e.supabase.anon_key, setCuenta).catch(() => setNubeActiva(false));
+          void iniciarNube(e.supabase.url, e.supabase.anon_key, setCuenta, e.supabase.google_client_id).catch(() => setNubeActiva(false));
         }
       })
       .catch(() => {

@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Fragment, type CSSProperties } from "react";
 import { Candado, LetraD } from "../components/piezas";
+import { DeboDeclarar } from "../components/DeboDeclarar";
 import { FadeIn, Revelar, ScaleUnblur } from "../components/Movimiento";
 import { selloHex, useTemaActual } from "../components/Navegacion";
 import SpotlightCard from "../components/reactbits/SpotlightCard";
@@ -141,13 +142,19 @@ export default function Inicio() {
           </div>
           <p className="nota-privacidad">
             <Candado />
-            Tus archivos no se guardan. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y las cifras las calcula el código, no la IA.
+            Sin cuenta, tus archivos no se guardan; con cuenta, quedan en tu carpeta privada. Antes de usar IA quitamos tu cédula, tu nombre y tus cuentas, y las cifras las calcula el código.
           </p>
         </FadeIn>
         <ScaleUnblur delay={0.15}>
           <FormularioMuestra />
         </ScaleUnblur>
       </section>
+
+      <Revelar className="seccion-debo">
+        <h2 id="titulo-debo" className="titular t-36">¿Tengo que declarar? Averígualo en 30 segundos.</h2>
+        <p className="suave">Cuatro cifras aproximadas y te digo si llegas a algún tope de la DIAN. No se guarda nada.</p>
+        <DeboDeclarar />
+      </Revelar>
 
       <Revelar className="pasos-stepper">
         <h2 id="titulo-pasos" className="titular t-36">Cómo funciona</h2>

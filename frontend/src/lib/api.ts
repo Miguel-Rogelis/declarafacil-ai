@@ -289,7 +289,7 @@ export interface Estado {
   anios: AnioDisponible[];
   admin_protegido: boolean;
   ia_restante_hoy?: number;
-  supabase?: { url: string; anon_key: string } | null;
+  supabase?: { url: string; anon_key: string; google_client_id?: string | null } | null;
 }
 
 export interface AgenteConfig {

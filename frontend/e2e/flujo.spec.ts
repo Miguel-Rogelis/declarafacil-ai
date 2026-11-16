@@ -34,4 +34,21 @@ test("la demo guiada llega sola hasta el borrador y se puede pausar", async ({ p
   await expect(page).toHaveURL(/#\/resultado/, { timeout: 120_000 });
   await expect(page.getByText(/saldo a favor|Te toca pagar/).first()).toBeVisible();
   await expect(page.getByText("Ya viste el caso completo")).toBeVisible();
+
+  // Del resultado a la guía para presentar en la DIAN: cada casilla se copia y queda marcada
+  await page.getByRole("button", { name: "Seguir yo" }).click();
+  await page.goto("/#/resultado");
+  await page.getByRole("button", { name: "Presentar en la DIAN, paso a paso" }).click();
+  await expect(page.getByRole("heading", { name: "Presenta tu declaración en la DIAN." })).toBeVisible();
+  await page.getByRole("button", { name: /Copiar el valor de la casilla/ }).first().click();
+  await expect(page.getByText(/^1 de \d+ casillas listas$/)).toBeVisible();
+});
+
+test("«¿Tengo que declarar?» responde con los topes del año", async ({ page }) => {
+  await page.goto("/#/inicio");
+  const debo = page.locator(".debo-declarar");
+  await debo.getByLabel(/Cuánto recibiste en/).fill("85000000");
+  await expect(debo.getByText("Sí, tienes que declarar")).toBeVisible();
+  await debo.getByLabel(/Cuánto recibiste en/).fill("20000000");
+  await expect(debo.getByText(/No tienes que declarar/)).toBeVisible();
 });

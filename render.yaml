@@ -17,5 +17,8 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
+      # ID de cliente de Google (Google Cloud → Credenciales). Opcional: hace que Google muestre «DeclaraFácil»
+      - key: GOOGLE_CLIENT_ID
+        sync: false
       - key: APP_URL
         value: https://declarafacil.onrender.com

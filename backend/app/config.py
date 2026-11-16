@@ -37,6 +37,8 @@ class Settings:
     # Cuentas (opcional): proyecto de Supabase. La clave «anon» es pública: la usa el navegador para iniciar sesión
     supabase_url: str = field(default_factory=lambda: _solo_dominio(os.getenv("SUPABASE_URL", "")))
     supabase_anon_key: str = field(default_factory=lambda: os.getenv("SUPABASE_ANON_KEY", ""))
+    # ID de cliente de Google (público): con él, el botón de Google dice «DeclaraFácil» y no la dirección de Supabase
+    google_client_id: str = field(default_factory=lambda: os.getenv("GOOGLE_CLIENT_ID", "").strip())
     max_upload_mb: int = 5
 
     @property

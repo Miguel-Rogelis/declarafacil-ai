@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useSesion } from "../lib/estado";
-import { entrarConCorreo, entrarConGoogle, salir } from "../lib/nube";
+import { botonGoogle, entrarConCorreo, entrarConGoogle, googleDirecto, salir } from "../lib/nube";
 
 const CURVA = [0.23, 1, 0.32, 1] as const;
 
@@ -22,6 +22,14 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
   const [estado, setEstado] = useState<"" | "google" | "enviando" | "enviado">("");
   const [error, setError] = useState("");
   const ventana = useRef<HTMLDivElement>(null);
+  // Con el ID de Google configurado va su botón oficial; si no carga, el de siempre (redirige por Supabase)
+  const cajaGoogle = useRef<HTMLDivElement>(null);
+  const [oficial, setOficial] = useState<"cargando" | "listo" | "no">(googleDirecto() ? "cargando" : "no");
+  useEffect(() => {
+    if (oficial !== "cargando" || !cajaGoogle.current) return;
+    const oscuro = document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    void botonGoogle(cajaGoogle.current, { oscuro, alFallar: setError }).then((ok) => setOficial(ok ? "listo" : "no"));
+  }, [oficial]);
 
   // Ventana modal: Escape cierra, Tab no se sale y al cerrar el foco vuelve al botón «Entrar»
   useEffect(() => {
@@ -102,10 +110,14 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
             </motion.div>
           ) : (
             <motion.div key="opciones" className="opciones-entrar" initial={false} exit={{ opacity: 0 }}>
-              <button type="button" className="boton-google" onClick={() => void google()} disabled={estado !== ""}>
-                <LogoGoogle />
-                {estado === "google" ? "Abriendo Google…" : "Continuar con Google"}
-              </button>
+              {oficial !== "no" ? (
+                <div className={`google-oficial${oficial === "cargando" ? " cargando" : ""}`} ref={cajaGoogle} aria-busy={oficial === "cargando"} />
+              ) : (
+                <button type="button" className="boton-google" onClick={() => void google()} disabled={estado !== ""}>
+                  <LogoGoogle />
+                  {estado === "google" ? "Abriendo Google…" : "Continuar con Google"}
+                </button>
+              )}
               <div className="separador" role="separator"><span>o con tu correo</span></div>
               <form className="entrar-correo" onSubmit={(e) => void porCorreo(e)}>
                 <label htmlFor="correo-entrar" className="visualmente-oculto">Tu correo</label>

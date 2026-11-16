@@ -593,6 +593,11 @@ main { padding-bottom: 6rem; }
   .marca span { display: none; }
   .marca { padding: 0.4rem 0.55rem; font-size: 1.5rem; }
 }
+@media (max-width: 1040px) {
+  .solo-ancho { display: none; }
+  .solo-angosto { display: inline; }
+  .selector-anio > span { display: none; }
+}
 @media (max-width: 640px) {
   .encabezado { grid-template-columns: auto 1fr auto; gap: 0.4rem; padding: 0.7rem 0.6rem; }
   .nav { justify-self: center; padding: 0.25rem; }
@@ -608,6 +613,7 @@ main { padding-bottom: 6rem; }
 }
 @media (max-width: 440px) {
   .encabezado { gap: 0.25rem; padding-inline: 0.4rem; }
+  .oculto-celular { display: none; }
   .nav { gap: 0.1rem; padding: 0.2rem; }
   .nav ul { gap: 0; }
   .nav a { padding: 0.3rem 0.45rem; font-size: var(--fs-xs); min-height: 2rem; }
@@ -925,3 +931,36 @@ main { padding-bottom: 6rem; }
 .comparar-anios thead th { font-weight: 600; color: var(--tinta-suave); font-size: var(--fs-sm); }
 .comparar-anios .sube { color: var(--lacre); }
 .comparar-anios .baja { color: var(--sello); }
+
+/* Botón oficial de Google (iframe de Google Identity Services) */
+.google-oficial { min-height: 44px; display: flex; justify-content: center; }
+.google-oficial.cargando { border-radius: var(--radio-pastilla); background: var(--papel-hondo); animation: latido-google 1.2s ease-in-out infinite; }
+@keyframes latido-google { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .google-oficial.cargando { animation: none; } }
+
+/* ---------- ¿Tengo que declarar? (portada) ---------- */
+.seccion-debo { padding-top: 5rem; }
+.seccion-debo > .suave { margin-top: 0.4rem; }
+.debo-declarar { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 1.4rem; margin-top: 1.8rem; align-items: stretch; }
+.debo-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem 1.2rem; padding: 1.4rem; border: 1px solid var(--marco); border-radius: var(--radio-marco); background: var(--hoja); box-shadow: var(--sombra-tarjeta); }
+.campo-debo { display: grid; gap: 0.35rem; align-content: start; }
+.campo-debo label { font-weight: 550; font-size: var(--fs-md); line-height: 1.35; }
+.campo-debo .ayuda { font-size: var(--fs-xs); color: var(--tinta-suave); line-height: 1.4; }
+.entrada-pesos { display: flex; align-items: center; gap: 0.35rem; padding: 0 0.85rem; border: 1px solid var(--borde-campo); border-radius: var(--radio-control); background: var(--campo); transition: border-color 160ms ease, box-shadow 160ms ease; }
+.entrada-pesos:focus-within { border-color: var(--sello); box-shadow: 0 0 0 3px var(--sello-claro); }
+.entrada-pesos span { color: var(--tinta-suave); font-weight: 550; }
+.entrada-pesos input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--tinta); font: inherit; font-size: 16px; font-weight: 600; padding: 0.7rem 0; font-variant-numeric: tabular-nums; }
+.check-iva { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.55rem; font-size: var(--fs-sm); color: var(--tinta-suave); cursor: pointer; }
+.check-iva input { width: 1.05rem; height: 1.05rem; accent-color: var(--sello); }
+.debo-veredicto { display: flex; flex-direction: column; justify-content: space-between; gap: 1.2rem; padding: 1.6rem; border-radius: var(--radio-marco); background: var(--papel-hondo); border: 1px solid var(--marco); transition: background-color 240ms ease, border-color 240ms ease; }
+.debo-veredicto.si { background: var(--sello-claro); border-color: color-mix(in srgb, var(--sello) 35%, transparent); }
+.debo-veredicto .boton { align-self: flex-start; }
+.debo-etiqueta { display: inline-block; font-size: var(--fs-sm); font-weight: 600; color: var(--sello-hondo); }
+.debo-veredicto.no .debo-etiqueta { color: var(--tinta); }
+.debo-titulo { font-family: var(--fuente-titular); font-size: 1.55rem; line-height: 1.2; letter-spacing: -0.01em; margin: 0.5rem 0 0.6rem; text-wrap: balance; }
+.debo-veredicto p.suave { margin: 0; font-size: var(--fs-md); line-height: 1.5; }
+@media (max-width: 860px) {
+  .debo-declarar { grid-template-columns: minmax(0, 1fr); }
+  .debo-campos { grid-template-columns: minmax(0, 1fr); padding: 1.1rem; }
+  .seccion-debo { padding-top: 3.5rem; }
+}

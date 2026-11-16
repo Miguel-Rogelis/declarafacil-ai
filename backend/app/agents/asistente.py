@@ -1470,9 +1470,13 @@ async def responder(t: TurnoChat) -> RespuestaChat:
     if rechazadas:
         partes.append(f"No anoté {', '.join(rechazadas)} porque no encontré esa cifra en lo que escribiste; escríbela con números.")
     nuevos_no = [x for x in descartes(t.mensaje) if x not in e.ya_preguntado and x in _YA_NO]
-    if nuevos_no and not con_ia and not hechas:
-        partes = [x for x in partes if x not in ("Entendido.", "")]
-        partes.insert(0, "Listo, anoté que " + diagnostico._lista(list(dict.fromkeys(_YA_NO[x] for x in nuevos_no))) + ".")
+    if nuevos_no:
+        frase = diagnostico._lista(list(dict.fromkeys(_YA_NO[x] for x in nuevos_no)))
+        if not hechas and not con_ia:
+            partes = [x for x in partes if x not in ("Entendido.", "")]
+            partes.insert(0, f"Listo, anoté que {frase}.")
+        elif hechas and not any(_YA_NO[x].split()[-1] in norm(" ".join(partes)) for x in nuevos_no):
+            partes.append(f"También anoté que {frase}.")
 
     # 4. Año
     cambiar = plan.cambiar_anio if plan.cambiar_anio in anios_vigentes() and plan.cambiar_anio != e.anio_gravable else None

@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { useSesion, type Ruta } from "../lib/estado";
+import { CuentaBoton } from "./CuentaBoton";
 import { LetraD } from "./piezas";
 
 type Tema = "light" | "dark";
@@ -118,14 +119,17 @@ export function Encabezado() {
         </ul>
         <BotonTema />
       </nav>
-      <label className="selector-anio">
-        <span>Año</span>
-        <select value={anio} onChange={(e) => cambiarAnio(Number(e.target.value))} aria-label="Año gravable">
-          {(vigentes.length ? vigentes : [{ anio_gravable: 2025 }]).map((a) => (
-            <option key={a.anio_gravable} value={a.anio_gravable}>{a.anio_gravable}</option>
-          ))}
-        </select>
-      </label>
+      <div className="encabezado-derecha">
+        <label className="selector-anio">
+          <span>Año</span>
+          <select value={anio} onChange={(e) => cambiarAnio(Number(e.target.value))} aria-label="Año gravable">
+            {(vigentes.length ? vigentes : [{ anio_gravable: 2025 }]).map((a) => (
+              <option key={a.anio_gravable} value={a.anio_gravable}>{a.anio_gravable}</option>
+            ))}
+          </select>
+        </label>
+        <CuentaBoton />
+      </div>
     </header>
   );
 }

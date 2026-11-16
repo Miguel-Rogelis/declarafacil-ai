@@ -116,7 +116,7 @@ function HojaTrabajo({ filas, respuestas, documentos }: { filas: Fila[]; respues
 }
 
 export default function Declarar() {
-  const { filas, respuestas, anio, mensajes, reiniciar, porRevisar, documentos, ficha } = useSesion();
+  const { filas, respuestas, anio, mensajes, reiniciar, porRevisar, documentos, ficha, cuenta } = useSesion();
   const [abierto, setAbierto] = useState(false);
   const boton = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
@@ -152,7 +152,7 @@ export default function Declarar() {
   const barra = (
     <div className="chat-barra">
       <div className="chat-columna fila-barra">
-        {mensajes.length ? <BorrarDatos onBorrar={reiniciar} /> : <span />}
+        {mensajes.length ? <BorrarDatos onBorrar={() => reiniciar({ nube: true })} nube={!!cuenta} /> : <span />}
         <button ref={boton} className="boton secundario chico" onClick={() => setAbierto(true)} aria-expanded={abierto} aria-controls="panel-datos">
           Tus datos{cantidad ? ` (${cantidad})` : ""}{porRevisar.length ? ` · ${porRevisar.length} por confirmar` : ""}
         </button>

@@ -12,5 +12,10 @@ services:
         sync: false
       - key: ADMIN_TOKEN
         generateValue: true
+      # Cuentas (opcional): proyecto de Supabase; ver «Cuentas» en el README
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
       - key: APP_URL
         value: https://declarafacil.onrender.com

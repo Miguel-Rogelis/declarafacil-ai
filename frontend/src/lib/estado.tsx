@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { borrarLocal, guardarLocal, leerLocal, sinAnimar, type Instantanea } from "./guardado";
+import { borrarDeLaNube, guardarEnLaNube, iniciarNube, leerDeLaNube, type Cuenta } from "./nube";
 import {
   analizarDocumentos,
   api,
@@ -65,6 +66,13 @@ interface Sesion {
   cerrarPregunta: () => void;
   ficha: ItemFicha[];
   servidor: EstadoServidor;
+  /** Cuentas: null sin sesión; nubeActiva dice si el servidor trae Supabase configurado. */
+  cuenta: Cuenta | null;
+  nubeActiva: boolean;
+  sincronizando: boolean;
+  instantanea: () => Instantanea;
+  aplicar: (s: Instantanea) => void;
+  pausarGuardado: (pausado: boolean) => void;
   decididas: Record<string, boolean>;
   trazaDocumento: EventoAgente[];
   respuestas: Respuestas;
@@ -83,7 +91,7 @@ interface Sesion {
   calcular: (opciones?: { silencioso?: boolean }) => Promise<void>;
   archivoPendiente: File[] | null;
   setArchivoPendiente: (f: File[] | null) => void;
-  reiniciar: () => void;
+  reiniciar: (opciones?: { nube?: boolean; conservarGuardado?: boolean }) => void;
   porRevisar: Fila[];
   hayDatos: boolean;
 }
@@ -114,6 +122,10 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [anios, setAnios] = useState<AnioDisponible[]>([]);
   const [modoLlm, setModoLlm] = useState("");
   const [servidor, setServidor] = useState<EstadoServidor>("conectando");
+  const [cuenta, setCuenta] = useState<Cuenta | null>(null);
+  const [nubeActiva, setNubeActiva] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  const guardadoPausado = useRef(false);
   const [extraccion, setExtraccion] = useState<Extraccion | null>(guardada?.extraccion ?? null);
   const [filas, setFilas] = useState<Fila[]>(guardada?.filas ?? []);
   const [decididas, setDecididas] = useState<Record<string, boolean>>(guardada?.decididas ?? {});
@@ -157,6 +169,10 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setAnios(e.anios);
         setModoLlm(e.modo_llm);
         setServidor("listo");
+        if (e.supabase) {
+          setNubeActiva(true);
+          void iniciarNube(e.supabase.url, e.supabase.anon_key, setCuenta).catch(() => setNubeActiva(false));
+        }
       })
       .catch(() => {
         setAnios([{ anio_gravable: 2025, estado: "vigente", uvt: 49799, descripcion: "" }]);
@@ -505,7 +521,8 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     [agregar, ponerAnio, recalcularSiHabia],
   );
 
-  const reiniciar = useCallback(() => {
+  const reiniciar = useCallback((opciones?: { nube?: boolean; conservarGuardado?: boolean }) => {
+    if (opciones?.nube) void borrarDeLaNube();
     setExtraccion(null);
     setFilas([]);
     setDecididas({});
@@ -516,7 +533,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setMensajes([]);
     conversacion.current = { pregunta: null, ya: [], descartados: [] };
     setFicha([]);
-    borrarLocal();
+    if (!opciones?.conservarGuardado) borrarLocal();
     recien.current = [];
     setPregunta(null);
     setElecciones({});
@@ -534,12 +551,18 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const ultima = useRef(instantanea);
   ultima.current = instantanea;
   useEffect(() => {
-    if (escribiendo || calculando) return;
+    if (escribiendo || calculando || guardadoPausado.current) return;
     const t = window.setTimeout(() => guardarLocal(instantanea()), 250);
     return () => window.clearTimeout(t);
   }, [instantanea, escribiendo, calculando]);
+  // Con sesión, también en la nube (con más pausa: es una llamada por red)
   useEffect(() => {
-    const guardarYa = () => guardarLocal(ultima.current());
+    if (!cuenta || sincronizando || escribiendo || calculando || guardadoPausado.current) return;
+    const t = window.setTimeout(() => void guardarEnLaNube(instantanea()).catch(() => {}), 1500);
+    return () => window.clearTimeout(t);
+  }, [instantanea, cuenta, sincronizando, escribiendo, calculando]);
+  useEffect(() => {
+    const guardarYa = () => !guardadoPausado.current && guardarLocal(ultima.current());
     const alOcultar = () => document.visibilityState === "hidden" && guardarYa();
     window.addEventListener("pagehide", guardarYa);
     document.addEventListener("visibilitychange", alOcultar);
@@ -549,11 +572,54 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  /** Pone una conversación guardada en pantalla (la de la nube al iniciar sesión, o la de antes de la demo). */
+  const aplicar = useCallback((g: Instantanea) => {
+    setAnio(g.anio);
+    setExtraccion(g.extraccion);
+    setFilas(g.filas);
+    setDecididas(g.decididas);
+    setElecciones(g.elecciones);
+    setTrazaDocumento(g.trazaDocumento);
+    setRespuestas({ ...respuestasIniciales(), ...g.respuestas });
+    setResultado(g.resultado);
+    const ms = sinAnimar(g.mensajes);
+    setMensajes(ms);
+    contador.current = Math.max(contador.current, ...ms.map((m) => m.id + 1));
+    conversacion.current = g.conversacion;
+    setFicha(g.ficha);
+    setPregunta(g.conversacion.pregunta?.partes?.length ? g.conversacion.pregunta : null);
+    ref.current = { ...ref.current, anio: g.anio, extraccion: g.extraccion, filas: g.filas, decididas: g.decididas, respuestas: g.respuestas, resultado: g.resultado, mensajes: ms };
+  }, []);
+
+  // Al iniciar sesión: gana la versión más reciente entre la de este navegador y la de la cuenta
+  const yaSincronizada = useRef<string | null>(null);
+  useEffect(() => {
+    if (!cuenta || yaSincronizada.current === cuenta.id) return;
+    yaSincronizada.current = cuenta.id;
+    setSincronizando(true);
+    void leerDeLaNube()
+      .then(async (nube) => {
+        const local = ultima.current();
+        const localTiene = local.mensajes.length > 0 || !!local.extraccion;
+        if (nube && (!localTiene || (leerLocal()?.guardada ?? "") < nube.guardada)) aplicar(nube);
+        else if (localTiene) await guardarEnLaNube(local);
+      })
+      .catch(() => {})
+      .finally(() => setSincronizando(false));
+  }, [cuenta, aplicar]);
+  useEffect(() => {
+    if (!cuenta) yaSincronizada.current = null;
+  }, [cuenta]);
+
+  const pausarGuardado = useCallback((pausado: boolean) => {
+    guardadoPausado.current = pausado;
+  }, []);
+
   const porRevisar = useMemo(() => porRevisarDe(filas, decididas), [filas, decididas]);
   const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, decididas, trazaDocumento, respuestas,
+    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, cuenta, nubeActiva, sincronizando, instantanea, aplicar, pausarGuardado, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
     procesarArchivo, procesarArchivos, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };

@@ -27,6 +27,9 @@ class Settings:
             o.strip() for o in os.getenv("CORS_ORIGINS", "https://suntzz.github.io,https://miguel-rogelis.github.io").split(",") if o.strip()
         ]
     )
+    # Cuentas (opcional): proyecto de Supabase. La clave «anon» es pública: la usa el navegador para iniciar sesión
+    supabase_url: str = field(default_factory=lambda: os.getenv("SUPABASE_URL", ""))
+    supabase_anon_key: str = field(default_factory=lambda: os.getenv("SUPABASE_ANON_KEY", ""))
     max_upload_mb: int = 5
 
     @property

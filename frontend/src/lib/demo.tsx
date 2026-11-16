@@ -42,6 +42,8 @@ export function ProveedorDemo({ children }: { children: ReactNode }) {
   s.current = sesion;
   const [estado, setEstado] = useState<EstadoDemo>(INICIAL);
   const control = useRef({ corriendo: false, cancelada: false, pausada: false, saltar: false });
+  // La conversación de la persona antes de la demo: vuelve si cierra la demo, y no se guarda encima mientras corre
+  const previa = useRef<ReturnType<typeof sesion.instantanea> | null>(null);
 
   // Espera ms de tiempo corrido (no cuenta mientras está en pausa); «Siguiente» la corta
   const esperar = useCallback(async (ms: number) => {
@@ -82,7 +84,9 @@ export function ProveedorDemo({ children }: { children: ReactNode }) {
     if (control.current.corriendo) return;
     control.current = { corriendo: true, cancelada: false, pausada: false, saltar: false };
     usarSinIa(true);
-    s.current.reiniciar();
+    if (!previa.current) previa.current = s.current.instantanea();
+    s.current.pausarGuardado(true);
+    s.current.reiniciar({ conservarGuardado: true });
     s.current.ir("declarar");
     try {
       for (let i = 0; i < PASOS.length; i++) {
@@ -123,6 +127,9 @@ export function ProveedorDemo({ children }: { children: ReactNode }) {
     tomarControl: () => {
       control.current.cancelada = true;
       usarSinIa(false);
+      // Sigue con la conversación de la demo: desde ahora es la suya y se guarda
+      previa.current = null;
+      s.current.pausarGuardado(false);
       setEstado(INICIAL);
       s.current.ir("declarar");
       window.setTimeout(() => document.getElementById("mensaje")?.focus(), 80);
@@ -130,6 +137,10 @@ export function ProveedorDemo({ children }: { children: ReactNode }) {
     cerrar: () => {
       control.current.cancelada = true;
       usarSinIa(false);
+      // Vuelve la conversación que tenía antes de la demo
+      if (previa.current) s.current.aplicar(previa.current);
+      previa.current = null;
+      s.current.pausarGuardado(false);
       setEstado(INICIAL);
     },
   };

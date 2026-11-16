@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import cuentas
 from app.config import settings
 from app.llm import cupo
 from app.routers import api
@@ -26,7 +27,9 @@ async def identificar(request: Request, call_next):  # noqa: ANN001, ANN201
     """Quién llama (para el cupo de IA) y si pide respuestas sin IA (modo demo)."""
     reenviada = request.headers.get("x-forwarded-for", "")
     ip = reenviada.split(",")[0].strip() or (request.client.host if request.client else "anonimo")
-    cupo.quien.set(getattr(request.state, "usuario", None) or ip)
+    # Con sesión iniciada cada persona tiene su cupo; sin sesión se cuenta por IP (un salón entero comparte la suya)
+    usuario = await cuentas.usuario_de(request.headers.get("authorization")) if request.url.path.startswith("/api/") else None
+    cupo.quien.set(f"usuario:{usuario}" if usuario else ip)
     cupo.sin_ia.set(request.headers.get("x-sin-ia") == "1")
     cupo.limitado.set(False)
     return await call_next(request)

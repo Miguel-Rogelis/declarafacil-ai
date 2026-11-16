@@ -1,3 +1,4 @@
+import { tokenActual } from "./nube";
 // Tipos y llamadas a la API del backend (FastAPI).
 
 export type Tratamiento = "suma" | "informativo" | "revisar";
@@ -271,6 +272,8 @@ export interface Estado {
   modo_llm: string;
   anios: AnioDisponible[];
   admin_protegido: boolean;
+  ia_restante_hoy?: number;
+  supabase?: { url: string; anon_key: string } | null;
 }
 
 export interface AgenteConfig {
@@ -382,7 +385,10 @@ let sinIa = false;
 export const usarSinIa = (v: boolean) => {
   sinIa = v;
 };
-const cabeceras = (h?: HeadersInit): HeadersInit => ({ ...(sinIa ? { "X-Sin-IA": "1" } : {}), ...(h as Record<string, string>) });
+const cabeceras = (h?: HeadersInit): HeadersInit => {
+  const token = tokenActual();
+  return { ...(sinIa ? { "X-Sin-IA": "1" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(h as Record<string, string>) };
+};
 
 /** Lee una respuesta Server-Sent Events de un POST y despacha cada evento. */
 async function flujo<R>(url: string, init: RequestInit, m: Manejadores<R>): Promise<void> {

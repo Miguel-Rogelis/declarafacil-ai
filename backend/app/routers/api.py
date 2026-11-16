@@ -20,7 +20,7 @@ from fastapi.responses import Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel
 
-from app import orquestador
+from app import cuentas, orquestador
 from app.agents import asistente, configuracion
 from app.agents.base import EventoAgente
 from app.config import settings
@@ -46,17 +46,24 @@ def _evento(item: orquestador.Salida) -> ServerSentEvent:
     return ServerSentEvent(data=item, event="resultado")
 
 
+class Supabase(BaseModel):
+    url: str
+    anon_key: str
+
+
 class Estado(BaseModel):
     modo_llm: str
     anios: list[dict[str, Any]]
     admin_protegido: bool
     ia_restante_hoy: int
+    supabase: Supabase | None = None  # cuentas activas: el navegador inicia sesión con esto
 
 
 @router.get("/estado")
 def estado() -> Estado:
     return Estado(modo_llm=settings.modo_llm, anios=repo_reglas.anios_disponibles(), admin_protegido=bool(settings.admin_token),
-                  ia_restante_hoy=cupo.restante_hoy())
+                  ia_restante_hoy=cupo.restante_hoy(),
+                  supabase=Supabase(url=settings.supabase_url, anon_key=settings.supabase_anon_key) if cuentas.activas() else None)
 
 
 @router.post("/documentos/analizar", response_class=EventSourceResponse)

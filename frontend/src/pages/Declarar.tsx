@@ -10,6 +10,7 @@ function extrasDeRespuestas(r: Respuestas): { concepto: string; valor: number | 
   const go = r.ganancias_ocasionales;
   const pares: [string, number][] = [
     ["Salarios", r.salarios_no_reportados],
+    ["Cesantías", r.cesantias_no_reportadas ?? 0],
     ["Honorarios", r.honorarios_no_reportados],
     ["Pensión", r.pensiones_no_reportadas],
     ["Arriendos", r.arriendos_no_reportados],

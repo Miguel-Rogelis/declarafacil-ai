@@ -1,4 +1,5 @@
 import { MotionConfig } from "motion/react";
+import { AvisoServidor } from "./components/AvisoServidor";
 import { Encabezado } from "./components/Navegacion";
 import Noise from "./components/reactbits/Noise";
 import { ShaderFlow } from "./components/ShaderFlow";
@@ -33,6 +34,7 @@ function Marco() {
       <Noise fixed fps={0} opacity={0.04} size={1.2} blendMode="multiply" contrast={0.5} zIndex={60} />
       <Fondo ruta={ruta} />
       <Encabezado />
+      <AvisoServidor />
       <Paginas />
     </div>
   );

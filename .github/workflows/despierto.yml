@@ -1,0 +1,20 @@
+# Render gratis apaga el servicio tras 15 minutos sin visitas y la siguiente tarda ~1 minuto en responder.
+# Este workflow lo visita cada 10 minutos para que esté despierto (un solo servicio 24/7 cabe en las 750 h gratis al mes).
+# La dirección sale de la variable API_URL del repo (Settings → Secrets and variables → Actions → Variables).
+name: Mantener Render despierto
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  visitar:
+    if: vars.API_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Llamar /api/salud
+        run: curl --fail --silent --show-error --max-time 120 --retry 2 --retry-delay 20 "${{ vars.API_URL }}/api/salud"

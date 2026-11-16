@@ -174,6 +174,7 @@ export interface GananciasOcasionales {
 export interface Respuestas {
   dependientes: number;
   salarios_no_reportados: number;
+  cesantias_no_reportadas?: number;
   retenciones_no_reportadas: number;
   dividendos_no_reportados: number;
   medicina_prepagada: number;
@@ -203,6 +204,7 @@ export interface Respuestas {
 export const respuestasIniciales = (): Respuestas => ({
   dependientes: 0,
   salarios_no_reportados: 0,
+  cesantias_no_reportadas: 0,
   retenciones_no_reportadas: 0,
   dividendos_no_reportados: 0,
   medicina_prepagada: 0,

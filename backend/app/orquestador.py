@@ -50,6 +50,7 @@ class Respuestas(BaseModel):
 
     dependientes: int = 0
     salarios_no_reportados: float = 0
+    cesantias_no_reportadas: float = 0
     retenciones_no_reportadas: float = 0
     dividendos_no_reportados: float = 0
     medicina_prepagada: float = 0
@@ -302,6 +303,11 @@ def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
             d.laboral.aportes_obligatorios_pension = r.salarios_no_reportados * 0.04
             d.laboral.aportes_obligatorios_salud = r.salarios_no_reportados * 0.04
             d.fuentes.setdefault("estimado", []).append("aportes 4 % + 4 %")
+    if r.cesantias_no_reportadas:
+        d.laboral.cesantias_e_intereses += r.cesantias_no_reportadas
+        if not d.laboral.salario_promedio_mensual_6m and r.salarios_no_reportados:
+            # Sin certificado: el promedio de los últimos 6 meses se estima con el salario del año
+            d.laboral.salario_promedio_mensual_6m = r.salarios_no_reportados / 12
     d.pagos.retenciones_renta += r.retenciones_no_reportadas
     d.dividendos.no_gravados_subcedula1 += r.dividendos_no_reportados
     d.deducciones.medicina_prepagada += r.medicina_prepagada

@@ -60,6 +60,7 @@ Tipo = Literal["pesos", "entero", "digitos", "booleano", "item"]
 # clave → (campo en Respuestas, tipo, etiqueta, mínimo, máximo)
 CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
     "salarios": ("salarios_no_reportados", "pesos", "Salarios del año", 0, 5e10),
+    "cesantias": ("cesantias_no_reportadas", "pesos", "Cesantías e intereses sobre cesantías", 0, 5e9),
     "honorarios": ("honorarios_no_reportados", "pesos", "Honorarios o servicios", 0, 5e10),
     "costos_independiente": ("costos_independiente", "pesos", "Costos del trabajo independiente", 0, 5e10),
     "arriendos": ("arriendos_no_reportados", "pesos", "Arriendos recibidos", 0, 5e10),
@@ -381,7 +382,7 @@ def periodo_de(texto: str) -> str | None:
     t = norm(texto)
     if numeros.es_mensual(t) or re.search(r"\b(mensuales?|mes)\b", t):
         return "mensual"
-    if re.search(r"\b(al ano|anual\w*|en el ano|todo el ano|por ano|en 20\d\d|del ano|ano completo|el ano pasado|ano pasado|durante el ano|en total)\b", t):
+    if re.search(r"\b(al ano|anual\w*|en el ano|todo el ano|por ano|en 20\d\d|del ano|ano completo|el ano pasado|ano pasado|durante el ano|en total|(todo|durante) el 20\d\d|en el 20\d\d)\b", t):
         return "anual"
     return None
 
@@ -593,6 +594,7 @@ _RE_AFIRMATIVO = re.compile(r"^(si|sip|claro|asi es|correcto|exacto|obvio|afirma
 _RE_NO_SE = re.compile(r"^(no se|ni idea|no tengo idea|no me acuerdo|no recuerdo|no estoy segur\w*)\b")
 
 _CONCEPTOS: list[tuple[str, str]] = [
+    (r"cesantia", "cesantias"),
     (r"icetex|credito educativo|prestamo educativo|credito (de|del|para) (mi |el )?(estudio|universidad|carrera)", "intereses_icetex"),
     (r"gastos?\b.{0,30}(arriend|inmueble|alquil)|(predial|administracion|mantenimiento).{0,30}(arriend|alquil)", "costos_arriendos"),
     (r"\b(done|donamos|hice (una )?donacion(es)?|di (una )?donacion|le done|aporte a una fundacion)\b", "donaciones_realizadas"),
@@ -603,7 +605,7 @@ _CONCEPTOS: list[tuple[str, str]] = [
     (r"retenc|retuv|retien|retefuente|rete fuente", "retenciones"),
     (r"dividend", "dividendos"),
     (r"arriend|arrendamiento|alquiler", "arriendos"),
-    (r"honorari|independiente|freelance|prestacion de servicios|por servicios|contratista|factur|cuentas? de cobro", "honorarios"),
+    (r"honorari|independiente|freelance|prestacion de servicios|por servicios|contratista|factur|cuentas? de cobro|consultori|asesori|trabajos? (extra|independientes?|por mi cuenta)|por mi cuenta", "honorarios"),
     (r"\bcostos?\b|gastos? (del|de mi) (negocio|trabajo|actividad)", "costos_independiente"),
     (r"pension", "pension"),
     (r"loteria|premio|chance|rifa|baloto", "loterias"),
@@ -635,6 +637,10 @@ def _concepto_de(clausula: str) -> dict[str, Any] | None:
         m = _RE_BIEN.search(clausula)
         if m and m.group(1) in ("carro", "moto", "casa", "apartamento"):
             return {"campo": "deuda", "concepto": f"Crédito del {m.group(1)}"}
+        if re.search(r"hipotec|credito de vivienda|leasing", clausula):
+            return {"campo": "deuda", "concepto": "Crédito hipotecario"}
+        if re.search(r"icetex", clausula):
+            return {"campo": "deuda", "concepto": "Crédito del ICETEX"}
         if re.search(r"tarjeta", clausula):
             return {"campo": "deuda", "concepto": "Tarjeta de crédito"}
         if re.search(r"\bbanco|bancolombia|davivienda|bbva|bogota|occidente|popular|caja social|av villas|nequi|cooperativa", clausula):
@@ -647,6 +653,14 @@ def _concepto_de(clausula: str) -> dict[str, Any] | None:
     if m:
         return {"campo": "bien", "concepto": _BIENES[m.group(1)]}
     return None
+
+
+def _montos_implicitos(texto: str, referencia: float) -> list[float]:
+    """Cifras del texto; si la persona ya habló en millones, «35» a secas son 35 millones."""
+    montos = [x for x in numeros.cantidades(texto) if x >= 1000]
+    if montos or referencia < 1_000_000:
+        return montos
+    return [x * 1_000_000 for x in numeros.cantidades(texto) if 0 < x < 1000]
 
 
 _RE_INDEPENDIENTE = re.compile(r"independiente|factur|honorari|contratista|freelance|cuentas? de cobro|prestacion de servicios|mi (negocio|actividad)")
@@ -680,7 +694,7 @@ _DESCARTES = {
 
 def descartes(mensaje: str) -> list[str]:
     msg = norm(mensaje)
-    return [tema for tema, patron in _DESCARTES.items() if re.search(patron, msg)]
+    return [tema for tema, patron in _DESCARTES.items() if re.search(rf"(?<![a-z])(?:{patron})", msg)]
 
 
 _RE_CORRIGE = re.compile(r"\b(perdon|me equivoque|corrijo|correccion|en realidad|realmente|mejor dicho|quise decir|no,? (eran|era|son|es)|eran|era)\b")
@@ -708,11 +722,19 @@ def _extraer_datos(mensaje: str) -> list[dict[str, Any]]:
     clausulas = [c.strip() for c in re.split(r"[,;]|\.\s| y (?!medio\b)(?=[a-z])| ademas | tambien | pero ", msg) if c.strip()]
     con_monto = [c for c in clausulas if any(x >= 1000 for x in numeros.cantidades(c))]
     independiente = bool(_RE_INDEPENDIENTE.search(msg))
+    arrienda = bool(re.search(r"\barriend|alquil", msg))
+    concepto_previo: dict[str, Any] | None = None
     for c in clausulas:
         montos = [x for x in numeros.cantidades(c) if x >= 1000]
         if not montos:
+            concepto_previo = _concepto_de(c) or concepto_previo
             continue
         concepto = _concepto_de(c)
+        # Gastos del inmueble que arrienda: predial, administración, mantenimiento
+        if arrienda and re.search(r"predial|administracion|mantenimiento|gastos?", c) and not re.search(r"\barriend|alquil", c):
+            concepto = {"campo": "costos_arriendos"}
+        if not concepto and concepto_previo and concepto_previo.get("campo") not in ("venta",):
+            concepto = concepto_previo
         # "facturé 95 millones y tuve gastos de 20": en boca de un independiente, los gastos son costos de su actividad
         if independiente and re.search(r"\b(gast|cost)\w*", c) and (not concepto or concepto["campo"] in ("salarios", "honorarios")):
             concepto = {"campo": "costos_independiente"}
@@ -720,7 +742,7 @@ def _extraer_datos(mensaje: str) -> list[dict[str, Any]]:
             continue
         if concepto["campo"] == "venta":
             compra = re.search(r"compr\w*.*", msg)
-            precio_compra = [x for x in numeros.cantidades(compra.group(0)) if x >= 1000] if compra else []
+            precio_compra = _montos_implicitos(compra.group(0), montos[0]) if compra else []
             anotar.append({**concepto, "precio_venta": montos[0], **({"precio_compra": precio_compra[0]} if precio_compra and precio_compra[0] != montos[0] else {})})
             continue
         item = {**concepto, "valor": montos[0]}
@@ -814,6 +836,8 @@ def _respuesta_a_pendiente(mensaje: str, p: PreguntaPendiente, ya: list[dict[str
             salida.append({"campo": "declaraciones_previas", "valor": 2})
         elif re.search(r"una vez|el ano pasado|^no\b|\bya\b", msg):
             salida.append({"campo": "declaraciones_previas", "valor": 1})
+    if "venta" in p.temas and not montos and p.valor:
+        montos = _montos_implicitos(msg, p.valor)
     if "venta" in p.temas and montos and not campos_ya & {"venta"}:
         if p.valor:
             salida.append({"campo": "venta", "concepto": p.concepto or "Bien", "precio_venta": p.valor, "precio_compra": montos[0]})
@@ -893,7 +917,7 @@ def _sin_ia(t: TurnoChat) -> _Plan:
     else:
         plan.anotar = datos
     plan.insiste = bool(_RE_INSISTE.search(msg))
-    es_pregunta = bool(_RE_PREGUNTA.search(msg))
+    es_pregunta = "?" in t.mensaje or (bool(_RE_PREGUNTA.search(msg)) and not datos)
     partes: list[str] = []
     if plan.cambiar_anio and plan.cambiar_anio != e.anio_gravable:
         partes.append(f"Listo, ahora uso las reglas del año gravable {plan.cambiar_anio}.")
@@ -921,6 +945,8 @@ def _sin_ia(t: TurnoChat) -> _Plan:
         tengo = diagnostico.ya_tengo(e)
         lista = "\n".join("– " + d for d in diagnostico.documentos(e, e.respuestas))
         partes.append(("Ya tengo: " + "; ".join(tengo) + ".\nTe falta:\n" if tengo else "Para tu caso necesitas:\n") + lista)
+    elif re.match(r"(y )?(cuando|hasta cuando|que fecha|cual es (mi|la) fecha|fecha|plazo)\b", msg) and _RE_VENCE.search(msg + " plazo"):
+        plan.caso = "vencimiento"
     elif _RE_OBLIGACION.search(msg) and not plan.simular:
         if _RE_COMO_SE.search(msg):
             sec = next(s for s in base_del_anio(anio) if s.titulo.startswith("¿Cómo sé si tengo"))
@@ -954,7 +980,7 @@ def _sin_ia(t: TurnoChat) -> _Plan:
         if explicito or not plan.fuentes:
             plan.calcular = True
 
-    if p and "dependientes" in p.temas and _RE_AFIRMATIVO.search(msg) and not any(a["campo"] == "dependientes" for a in plan.anotar):
+    if p and "dependientes" in p.temas and _RE_AFIRMATIVO.search(msg) and not plan.anotar:
         plan.pregunta = PreguntaPendiente(texto="¿Cuántas personas dependen de ti?", temas=["dependientes"], intencion=p.intencion, rondas=p.rondas)
     elif p and _RE_AFIRMATIVO.search(msg) and not plan.anotar and not plan.pregunta:
         tema = next((x for x in p.temas if x in _SEGUIMIENTO), None)
@@ -1186,6 +1212,25 @@ def _lista_dict(v: Any) -> list[dict[str, Any]]:
     return [{k: y for k, y in x.items() if not str(k).startswith("_")} for x in (v or []) if isinstance(x, dict)] if isinstance(v, list) else []
 
 
+KB_SECCIONES = 6  # secciones completas por turno; el resto va solo con su título
+
+
+def _base_relevante(t: TurnoChat, base: list[SeccionKB]) -> str:
+    """Las secciones de la base de conocimiento que tienen que ver con el mensaje, completas, y el resto solo por título.
+
+    Mandar las 60 secciones en cada turno eran ~4.500 tokens que el modelo leía siempre; con las más
+    relevantes responde igual de bien y más rápido.
+    """
+    previo = next((m.texto for m in reversed(t.historial) if m.rol == "usuario"), "")
+    elegidas = [i for _, i in puntajes(t.mensaje)[:KB_SECCIONES]]
+    elegidas += [i for _, i in puntajes(previo)[:2] if i not in elegidas]
+    completas = "\n".join(f"### {base[i].titulo}\n{base[i].texto}" for i in elegidas)
+    titulos = "; ".join(s.titulo for i, s in enumerate(base) if i not in elegidas)
+    return (completas or "(ninguna sección coincide con el mensaje)") + (
+        f"\n\nOTRAS SECCIONES (solo el título; si la pregunta es sobre una de estas y no tienes su texto, responde lo básico sin inventar cifras): {titulos}"
+    )
+
+
 async def _con_ia(t: TurnoChat, vp: Liquidacion | None) -> tuple[_Plan, str]:
     e = t.estado
     base = base_del_anio(e.anio_gravable)
@@ -1193,7 +1238,7 @@ async def _con_ia(t: TurnoChat, vp: Liquidacion | None) -> tuple[_Plan, str]:
         SISTEMA.format(hoy=fecha_texto(date.today()))
         + "\n\nCAMPOS (claves para anotar, quitar o simular):\n" + "\n".join(f"- {k}: {v[2]}" for k, v in CAMPOS.items())
         + "\n\nDATOS DEL AÑO:\n" + _datos_anio_texto(e.anio_gravable)
-        + "\n\nBASE DE CONOCIMIENTO:\n" + "\n".join(f"### {s.titulo}\n{s.texto}" for s in base)
+        + "\n\nBASE DE CONOCIMIENTO:\n" + _base_relevante(t, base)
     )
     historial = "\n".join(f"{'Usuario' if m.rol == 'usuario' else 'Tú'}: {m.texto[:500]}" for m in t.historial[-10:])
     usuario = f"ESTADO:\n{_estado_texto(e, vp)}\n\nCONVERSACIÓN RECIENTE:\n{historial or '(es el primer mensaje)'}\n\nMENSAJE DEL USUARIO: {t.mensaje}"
@@ -1305,6 +1350,12 @@ def ficha(e: EstadoChat, r: Respuestas, vp: Liquidacion | None, ya: list[str], d
         salida.append(ItemFicha(tema=tema, etiqueta=etiqueta, estado=estado, detalle=detalle))
     return salida
 
+
+_CAMPOS_DEL_TEMA = {
+    "retenciones": {"retenciones"}, "dependientes": {"dependientes"}, "historial": {"declaraciones_previas"},
+    "deducciones": {"medicina_prepagada", "intereses_vivienda", "intereses_icetex", "aportes_voluntarios"},
+    "costos": {"costos_independiente"}, "patrimonio": {"bien", "deuda"}, "bienes": {"bien"},
+}
 
 _YA_NO = {
     "retenciones": "no te hicieron retención",
@@ -1436,7 +1487,9 @@ async def responder(t: TurnoChat) -> RespuestaChat:
     for v in ventas[:1]:
         concepto = str(v.get("concepto") or "Bien")
         venta, compra = _a_float(v.get("precio_venta") or v.get("valor")), _a_float(v.get("precio_compra"))
-        if venta is None or not numeros.aparece(venta, texto_usuario) or (compra is not None and not numeros.aparece(compra, texto_usuario)):
+        def _dicha(v: float) -> bool:
+            return numeros.aparece(v, texto_usuario) or (v >= 1_000_000 and v % 1_000_000 == 0 and numeros.aparece(v / 1_000_000, texto_usuario))
+        if venta is None or not _dicha(venta) or (compra is not None and not _dicha(compra)):
             continue
         if compra is None:
             pregunta_venta = PreguntaPendiente(
@@ -1475,8 +1528,11 @@ async def responder(t: TurnoChat) -> RespuestaChat:
         if not hechas and not con_ia:
             partes = [x for x in partes if x not in ("Entendido.", "")]
             partes.insert(0, f"Listo, anoté que {frase}.")
-        elif hechas and not any(_YA_NO[x].split()[-1] in norm(" ".join(partes)) for x in nuevos_no):
-            partes.append(f"También anoté que {frase}.")
+        else:
+            anotados = {a.clave for a in hechas}
+            solo_nuevos = [x for x in nuevos_no if not anotados & _CAMPOS_DEL_TEMA.get(x, set())]
+            if hechas and solo_nuevos and not con_ia:
+                partes.append("También anoté que " + diagnostico._lista(list(dict.fromkeys(_YA_NO[x] for x in solo_nuevos))) + ".")
 
     # 4. Año
     cambiar = plan.cambiar_anio if plan.cambiar_anio in anios_vigentes() and plan.cambiar_anio != e.anio_gravable else None

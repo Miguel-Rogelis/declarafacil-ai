@@ -431,3 +431,53 @@ def test_ficha_muestra_lo_que_tiene_y_lo_que_falta():
     estados = {i["tema"]: i["estado"] for i in j["ficha"]}
     assert estados["ingresos"] == "tengo" and estados["cedula"] == "tengo"
     assert estados["patrimonio"] == "falta"
+
+
+# ---------- Batería de frases como las escribe la gente ----------
+
+
+@pytest.mark.parametrize(("mensaje", "clave", "valor"), [
+    ("en todo el 2025 me pagaron 62 millones de salario", "salarios", "$62.000.000"),
+    ("pago intereses del credito de vivienda, como 900 mil al mes", "intereses_vivienda", "$10.800.000"),
+    ("soy pensionado, me llegan 2.800.000 al mes", "pension", "$33.600.000"),
+    ("tengo un trabajo donde gano 4 millones al mes y aparte hago consultorias por 2 millones al mes", "honorarios", "$24.000.000"),
+    ("arriendo un local por 2 millones al mes y pago 3 millones de predial y administracion al año por ese local", "costos_arriendos", "$3.000.000"),
+    ("gano 5 millones mensuales y me dieron 5 millones de cesantias", "cesantias", "$5.000.000"),
+    ("vendi mi carro en 40 millones, lo habia comprado en 35", "venta_otros_activos", "$5.000.000"),
+])
+def test_frases_reales_se_anotan_bien(mensaje, clave, valor):
+    a = _anotado(Charla()(mensaje), clave)
+    assert a and a["valor"] == valor
+
+
+def test_me_retuvieron_no_se_confunde_con_no_me_retuvieron():
+    ch = Charla()
+    ch("gano 8 millones al mes")
+    j = ch("en el año me retuvieron 6 millones")
+    assert _anotado(j, "retenciones")["valor"] == "$6.000.000"
+    assert "no te hicieron" not in asistente.norm(j["respuesta"])
+
+
+def test_venta_con_compra_en_otro_mensaje_sin_millones():
+    ch = Charla()
+    ch("vendi un lote en 120 millones")
+    assert _anotado(ch("lo compre en 80"), "venta_otros_activos")["valor"] == "$40.000.000"
+
+
+def test_cuando_me_toca_pregunta_la_cedula_para_la_fecha():
+    j = Charla()("cuando me toca declarar?")
+    assert "cedula" in j["pregunta"]["temas"]
+
+
+@pytest.mark.parametrize("mensaje", ["debo 8 millones en la tarjeta de credito", "como contratista me pagan 6 millones al mes por prestacion de servicios"])
+def test_un_dato_no_se_toma_como_pregunta(mensaje):
+    assert asistente.norm(Charla()(mensaje)["respuesta"]) == "listo, lo anote."
+
+
+def test_cesantias_del_chat_tienen_su_exencion():
+    from app.orquestador import SolicitudLiquidacion, construir_declaracion
+    from app.tax.motor import liquidar
+    sol = SolicitudLiquidacion(respuestas=Respuestas(salarios_no_reportados=60_000_000, cesantias_no_reportadas=5_000_000))
+    liq = liquidar(construir_declaracion(sol))
+    lineas = {l.clave: l.valor for s in liq.secciones for l in s.lineas}
+    assert lineas["cesantias_exentas"] > 0

@@ -61,6 +61,7 @@ interface Sesion {
   pregunta: PreguntaPendiente | null;
   cerrarPregunta: () => void;
   ficha: ItemFicha[];
+  servidor: EstadoServidor;
   decididas: Record<string, boolean>;
   trazaDocumento: EventoAgente[];
   respuestas: Respuestas;
@@ -84,6 +85,8 @@ interface Sesion {
   hayDatos: boolean;
 }
 
+export type EstadoServidor = "conectando" | "despertando" | "listo" | "sin_conexion";
+
 const Ctx = createContext<Sesion | null>(null);
 
 const RUTAS: Ruta[] = ["inicio", "declarar", "resultado", "configuracion"];
@@ -105,6 +108,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [anio, setAnio] = useState(2025);
   const [anios, setAnios] = useState<AnioDisponible[]>([]);
   const [modoLlm, setModoLlm] = useState("");
+  const [servidor, setServidor] = useState<EstadoServidor>("conectando");
   const [extraccion, setExtraccion] = useState<Extraccion | null>(null);
   const [filas, setFilas] = useState<Fila[]>([]);
   const [decididas, setDecididas] = useState<Record<string, boolean>>({});
@@ -138,14 +142,24 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   useEffect(() => {
     const alCambiar = () => setRuta(leerRuta());
     window.addEventListener("hashchange", alCambiar);
+    // En el plan gratis el servidor se duerme: si tarda en contestar, se avisa que está despertando
+    const aviso = window.setTimeout(() => setServidor((s) => (s === "conectando" ? "despertando" : s)), 2500);
     api
       .estado()
       .then((e) => {
         setAnios(e.anios);
         setModoLlm(e.modo_llm);
+        setServidor("listo");
       })
-      .catch(() => setAnios([{ anio_gravable: 2025, estado: "vigente", uvt: 49799, descripcion: "" }]));
-    return () => window.removeEventListener("hashchange", alCambiar);
+      .catch(() => {
+        setAnios([{ anio_gravable: 2025, estado: "vigente", uvt: 49799, descripcion: "" }]);
+        setServidor("sin_conexion");
+      })
+      .finally(() => window.clearTimeout(aviso));
+    return () => {
+      window.removeEventListener("hashchange", alCambiar);
+      window.clearTimeout(aviso);
+    };
   }, []);
 
   const ir = useCallback((r: Ruta) => {
@@ -476,7 +490,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, decididas, trazaDocumento, respuestas,
+    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
     procesarArchivo, procesarArchivos, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };

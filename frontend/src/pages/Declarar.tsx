@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Conversacion from "../components/Conversacion";
+import { Ficha } from "../components/Ficha";
 import type { DocumentoCargado, Fila, Respuestas } from "../lib/api";
 import { useSesion } from "../lib/estado";
 import { GRUPOS, NOMBRES_CAMPO, pesos } from "../lib/formato";
@@ -113,7 +114,7 @@ function HojaTrabajo({ filas, respuestas, documentos }: { filas: Fila[]; respues
 }
 
 export default function Declarar() {
-  const { filas, respuestas, anio, mensajes, reiniciar, porRevisar, documentos } = useSesion();
+  const { filas, respuestas, anio, mensajes, reiniciar, porRevisar, documentos, ficha } = useSesion();
   const [abierto, setAbierto] = useState(false);
   const boton = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
@@ -156,6 +157,7 @@ export default function Declarar() {
           Tus datos{cantidad ? ` (${cantidad})` : ""}{porRevisar.length ? ` · ${porRevisar.length} por confirmar` : ""}
         </button>
       </div>
+      {mensajes.length ? <div className="chat-columna"><Ficha items={ficha} /></div> : null}
     </div>
   );
   return (

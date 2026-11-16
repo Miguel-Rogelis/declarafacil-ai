@@ -675,3 +675,22 @@ main { padding-bottom: 6rem; }
 .encabezado::before { content: ""; position: absolute; inset: 0 0 -1.2rem; z-index: -1; pointer-events: none; background: linear-gradient(to bottom, var(--papel) 35%, color-mix(in srgb, var(--papel) 0%, transparent)); }
 .app-chat .encabezado::before { display: none; }
 @media print { .fondo-animado { display: none; } .principal { padding-top: 0; } }
+
+/* ---------- Ficha: lo que el agente ya sabe y lo que le falta ---------- */
+.ficha { margin-top: 0.55rem; display: grid; gap: 0.45rem; }
+.ficha-cabeza { display: flex; align-items: center; gap: 0.6rem; font-size: var(--fs-xs); }
+.ficha-titulo { font-weight: 600; color: var(--tinta); }
+.ficha-cuenta { color: var(--tinta-suave); font-variant-numeric: tabular-nums; }
+.ficha-barra { flex: 1; height: 4px; border-radius: var(--radio-pastilla); background: var(--reticula); overflow: hidden; }
+.ficha-relleno { display: block; height: 100%; background: var(--sello); transform-origin: left; border-radius: inherit; }
+.ficha-lista { list-style: none; margin: 0; padding: 0; display: flex; gap: 0.35rem; overflow-x: auto; scrollbar-width: none; }
+.ficha-lista::-webkit-scrollbar { display: none; }
+.ficha-item { flex: none; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.22rem 0.65rem 0.22rem 0.3rem; border-radius: var(--radio-pastilla); font-size: var(--fs-xs); border: 1px solid var(--marco); background: var(--hoja); color: var(--tinta-suave); transition: background-color 0.3s var(--curva), border-color 0.3s var(--curva), color 0.3s var(--curva); }
+.ficha-item.tengo { color: var(--tinta); border-color: color-mix(in srgb, var(--sello) 35%, transparent); background: var(--sello-claro); }
+.ficha-item.falta { color: var(--tinta); border-style: dashed; border-color: var(--borde-campo); }
+.ficha-item.no_aplica, .ficha-item.omitido { opacity: 0.75; }
+.ficha-marca { width: 1.05rem; height: 1.05rem; border-radius: 50%; display: grid; place-items: center; flex: none; border: 1.5px solid var(--borde-campo); }
+.ficha-marca.tengo { background: var(--sello); border-color: var(--sello); color: var(--papel); }
+.ficha-marca.no_aplica { border-color: var(--reticula); color: var(--tinta-suave); }
+.ficha-marca.falta { border-style: dashed; }
+.ficha-marca svg { width: 0.8rem; height: 0.8rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }

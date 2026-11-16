@@ -296,6 +296,15 @@ export interface EstadoChat {
   ya_preguntado: string[];
   documentos: DocumentoCargado[];
   recien: string[];
+  descartados: string[];
+}
+
+/** Un dato clave de la declaración y en qué va (la «ficha» que se ve arriba del chat). */
+export interface ItemFicha {
+  tema: string;
+  etiqueta: string;
+  estado: "tengo" | "falta" | "omitido" | "no_aplica";
+  detalle: string;
 }
 
 export interface PreguntaPendiente {
@@ -351,6 +360,8 @@ export interface RespuestaChat {
   fuentes: string[];
   modelo: string | null;
   con_ia: boolean;
+  ficha?: ItemFicha[];
+  descartados?: string[];
 }
 
 type Manejadores<R> = {

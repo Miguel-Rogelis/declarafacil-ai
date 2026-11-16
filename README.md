@@ -114,13 +114,13 @@ Requisitos: Python 3.12+ y Node 20+.
 cd backend
 python -m venv .venv && source .venv/bin/activate   # en Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-export OPENROUTER_API_KEY=sk-or-...                  # opcional; sin llave funciona en modo simulado
-uvicorn app.main:app --reload --port 8000
+cp .env.example .env                                # pega tu llave de OpenRouter en .env (opcional; sin llave funciona en modo simulado)
+uvicorn app.main:app --reload --port 8000 --env-file .env
 
 # Front (otra terminal)
 cd frontend
 npm install
-npm run dev        # http://localhost:5173, redirige /api al backend
+npm run dev        # http://localhost:5173, redirige /api al backend (DF_API=http://127.0.0.1:8001 si usas otro puerto)
 ```
 
 Pruebas: `cd backend && pytest`. Para regenerar la exógena ficticia: `python scripts/generar_exogena_demo.py`.
@@ -132,6 +132,16 @@ Pruebas: `cd backend && pytest`. Para regenerar la exógena ficticia: `python sc
 3. *New* → *Blueprint* → elige este repositorio. Render lee `render.yaml`.
 4. Cuando lo pida, pega tu llave en `OPENROUTER_API_KEY`. `ADMIN_TOKEN` se genera solo: búscalo en *Environment* del servicio; es la clave para editar reglas y agentes.
 5. *Apply*. La primera construcción tarda unos minutos. La app queda en `https://<nombre>.onrender.com`.
+
+### Demo del front en GitHub Pages
+
+El workflow `.github/workflows/pages.yml` publica solo el front en `https://<usuario>.github.io/<repo>/` y lo conecta a la API de Render:
+
+1. En el repo: *Settings* → *Pages* → *Source*: **GitHub Actions**.
+2. *Settings* → *Secrets and variables* → *Actions* → pestaña *Variables* → crea `API_URL` con la dirección de tu servicio de Render (por ejemplo `https://declarafacil-xyz.onrender.com`).
+3. Si tu usuario de GitHub no es `suntzz` ni `miguel-rogelis`, agrega en Render la variable `CORS_ORIGINS=https://<usuario>.github.io` para que la API acepte las llamadas desde Pages.
+
+Cada push a `main` vuelve a publicar la demo.
 
 Límites a tener en cuenta:
 

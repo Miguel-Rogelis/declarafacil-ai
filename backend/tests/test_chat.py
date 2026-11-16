@@ -33,7 +33,8 @@ def _turno(mensaje, estado, historial=None):
     assert r.status_code == 200, r.text
     j = r.json()
     assert "sugerencias" not in j  # el agente no sugiere preguntas
-    nuevo = {**estado, "respuestas": j["respuestas"], "pregunta_pendiente": j["pregunta"], "ya_preguntado": j["ya_preguntado"]}
+    nuevo = {**estado, "respuestas": j["respuestas"], "pregunta_pendiente": j["pregunta"], "ya_preguntado": j["ya_preguntado"],
+             "descartados": j["descartados"]}
     if j["cambiar_anio"]:
         nuevo["anio_gravable"] = j["cambiar_anio"]
     return j, nuevo
@@ -370,3 +371,63 @@ def test_ronda_antes_de_calcular_trae_una_parte_por_dato():
     assert j["pregunta"]["intro"].startswith("Antes de calcular") and "calcula así" not in j["texto_visible"]
     j = ch(". ".join(p["opciones"][0] for p in partes))  # el cuadro manda las respuestas juntas
     assert j["anotaciones"] or j["pregunta"] or j["calcular"]
+
+
+# ---------- Toma bien la información y pide solo lo que falta ----------
+
+
+def _anotado(j, clave):
+    return next((a for a in j["anotaciones"] if a["clave"] == clave), None)
+
+
+def test_retencion_mensual_se_anota_y_no_se_vuelve_a_pedir():
+    ch = Charla()
+    ch("soy empleado y gano 4.500.000 al mes")
+    j = ch("me retienen como 150 mil cada mes")
+    assert _anotado(j, "retenciones")["valor"] == "$1.800.000"
+    j = ch("calcula")
+    assert "retencion" not in asistente.norm(j["respuesta"])
+
+
+def test_independiente_que_factura_y_tiene_gastos():
+    j = Charla()("soy independiente, facturé 95 millones el año pasado y tuve gastos de 20 millones")
+    assert _anotado(j, "honorarios")["valor"] == "$95.000.000"
+    assert _anotado(j, "costos_independiente")["valor"] == "$20.000.000"
+
+
+def test_lo_que_dice_que_no_tiene_no_se_vuelve_a_preguntar():
+    ch = Charla()
+    ch("soy independiente, facturé 95 millones el año pasado")
+    j = ch("no me hicieron retención")
+    assert "no te hicieron retencion" in asistente.norm(j["respuesta"])
+    assert next(i for i in j["ficha"] if i["tema"] == "retenciones")["estado"] == "no_aplica"
+    j = ch("calcula")
+    assert "retencion" not in asistente.norm(j["respuesta"])
+
+
+@pytest.mark.parametrize(("mensaje", "n"), [
+    ("mi mamá vive conmigo y yo la mantengo", 1),
+    ("mantengo a mis papás", 2),
+    ("tengo 2 hijos y mi mamá depende de mí", 3),
+])
+def test_familiares_a_cargo(mensaje, n):
+    assert _anotado(Charla()(mensaje), "dependientes")["valor"] == str(n)
+
+
+def test_corrige_la_ultima_cifra_con_su_periodo():
+    ch = Charla()
+    ch("gano 5 millones al mes")
+    j = ch("no, perdón, eran 4 millones no 5")
+    assert _anotado(j, "salarios")["valor"] == "$48.000.000"
+
+
+def test_deuda_con_el_banco_tiene_nombre():
+    j = Charla()("tengo un apartamento que vale 280 millones y le debo al banco 120 millones")
+    assert any(a["etiqueta"] == "Deuda: Crédito con el banco" for a in j["anotaciones"])
+
+
+def test_ficha_muestra_lo_que_tiene_y_lo_que_falta():
+    j = Charla()("gano 3 millones al mes y mi cédula termina en 21")
+    estados = {i["tema"]: i["estado"] for i in j["ficha"]}
+    assert estados["ingresos"] == "tengo" and estados["cedula"] == "tengo"
+    assert estados["patrimonio"] == "falta"

@@ -11,6 +11,7 @@ import {
   type EventoAgente,
   type Extraccion,
   type Fila,
+  type ItemFicha,
   type PreguntaPendiente,
   type Respuestas,
   type ResultadoLiquidacion,
@@ -59,6 +60,7 @@ interface Sesion {
   elecciones: Record<string, string>;
   pregunta: PreguntaPendiente | null;
   cerrarPregunta: () => void;
+  ficha: ItemFicha[];
   decididas: Record<string, boolean>;
   trazaDocumento: EventoAgente[];
   respuestas: Respuestas;
@@ -116,12 +118,14 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [escribiendo, setEscribiendo] = useState(false);
   const [archivoPendiente, setArchivoPendiente] = useState<File[] | null>(null);
   const contador = useRef(1);
-  const conversacion = useRef<{ pregunta: PreguntaPendiente | null; ya: string[] }>({ pregunta: null, ya: [] });
+  const conversacion = useRef<{ pregunta: PreguntaPendiente | null; ya: string[]; descartados: string[] }>({ pregunta: null, ya: [], descartados: [] });
+  const [ficha, setFicha] = useState<ItemFicha[]>([]);
   const recien = useRef<string[]>([]);
   const [pregunta, setPregunta] = useState<PreguntaPendiente | null>(null);
   const [elecciones, setElecciones] = useState<Record<string, string>>({});
-  const ponerPregunta = useCallback((p: PreguntaPendiente | null, ya: string[]) => {
-    conversacion.current = { pregunta: p, ya };
+  const ponerPregunta = useCallback((p: PreguntaPendiente | null, ya: string[], extra?: { ficha?: ItemFicha[]; descartados?: string[] }) => {
+    conversacion.current = { pregunta: p, ya, descartados: extra?.descartados ?? conversacion.current.descartados };
+    if (extra?.ficha?.length) setFicha(extra.ficha);
     setPregunta(p?.partes?.length ? p : null);
   }, []);
   const cerrarPregunta = useCallback(() => setPregunta(null), []);
@@ -175,6 +179,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       respuestas: s.respuestas,
       pregunta_pendiente: conversacion.current.pregunta,
       ya_preguntado: conversacion.current.ya,
+      descartados: conversacion.current.descartados,
       documentos: docs,
       recien: recien.current,
       resultado: r
@@ -310,7 +315,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       setEscribiendo(true);
       try {
         const d = await api.diagnostico(estadoChat());
-        ponerPregunta(d.pregunta, d.ya_preguntado);
+        ponerPregunta(d.pregunta, d.ya_preguntado, d);
         const visible = d.texto_visible ?? d.respuesta;
         agregar({ rol: "asistente", texto: visible || undefined, historial: d.respuesta, oculto: !visible });
         d.widgets.forEach((w) => agregar({ rol: "asistente", widget: w as Widget }));
@@ -347,7 +352,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         const r = await api.chat(t, historial, estadoChat());
         setRespuestas(r.respuestas);
         ref.current.respuestas = r.respuestas;
-        ponerPregunta(r.pregunta, r.ya_preguntado);
+        ponerPregunta(r.pregunta, r.ya_preguntado, r);
         const cambiaron = r.anotaciones.length > 0 || r.quitadas.length > 0;
         if (cambiaron) agregar({ rol: "asistente", widget: "anotado", anotaciones: r.anotaciones, quitadas: r.quitadas, antes });
         // La pregunta va en su propio cuadro arriba de la barra; en el hilo queda el resto de la respuesta
@@ -459,7 +464,8 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     setResultado(null);
     setEventosCalculo([]);
     setMensajes([]);
-    conversacion.current = { pregunta: null, ya: [] };
+    conversacion.current = { pregunta: null, ya: [], descartados: [] };
+    setFicha([]);
     recien.current = [];
     setPregunta(null);
     setElecciones({});
@@ -470,7 +476,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, decididas, trazaDocumento, respuestas,
+    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
     procesarArchivo, procesarArchivos, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };

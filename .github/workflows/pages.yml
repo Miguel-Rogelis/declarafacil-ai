@@ -31,7 +31,8 @@ jobs:
       - run: npm ci
       - run: npx tsc -b && npx vite build --base=/${{ github.event.repository.name }}/
         env:
-          VITE_API_URL: https://declarafacil-adix.onrender.com
+          # La dirección de tu servicio de Render: variable API_URL del repo (Settings → Secrets and variables → Actions → Variables)
+          VITE_API_URL: ${{ vars.API_URL || 'https://declarafacil-adix.onrender.com' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist

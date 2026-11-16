@@ -7,35 +7,75 @@ import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "./MesaAgentes";
 import { useDemo } from "../lib/demo";
 import { FadeIn } from "./Movimiento";
 import { Marca } from "./piezas";
+import { trozos, textoPlano } from "../lib/enlaces";
+
+/** Un párrafo con sus enlaces oficiales; con «hasta», solo los primeros caracteres (para revelarlo). */
+function Parrafo({ texto, hasta }: { texto: string; hasta?: number }) {
+  let quedan = hasta ?? Infinity;
+  const partes = [];
+  for (const [i, t] of trozos(texto).entries()) {
+    if (quedan <= 0) break;
+    const visible = t.texto.slice(0, quedan);
+    quedan -= t.texto.length;
+    partes.push(
+      t.href ? (
+        <a key={i} className="enlace-oficial" href={t.href} target="_blank" rel="noopener noreferrer">
+          {visible}
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5h5v5M9.5 2.5 3 9" /></svg>
+        </a>
+      ) : (
+        visible
+      ),
+    );
+  }
+  return <p>{partes}</p>;
+}
+
+function Parrafos({ texto, hasta }: { texto: string; hasta?: number }) {
+  let quedan = hasta ?? Infinity;
+  return (
+    <>
+      {texto.split(/\n+/).map((p, i) => {
+        if (quedan <= 0) return null;
+        const n = quedan;
+        quedan -= textoPlano(p).length + 1;
+        return <Parrafo key={i} texto={p} hasta={n} />;
+      })}
+    </>
+  );
+}
 
 /** Revela el texto de una respuesta nueva mientras llega: rápido (máximo ~0,7 s) y quieto con «reducir movimiento». */
 function TextoRevelado({ texto }: { texto: string }) {
   const reducido = useReducedMotion();
-  const [visibles, setVisibles] = useState(reducido ? texto.length : 0);
+  const plano = textoPlano(texto);
+  const largo = plano.length;
+  const [visibles, setVisibles] = useState(reducido ? largo : 0);
   const cuenta = useRef(visibles);
   useEffect(() => {
     if (reducido) {
-      setVisibles(texto.length);
+      setVisibles(largo);
       return;
     }
     let raf = 0;
     let antes = performance.now();
-    const porSegundo = Math.max(260, texto.length / 0.7);
+    const porSegundo = Math.max(260, largo / 0.7);
     const paso = (ahora: number) => {
-      cuenta.current = Math.min(texto.length, cuenta.current + Math.max(1, Math.round(((ahora - antes) / 1000) * porSegundo)));
+      cuenta.current = Math.min(largo, cuenta.current + Math.max(1, Math.round(((ahora - antes) / 1000) * porSegundo)));
       antes = ahora;
       setVisibles(cuenta.current);
-      if (cuenta.current < texto.length) raf = requestAnimationFrame(paso);
+      if (cuenta.current < largo) raf = requestAnimationFrame(paso);
     };
     raf = requestAnimationFrame(paso);
     return () => cancelAnimationFrame(raf);
-  }, [texto, reducido]);
-  const mostrado = texto.slice(0, visibles);
+  }, [largo, reducido]);
+  // Mientras se revela, el texto se lee en pantalla; al terminar queda uno solo, con sus enlaces que se pueden tocar
+  if (visibles >= largo) return <Parrafos texto={texto} />;
   return (
     <>
-      <span className="visualmente-oculto">{texto}</span>
+      <span className="visualmente-oculto">{plano}</span>
       <span aria-hidden="true">
-        {mostrado.split(/\n+/).map((p, i) => <p key={i}>{p}</p>)}
+        <Parrafos texto={texto} hasta={visibles} />
       </span>
     </>
   );
@@ -50,7 +90,7 @@ function Burbuja({ m, children }: { m: Mensaje; children?: ReactNode }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
     >
-      {m.texto && m.nuevo ? <TextoRevelado texto={m.texto} /> : m.texto ? m.texto.split(/\n+/).map((p, i) => <p key={i}>{p}</p>) : null}
+      {m.texto && m.nuevo ? <TextoRevelado texto={m.texto} /> : m.texto ? <Parrafos texto={m.texto} /> : null}
       {children}
       {m.fuentes?.length ? <div className="fuentes">Fuente: {m.fuentes.join("; ")}</div> : null}
     </motion.div>

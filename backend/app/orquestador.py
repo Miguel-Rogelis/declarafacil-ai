@@ -21,6 +21,7 @@ from app.agents import (
     anonimizador,
     auditor,
     clasificador,
+    consejos,
     conciliador,
     explicador,
     extractor,
@@ -35,6 +36,7 @@ from app.agents.base import (
     FilaInterpretada,
     Traza,
 )
+from app.agents.consejos import Consejo
 from app.tax import reglas as repo_reglas
 from app.tax.modelos import (
     DatosDeclaracion,
@@ -52,6 +54,9 @@ class Respuestas(BaseModel):
     salarios_no_reportados: float = 0
     cesantias_no_reportadas: float = 0
     retenciones_no_reportadas: float = 0
+    rendimientos_financieros: float = 0
+    compras_factura_electronica: float = 0
+    aportes_independiente: float = 0
     dividendos_no_reportados: float = 0
     medicina_prepagada: float = 0
     intereses_vivienda: float = 0
@@ -118,6 +123,7 @@ class ResultadoLiquidacion(BaseModel):
     explicacion: str
     explicacion_con_ia: bool
     traza: list[EventoAgente]
+    consejos: list[Consejo] = []
 
 
 class ErrorFlujo(BaseModel):
@@ -319,6 +325,12 @@ def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
     d.descuentos.donaciones += r.donaciones_realizadas
     d.independiente.honorarios_y_servicios += r.honorarios_no_reportados
     d.independiente.costos_gastos_procedentes += r.costos_independiente
+    d.capital.rendimientos_financieros += r.rendimientos_financieros
+    d.deducciones.compras_factura_electronica += r.compras_factura_electronica
+    if r.aportes_independiente and not (d.independiente.aportes_obligatorios_pension or d.independiente.aportes_obligatorios_salud):
+        # La PILA suele decirse en un solo valor: salud (12,5 %) y pensión (16 %) sobre la misma base
+        d.independiente.aportes_obligatorios_salud = r.aportes_independiente * 12.5 / 28.5
+        d.independiente.aportes_obligatorios_pension = r.aportes_independiente - d.independiente.aportes_obligatorios_salud
     d.capital.arrendamientos += r.arriendos_no_reportados
     d.no_laborales.ingresos += r.otros_ingresos_no_reportados
     d.pensiones.pensiones_nacionales += r.pensiones_no_reportadas
@@ -375,4 +387,8 @@ async def procesar_liquidacion(sol: SolicitudLiquidacion) -> AsyncIterator[Salid
     msg = "Resumen escrito por IA y verificado cifra por cifra" if con_ia else "Resumen con plantilla" + (" (la IA citó cifras que no existen y se descartó)" if modelo else "")
     yield traza.fin("explicador", msg, t0, "ok", modelo)
 
-    yield ResultadoLiquidacion(datos=datos, liquidacion=liq, explicacion=texto, explicacion_con_ia=con_ia, traza=traza.eventos)
+    try:
+        sugerencias = consejos.consejos(datos, liq, reglas)
+    except Exception:  # noqa: BLE001 - un consejo nunca debe tumbar el resultado
+        sugerencias = []
+    yield ResultadoLiquidacion(datos=datos, liquidacion=liq, explicacion=texto, explicacion_con_ia=con_ia, traza=traza.eventos, consejos=sugerencias)

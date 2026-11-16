@@ -177,6 +177,9 @@ export interface Respuestas {
   salarios_no_reportados: number;
   cesantias_no_reportadas?: number;
   retenciones_no_reportadas: number;
+  rendimientos_financieros?: number;
+  compras_factura_electronica?: number;
+  aportes_independiente?: number;
   dividendos_no_reportados: number;
   medicina_prepagada: number;
   intereses_vivienda: number;
@@ -207,6 +210,9 @@ export const respuestasIniciales = (): Respuestas => ({
   salarios_no_reportados: 0,
   cesantias_no_reportadas: 0,
   retenciones_no_reportadas: 0,
+  rendimientos_financieros: 0,
+  compras_factura_electronica: 0,
+  aportes_independiente: 0,
   dividendos_no_reportados: 0,
   medicina_prepagada: 0,
   intereses_vivienda: 0,
@@ -259,6 +265,16 @@ export interface ResultadoLiquidacion {
   explicacion: string;
   explicacion_con_ia: boolean;
   traza: EventoAgente[];
+  /** Qué podría hacer para pagar menos el próximo año (el código re-liquida su caso). */
+  consejos?: Consejo[];
+}
+
+export interface Consejo {
+  clave: string;
+  titulo: string;
+  detalle: string;
+  ahorro: number;
+  monto: number;
 }
 
 export interface AnioDisponible {

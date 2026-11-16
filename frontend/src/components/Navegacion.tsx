@@ -72,7 +72,7 @@ export function Encabezado() {
   const items: { ruta: Ruta; texto: string; corto?: string }[] = [
     { ruta: "inicio", texto: "Inicio" },
     { ruta: "declarar", texto: "Chat" },
-    ...(resultado ? [{ ruta: "resultado" as Ruta, texto: "Resultado" }] : []),
+    ...(resultado ? [{ ruta: "resultado" as Ruta, texto: "Resultado" }, { ruta: "presentar" as Ruta, texto: "Presentar", corto: "DIAN" }] : []),
     { ruta: "configuracion", texto: "Reglas y agentes", corto: "Reglas" },
   ];
   const lista = useRef<HTMLUListElement>(null);

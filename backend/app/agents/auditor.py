@@ -89,6 +89,17 @@ def auditar(datos: DatosDeclaracion, liq: Liquidacion, filas: list[FilaInterpret
     if liq.resumen.deudas > 0 and datos.deducciones.intereses_vivienda == 0:
         agregar("info", "¿Alguna deuda es crédito de vivienda?", "Los intereses que pagaste en el año se pueden deducir hasta 1.200 UVT. Pide el certificado al banco.")
 
+    # Activos en el exterior: más de 2.000 UVT obliga a presentar también el formulario 160
+    afuera = sum(b.valor for b in datos.patrimonio.bienes if any(x in b.concepto.lower() for x in ("exterior", "cripto")))
+    if afuera > 2000 * liq.uvt:
+        agregar(
+            "advertencia",
+            "También debes presentar el formulario 160",
+            f"Tus bienes en el exterior o en criptomonedas suman {cop(afuera)}, más de 2.000 UVT. Además de la renta, va la declaración anual de activos en el exterior (formulario 160), con la misma fecha.",
+        )
+    elif afuera > 0:
+        agregar("info", "Bienes en el exterior", "Van en tu patrimonio en pesos, con la TRM del 31 de diciembre. Por debajo de 2.000 UVT no necesitas el formulario 160.")
+
     # 5. Resultado
     if liq.resumen.saldo_favor > 0:
         agregar("info", "Te queda saldo a favor", f"Puedes pedir la devolución de {cop(liq.resumen.saldo_favor)} o usarlo en tu próxima declaración.")

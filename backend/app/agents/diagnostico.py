@@ -175,7 +175,7 @@ def _lista(cosas: list[str], y: str = "y") -> str:
 def _hay_ingresos(e: EstadoChat, r: Respuestas) -> bool:
     return bool(e.tiene_exogena or e.filas) or any(
         [r.salarios_no_reportados, r.honorarios_no_reportados, r.pensiones_no_reportadas, r.otros_ingresos_no_reportados,
-         r.arriendos_no_reportados, r.dividendos_no_reportados]
+         r.arriendos_no_reportados, r.dividendos_no_reportados, r.rendimientos_financieros]
     )
 
 
@@ -259,6 +259,12 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         "Como independiente, ¿tuviste costos o gastos de tu actividad con factura a tu nombre? Si no, uso el 25 % exento, que suele convenir más.",
         "Las facturas electrónicas a tu nombre las ves en el portal de facturación de la DIAN.",
     ))
+    agregar(impuesto > 0 and honorarios and not con_exo and not r.aportes_independiente
+            and not (ex.get("independiente.aportes_obligatorios_pension") or ex.get("independiente.aportes_obligatorios_salud")), Vacio(
+        "aportes_pila", "cuánto pagaste de salud y pensión como independiente",
+        "¿Cuánto pagabas al mes de salud y pensión en la planilla PILA? Eso se resta de tus ingresos y no paga impuesto.",
+        "Las planillas PILA pagadas las descargas en el operador donde pagas (Mi Planilla, SOI, Aportes en Línea).",
+    ))
     arriendos = r.arriendos_no_reportados + ex.get("capital.arrendamientos", 0)
     agregar(impuesto > 0 and arriendos and not r.costos_arriendos and not ex.get("capital.costos_gastos_procedentes"), Vacio(
         "costos_arriendo", "si tuviste gastos del inmueble que arriendas",
@@ -307,6 +313,23 @@ def vacios(e: EstadoChat, r: Respuestas, vp: Liquidacion | None) -> list[Vacio]:
         "donaciones_hechas", "si donaste a una fundación",
         "¿Donaste en el año a una fundación o entidad sin ánimo de lucro que te dio certificado? El 25 % de lo donado se descuenta del impuesto.",
         "Certificado de donación de la entidad (con su NIT y el valor donado).",
+    ))
+    agregar(impuesto > 0 and trabajo and anio >= 2023 and not r.compras_factura_electronica and not ex.get("deducciones.compras_factura_electronica"), Vacio(
+        "factura", "si pediste factura electrónica a tu nombre",
+        f"¿En {anio} pediste factura electrónica con tu cédula en tus compras (mercado, ropa, restaurantes)? El 1 % de esas compras se resta, hasta 240 UVT. ¿Cuánto sumaron más o menos?",
+        "Todas las facturas electrónicas a tu nombre aparecen en el portal de facturación de la DIAN (catalogo-vpfe.dian.gov.co).",
+    ))
+    bancarios = [b for b in r.bienes_adicionales if any(x in norm(b.concepto) for x in ("cdt", "ahorro", "cuenta", "inversion", "fondo"))]
+    agregar(bancarios and not con_exo and "certificado_bancario" not in docs and not r.rendimientos_financieros, Vacio(
+        "rendimientos", "cuánto te dieron de intereses tus cuentas o CDT",
+        f"¿Cuánto te dieron de intereses en {anio} tus cuentas de ahorro, CDT o fondos? Son ingresos y una parte no paga impuesto.",
+        "El certificado tributario de cada banco trae los rendimientos del año (en la banca virtual, «Certificados»).",
+    ))
+    exterior = any(any(x in norm(b.concepto) for x in ("exterior", "cripto")) for b in r.bienes_adicionales)
+    agregar(r.bienes_adicionales and not exterior, Vacio(
+        "exterior", "si tienes cuentas, bienes o criptomonedas fuera de Colombia",
+        "¿Tienes cuentas, bienes o criptomonedas fuera de Colombia? También van en tu patrimonio, en pesos al 31 de diciembre.",
+        "Extractos de la cuenta o de la plataforma (Binance, etc.) con el saldo al 31 de diciembre y la TRM de ese día.",
     ))
     agregar(sancion > 0 and r.sin_sanciones_ultimos_2_anios, Vacio(
         "sanciones", "si te han sancionado por declarar tarde",

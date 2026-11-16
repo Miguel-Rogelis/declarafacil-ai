@@ -9,6 +9,7 @@ import { ProveedorSesion, useSesion, type Ruta } from "./lib/estado";
 import Configuracion from "./pages/Configuracion";
 import Declarar from "./pages/Declarar";
 import Inicio from "./pages/Inicio";
+import Presentar from "./pages/Presentar";
 import Resultado from "./pages/Resultado";
 
 /** Fondo animado detrás de la parte de arriba (el shader de la plantilla rbp-portfolio con la tinta y el sello).
@@ -50,6 +51,7 @@ function Paginas() {
       {ruta === "inicio" ? <Inicio /> : null}
       {ruta === "declarar" ? <Declarar /> : null}
       {ruta === "resultado" ? <Resultado /> : null}
+      {ruta === "presentar" ? <Presentar /> : null}
       {ruta === "configuracion" ? <Configuracion /> : null}
       {ruta === "declarar" ? null : <footer className="pie contenedor">
         DeclaraFácil prepara un borrador con fines educativos. No reemplaza la asesoría de un contador ni presenta la declaración por ti.

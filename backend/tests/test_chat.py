@@ -502,3 +502,48 @@ def test_chat_en_vivo_termina_con_la_respuesta_validada():
 def test_ficha_sin_ingresos_no_da_nada_por_listo():
     j = Charla()("hola, ¿tengo que declarar renta?")
     assert all(i["estado"] == "falta" for i in j["ficha"])
+
+
+# ---------- Datos nuevos: factura electrónica, intereses, exterior, PILA ----------
+
+
+@pytest.mark.parametrize(("mensaje", "clave", "valor"), [
+    ("gano 6 millones al mes y compré como 30 millones con factura electrónica a mi nombre", "compras_factura", "$30.000.000"),
+    ("el CDT me dio 2 millones de intereses en el año", "rendimientos", "$2.000.000"),
+    ("soy independiente, facturo 8 millones al mes y pago 1.100.000 al mes de la PILA", "aportes_independiente", "$13.200.000"),
+])
+def test_datos_nuevos_se_anotan(mensaje, clave, valor):
+    a = _anotado(Charla()(mensaje), clave)
+    assert a and a["valor"] == valor
+
+
+def test_cripto_y_cuenta_afuera_van_al_patrimonio():
+    j = Charla()("tengo 15 millones en bitcoin y una cuenta en Estados Unidos con 40 millones")
+    etiquetas = {a["etiqueta"] for a in j["anotaciones"]}
+    assert "Bien: Criptomonedas" in etiquetas
+    assert any("exterior" in x for x in etiquetas)
+    assert next(i for i in j["ficha"] if i["tema"] == "exterior")["estado"] == "tengo"
+
+
+def test_no_tengo_nada_de_eso_responde_lo_que_se_pregunto():
+    assert set(asistente.descartes("No tengo nada de eso", ["factura", "rendimientos"])) == {"factura", "rendimientos"}
+    assert asistente.descartes("No tengo nada de eso") == []
+    assert asistente.descartes("ninguna de esas", ["deducciones"]) == ["deducciones"]
+
+
+def test_aportes_pila_bajan_la_base():
+    from app.orquestador import SolicitudLiquidacion, construir_declaracion
+    d = construir_declaracion(SolicitudLiquidacion(respuestas=Respuestas(honorarios_no_reportados=90e6, aportes_independiente=12e6)))
+    assert round(d.independiente.aportes_obligatorios_salud + d.independiente.aportes_obligatorios_pension) == 12_000_000
+
+
+def test_mas_de_2000_uvt_afuera_pide_formulario_160():
+    from app.orquestador import SolicitudLiquidacion, construir_declaracion
+    from app.agents import auditor
+    from app.tax import reglas
+    from app.tax.modelos import ItemPatrimonio
+    from app.tax.motor import liquidar
+    r = Respuestas(salarios_no_reportados=80e6, bienes_adicionales=[ItemPatrimonio(concepto="Cuentas bancarias en el exterior", valor=150e6)])
+    d = construir_declaracion(SolicitudLiquidacion(respuestas=r))
+    liq = liquidar(d, reglas.cargar(2025))
+    assert any("160" in a.titulo for a in auditor.auditar(d, liq, []))

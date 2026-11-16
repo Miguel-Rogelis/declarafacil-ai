@@ -8,6 +8,8 @@ import Counter from "../components/reactbits/Counter";
 import type { Fila, Linea } from "../lib/api";
 import { useSesion } from "../lib/estado";
 import { fechaLarga, pesos } from "../lib/formato";
+import { archivoCalendario, descargar, documentosDe } from "../lib/ayudas";
+import SpotlightCard from "../components/reactbits/SpotlightCard";
 
 const ORDEN = { critica: 0, advertencia: 1, info: 2 } as const;
 const TOTALES = new Set(["patrimonio_liquido", "renta_liquida_cg", "rlg_cg", "rlg_pen", "rlg_total", "impuesto_neto", "total_cargo", "saldo_pagar", "saldo_favor", "go_impuesto"]);
@@ -90,6 +92,8 @@ export default function Resultado() {
   const alertas = [...liq.alertas].sort((a, b) => ORDEN[a.nivel] - ORDEN[b.nivel]);
   const pagar = r.total_a_pagar > 0;
   const favor = !pagar && r.saldo_favor > 0;
+  const consejos = resultado.consejos ?? [];
+  const docs = documentosDe(resultado.datos);
 
   return (
     <div className="contenedor">
@@ -120,12 +124,23 @@ export default function Resultado() {
             ) : null}
           </h1>
           {liq.vencimiento ? (
-            <p className="sin-margen mt-1">
+            <p className="sin-margen mt-1 fecha-limite">
               {liq.vencimiento.extemporanea
                 ? `Tu plazo venció el ${fechaLarga(liq.vencimiento.fecha)}. Incluimos la sanción estimada por ${liq.vencimiento.meses_retraso} mes(es) de retraso.`
                 : `Tienes plazo hasta el ${fechaLarga(liq.vencimiento.fecha)}.`}
+              {!liq.vencimiento.extemporanea ? (
+                <button type="button" className="boton-calendario no-imprimir" onClick={() => {
+                  const b = archivoCalendario(liq);
+                  if (b) descargar(b, `declarar-renta-${liq.anio_gravable}.ics`);
+                }}>
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3.5" width="11" height="10" rx="2" /><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3M8 8.5v3M6.5 10h3" /></svg>
+                  Agregar a mi calendario
+                </button>
+              ) : null}
             </p>
-          ) : null}
+          ) : (
+            <p className="sin-margen mt-1 suave">Dile al agente en qué dos números termina tu cédula y te digo tu fecha límite.</p>
+          )}
         </FadeIn>
         <dl className="desglose">
           <div><dt>Impuesto a cargo</dt><dd>{pesos(r.total_impuesto_cargo)}</dd></div>
@@ -186,6 +201,40 @@ export default function Resultado() {
         </aside>
       </Revelar>
 
+      <Revelar className={`ayudas-resultado${consejos.length ? "" : " una"}`}>
+        {consejos.length ? (
+          <section className="consejos no-imprimir" aria-labelledby="t-consejos">
+            <h2 id="t-consejos" className="titular t-24">Para pagar menos el próximo año</h2>
+            <p className="chico suave">Calculado con tu mismo caso: es lo que te habrías ahorrado este año.</p>
+            <div className="consejos-lista">
+              {consejos.map((c) => (
+                <SpotlightCard key={c.clave} className="consejo" spotlightColor="rgba(90, 59, 192, 0.12)">
+                  <span className="consejo-ahorro">Ahorras unos {pesos(c.ahorro)}</span>
+                  <h3>{c.titulo}</h3>
+                  <p>{c.detalle}</p>
+                </SpotlightCard>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="documentos-lista" aria-labelledby="t-docs">
+          <h2 id="t-docs" className="titular t-24">Documentos para tener a mano</h2>
+          <p className="chico suave">Según lo que trae tu declaración. Guárdalos: la DIAN te los puede pedir hasta 5 años después.</p>
+          <ul>
+            {docs.map((d) => (
+              <li key={d.clave}>
+                <strong>{d.nombre}</strong>
+                <span>
+                  {d.donde}
+                  {d.enlace ? <> <a className="enlace-oficial" href={d.enlace} target="_blank" rel="noopener noreferrer">Abrir<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5h5v5M9.5 2.5 3 9" /></svg></a></> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </Revelar>
+
       <Pestanas
         className="no-imprimir"
         pegadas
@@ -219,7 +268,7 @@ export default function Resultado() {
       </div>
 
       <div className="acciones-resultado">
-        <a className="boton sello" href="https://www.dian.gov.co" target="_blank" rel="noreferrer">Ir a la DIAN a firmar<span className="visualmente-oculto"> (se abre en otra pestaña)</span></a>
+        <button className="boton sello" onClick={() => ir("presentar")}>Presentar en la DIAN, paso a paso</button>
         <button className="boton secundario" onClick={() => window.print()}>Guardar como PDF</button>
         <button className="boton secundario" onClick={() => ir("declarar")}>Seguir en el chat</button>
         <button className="boton-texto" onClick={() => { reiniciar(); ir("inicio"); }}>Empezar de nuevo</button>

@@ -20,7 +20,7 @@ import {
   type Simulacion,
 } from "./api";
 
-export type Ruta = "inicio" | "declarar" | "resultado" | "configuracion";
+export type Ruta = "inicio" | "declarar" | "resultado" | "presentar" | "configuracion";
 
 export type Widget = "subir_exogena" | "revisar" | "traza_documento" | "traza_calculo" | "resultado" | "anotado" | "simulacion";
 
@@ -100,7 +100,7 @@ export type EstadoServidor = "conectando" | "despertando" | "listo" | "sin_conex
 
 const Ctx = createContext<Sesion | null>(null);
 
-const RUTAS: Ruta[] = ["inicio", "declarar", "resultado", "configuracion"];
+const RUTAS: Ruta[] = ["inicio", "declarar", "resultado", "presentar", "configuracion"];
 const leerRuta = (): Ruta => {
   const h = window.location.hash.replace("#/", "") as Ruta;
   return RUTAS.includes(h) ? h : "inicio";
@@ -111,7 +111,7 @@ const porRevisarDe = (f: Fila[], d: Record<string, boolean>) =>
 
 const tieneDatos = (ex: Extraccion | null, r: Respuestas) =>
   !!ex ||
-  r.salarios_no_reportados + r.honorarios_no_reportados + r.pensiones_no_reportadas + r.otros_ingresos_no_reportados + r.arriendos_no_reportados + r.dividendos_no_reportados > 0 ||
+  r.salarios_no_reportados + r.honorarios_no_reportados + r.pensiones_no_reportadas + r.otros_ingresos_no_reportados + r.arriendos_no_reportados + r.dividendos_no_reportados + (r.rendimientos_financieros ?? 0) > 0 ||
   r.bienes_adicionales.length > 0;
 
 export function ProveedorSesion({ children }: { children: ReactNode }) {

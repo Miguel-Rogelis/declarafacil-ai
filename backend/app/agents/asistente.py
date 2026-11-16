@@ -70,6 +70,9 @@ CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
     "dividendos": ("dividendos_no_reportados", "pesos", "Dividendos recibidos", 0, 5e10),
     "dividendos_gravados": ("dividendos_gravados", "pesos", "Dividendos gravados", 0, 5e10),
     "retenciones": ("retenciones_no_reportadas", "pesos", "Retenciones que te hicieron", 0, 5e10),
+    "rendimientos": ("rendimientos_financieros", "pesos", "Intereses y rendimientos del banco, CDT o fondos", 0, 5e10),
+    "compras_factura": ("compras_factura_electronica", "pesos", "Compras con factura electrónica a tu nombre", 0, 5e10),
+    "aportes_independiente": ("aportes_independiente", "pesos", "Aportes a salud y pensión como independiente (PILA)", 0, 5e9),
     "dependientes": ("dependientes", "entero", "Personas a cargo", 0, 10),
     "medicina_prepagada": ("medicina_prepagada", "pesos", "Medicina prepagada", 0, 1e9),
     "intereses_vivienda": ("intereses_vivienda", "pesos", "Intereses de crédito de vivienda", 0, 5e9),
@@ -97,7 +100,7 @@ CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
 }
 
 # Cifras que la gente suele decir por mes: si no dice el periodo, el agente pregunta.
-_MENSUALES = {"salarios", "pension", "arriendos", "medicina_prepagada", "honorarios", "aportes_voluntarios", "intereses_vivienda", "intereses_icetex"}
+_MENSUALES = {"salarios", "pension", "arriendos", "medicina_prepagada", "honorarios", "aportes_voluntarios", "intereses_vivienda", "intereses_icetex", "aportes_independiente"}
 
 # Tema de cada campo (para no volver a preguntar lo mismo)
 _TEMA = {
@@ -106,6 +109,7 @@ _TEMA = {
     "intereses_vivienda": "deducciones", "aportes_voluntarios": "deducciones", "gmf": "deducciones", "declaraciones_previas": "historial",
     "intereses_icetex": "deducciones", "costos_arriendos": "costos_arriendo", "donaciones_realizadas": "donaciones_hechas",
     "ultimos_dos_digitos_cedula": "cedula", "bien": "patrimonio", "deuda": "patrimonio",
+    "compras_factura": "factura", "rendimientos": "rendimientos", "aportes_independiente": "aportes_pila",
 }
 
 _PREGUNTAS = {
@@ -373,7 +377,7 @@ def quitar(respuestas: Respuestas, items: list[dict[str, Any]]) -> tuple[Respues
 
 def _hay_ingresos(r: Respuestas) -> bool:
     return any([r.salarios_no_reportados, r.honorarios_no_reportados, r.pensiones_no_reportadas, r.otros_ingresos_no_reportados,
-                r.arriendos_no_reportados, r.dividendos_no_reportados])
+                r.arriendos_no_reportados, r.dividendos_no_reportados, r.rendimientos_financieros])
 
 
 def _hay_datos(e: EstadoChat, r: Respuestas) -> bool:
@@ -479,6 +483,10 @@ _OPCIONES: dict[str, list[str]] = {
     "consignaciones": ["Fue un préstamo", "Pasé plata entre mis cuentas", "Vendí algo"],
     "concepto": ["Salario", "Honorarios", "Arriendo", "Una deuda"],
     "valor": ["No sé"],
+    "factura": ["No tengo nada de eso", "No sé"],
+    "rendimientos": ["No tengo nada de eso", "No sé"],
+    "exterior": ["No tengo nada de eso", "Sí"],
+    "aportes_pila": ["No tengo nada de eso", "No sé"],
 }
 
 
@@ -597,10 +605,14 @@ _RE_NO_SE = re.compile(r"^(no se|ni idea|no tengo idea|no me acuerdo|no recuerdo
 
 _CONCEPTOS: list[tuple[str, str]] = [
     (r"cesantia", "cesantias"),
+    (r"compr\w*.{0,40}factura|factura electronica.{0,30}(compr|a mi nombre|con mi cedula)|(pido|pedi|pidiendo|pidio) (la )?factura", "compras_factura"),
+    (r"rendimient|(interes\w*|me (dio|dieron|pago|pagaron)|rindio|rindieron|gane).{0,40}\b(cdt|ahorros?|cuentas?|banco|inversion\w*|fondos?|fiducia)\b"
+     r"|\b(cdt|ahorros?|cuentas?|fondos?|fiducia)\b.{0,30}(me (dio|dieron|pago|pagaron|genero|generaron)|rindio|rindieron|interes)", "rendimientos"),
     (r"icetex|credito educativo|prestamo educativo|credito (de|del|para) (mi |el )?(estudio|universidad|carrera)", "intereses_icetex"),
     (r"gastos?\b.{0,30}(arriend|inmueble|alquil)|(predial|administracion|mantenimiento).{0,30}(arriend|alquil)", "costos_arriendos"),
     (r"\b(done|donamos|hice (una )?donacion(es)?|di (una )?donacion|le done|aporte a una fundacion)\b", "donaciones_realizadas"),
     (r"voluntari|\bafc\b|\bavc\b", "aportes_voluntarios"),
+    (r"\bpila\b|planilla|seguridad social|(pag|aport|cotiz)\w*.{0,25}(salud y pension|pension y salud)", "aportes_independiente"),
     (r"prepagad|medicina|poliza de salud|plan complementario", "medicina_prepagada"),
     (r"interes\w*.{0,30}(vivienda|hipotec|apartamento|casa)|hipotec|leasing habitacional", "intereses_vivienda"),
     (r"4\s*x\s*1\.?000|4 por mil|cuatro por mil|\bgmf\b", "gmf"),
@@ -619,7 +631,10 @@ _CONCEPTOS: list[tuple[str, str]] = [
 _RE_DEUDA = re.compile(r"\b(debo|deuda|deudas|prestamo|credito|le debo)\b")
 _BIENES = {"carro": "Carro", "moto": "Moto", "vehiculo": "Vehículo", "camioneta": "Camioneta", "casa": "Casa", "apartamento": "Apartamento",
            "apto": "Apartamento", "lote": "Lote", "finca": "Finca", "local": "Local", "cdt": "CDT", "acciones": "Acciones", "ahorros": "Ahorros",
-           "banco": "Cuentas bancarias", "cuenta": "Cuentas bancarias", "inversion": "Inversiones"}
+           "banco": "Cuentas bancarias", "cuenta": "Cuentas bancarias", "inversion": "Inversiones",
+           "cripto": "Criptomonedas", "criptos": "Criptomonedas", "criptomonedas": "Criptomonedas", "criptomoneda": "Criptomonedas",
+           "bitcoin": "Criptomonedas", "bitcoins": "Criptomonedas", "btc": "Criptomonedas", "usdt": "Criptomonedas", "binance": "Criptomonedas"}
+_RE_EXTERIOR = re.compile(r"exterior|afuera|fuera (del pais|de colombia)|en (estados unidos|usa|eeuu|espana|panama|miami|europa|mexico|chile|canada)|\bdolares\b|\busd\b")
 _RE_BIEN = re.compile(r"\b(" + "|".join(_BIENES) + r")\b")
 
 
@@ -653,7 +668,10 @@ def _concepto_de(clausula: str) -> dict[str, Any] | None:
         return {"campo": campo}
     m = _RE_BIEN.search(clausula)
     if m:
-        return {"campo": "bien", "concepto": _BIENES[m.group(1)]}
+        concepto = _BIENES[m.group(1)]
+        if concepto != "Criptomonedas" and _RE_EXTERIOR.search(clausula):
+            concepto += " en el exterior"
+        return {"campo": "bien", "concepto": concepto}
     return None
 
 
@@ -687,16 +705,26 @@ _DESCARTES = {
     "retenciones": r"no (me )?(hicieron|hacen|hacian|aplicaron|practicaron|retuvieron|retienen|descontaron|descuentan)\b.{0,25}retenc|no me (retuvieron|retienen|retenian)|sin retenc|no (tuve|tengo|hubo) retenc",
     "dependientes": r"no tengo (hijos|dependientes|personas a cargo)|nadie depende|nadie a (mi )?cargo|no mantengo a nadie|sin hijos",
     "deducciones": r"no pago (prepagada|medicina|nada de eso|ninguna de esas|ninguno|ninguna|nada)|no tengo (prepagada|deducciones|credito de vivienda|icetex)|ninguna de esas",
-    "patrimonio": r"no tengo (nada|bienes|propiedades|casa ni carro|carro ni casa)( a mi nombre)?|nada a mi nombre|no tengo (ni )?(casa|carro|bienes)",
-    "bienes": r"no tengo (nada|bienes|propiedades|casa ni carro|carro ni casa|ni casa|ni carro|carro|moto|vehiculo)( a mi nombre)?|nada a mi nombre",
+    "patrimonio": r"no tengo (nada(?! de (eso|esos|esas|esto))|bienes|propiedades|casa ni carro|carro ni casa)( a mi nombre)?|nada a mi nombre|no tengo (ni )?(casa|carro|bienes)",
+    "bienes": r"no tengo (nada(?! de (eso|esos|esas|esto))|bienes|propiedades|casa ni carro|carro ni casa|ni casa|ni carro|carro|moto|vehiculo)( a mi nombre)?|nada a mi nombre",
     "costos": r"no tuve (costos|gastos)|sin (costos|gastos)|no tengo (costos|gastos|facturas)",
     "historial": r"primera vez|nunca (he|habia) declarado|nunca declare",
+    "factura": r"no (pido|pedi|pedia) factura|no (tengo|tuve) (compras con )?factura|sin factura",
+    "rendimientos": r"no (me )?(dio|dieron|genero|generaron|dan|pagan) (nada de )?interes|no tengo (cdt|inversiones|ahorros)|no (tuve|tengo) rendimientos",
+    "exterior": r"no tengo (nada )?(afuera|en el exterior|fuera del pais|cripto\w*|bitcoin)|nada (afuera|en el exterior)",
+    "aportes_pila": r"no (pago|pague|pagaba|hago|hice) (la )?(pila|planilla|seguridad social)|no (cotizo|cotice|aporto|aporte) (a )?(salud|pension|seguridad)",
 }
 
+# «No tengo nada de eso» (la respuesta rápida): vale para todo lo que se acababa de preguntar
+_RE_NADA_DE_ESO = re.compile(r"^(no,? )?(no tengo |no pago |no tuve )?(nada|ninguno|ninguna) de (eso|esos|esas|esto)|^no tengo nada( de eso)?$|^(nada|ninguno|ninguna)$")
 
-def descartes(mensaje: str) -> list[str]:
-    msg = norm(mensaje)
-    return [tema for tema, patron in _DESCARTES.items() if re.search(rf"(?<![a-z])(?:{patron})", msg)]
+
+def descartes(mensaje: str, preguntados: list[str] | None = None) -> list[str]:
+    msg = norm(mensaje).strip(" .!")
+    temas = [tema for tema, patron in _DESCARTES.items() if re.search(rf"(?<![a-z])(?:{patron})", msg)]
+    if preguntados and _RE_NADA_DE_ESO.search(msg):
+        temas += [x for x in preguntados if x in _YA_NO and x not in temas]
+    return temas
 
 
 _RE_CORRIGE = re.compile(r"\b(perdon|me equivoque|corrijo|correccion|en realidad|realmente|mejor dicho|quise decir|no,? (eran|era|son|es)|eran|era)\b")
@@ -1012,7 +1040,7 @@ SISTEMA = """Eres el agente de DeclaraFácil. Ayudas a personas en Colombia con 
 CÓMO RESPONDES
 - Responde exactamente lo que te preguntaron, desde la primera frase. Sin rodeos, sin introducciones y sin temas que no pidieron.
 - Corto: de 1 a 4 frases, máximo 80 palabras. Solo te extiendes si la persona pide detalle o una explicación.
-- Español de Colombia, sencillo, tuteando. Si usas un término técnico, explícalo en pocas palabras. Sin markdown, sin listas, sin emojis.
+- Español de Colombia, sencillo, tuteando. Si usas un término técnico, explícalo en pocas palabras. Sin markdown, sin listas, sin emojis. La única excepción son los enlaces oficiales que trae la BASE DE CONOCIMIENTO en forma [texto](url): cuando sirvan, cópialos tal cual; nunca inventes enlaces.
 - Ninguna pregunta es tonta: responde lo básico con naturalidad.
 - La persona lleva la conversación: nada de preguntas de relleno ni ofrecimientos ("¿Quieres que…?", "Si quieres…", "¿Algo más?").
 - PERO pregunta cuando te falte información para hacer bien lo que la persona quiere: una cifra que no sabes si es mensual o anual, una cifra sin concepto, o un dato de su caso que necesitas para contestarle (por ejemplo, pregunta si tiene que declarar y no sabes sus ingresos). Una sola pregunta concreta (máximo dos datos), di para qué la necesitas y descríbela en "pregunta". No repitas lo que está en YA PREGUNTASTE.
@@ -1062,6 +1090,12 @@ Usuario: no, perdón, eran 4 millones no 5   (antes había dicho "gano 5 millone
 {{"respuesta": "Listo, lo corregí.", "anotar": [{{"campo": "salarios", "valor": "4 millones", "periodo": "mensual"}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
 Usuario: no me hicieron retención
 {{"respuesta": "Listo, anoté que no te hicieron retención.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+Usuario: compré como 20 millones con factura electrónica a mi nombre y el CDT me dio 1 millón de intereses
+{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "compras_factura", "valor": "20 millones", "periodo": "anual"}}, {{"campo": "rendimientos", "valor": "1 millón", "periodo": "anual"}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+Usuario: tengo 15 millones en bitcoin
+{{"respuesta": "Listo, lo anoté en tu patrimonio.", "anotar": [{{"campo": "bien", "valor": "15 millones", "concepto": "Criptomonedas"}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+Usuario: no tengo nada de eso   (le habías preguntado por factura electrónica e intereses)
+{{"respuesta": "Listo, anoté que no tienes eso.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
 Usuario: calcula
 {{"respuesta": "Calculo tu borrador con lo que tengo.", "anotar": [], "quitar": [], "simular": [], "calcular": true, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}"""
 
@@ -1357,7 +1391,17 @@ _FICHA = [
     ("deducciones", "Deducciones"),
     ("patrimonio", "Patrimonio"),
     ("cedula", "Cédula"),
+    ("factura", "Compras con factura"),
+    ("rendimientos", "Intereses del banco"),
+    ("exterior", "Bienes en el exterior"),
 ]
+
+_EXTERIOR = ("exterior", "cripto")
+
+
+def bienes_exterior(r: Respuestas) -> float:
+    """Lo que tiene fuera de Colombia o en criptomonedas (para el aviso del formulario 160)."""
+    return sum(b.valor for b in r.bienes_adicionales if any(x in norm(b.concepto) for x in _EXTERIOR))
 
 
 def ficha(e: EstadoChat, r: Respuestas, vp: Liquidacion | None, ya: list[str], descartados: list[str], preguntando: list[str]) -> list[ItemFicha]:
@@ -1378,6 +1422,11 @@ def ficha(e: EstadoChat, r: Respuestas, vp: Liquidacion | None, ya: list[str], d
         "deducciones": (bool(deducciones), ", ".join(deducciones)),
         "patrimonio": (bool(bienes or r.deudas_adicionales), pesos(bienes) + " en bienes" if bienes else "deudas"),
         "cedula": (bool(r.ultimos_dos_digitos_nit), f"termina en {r.ultimos_dos_digitos_nit}" if r.ultimos_dos_digitos_nit else ""),
+        "factura": (bool(r.compras_factura_electronica or ex.get("deducciones.compras_factura_electronica")),
+                    pesos(r.compras_factura_electronica or ex.get("deducciones.compras_factura_electronica", 0))),
+        "rendimientos": (bool(r.rendimientos_financieros or ex.get("capital.rendimientos_financieros")),
+                         pesos(r.rendimientos_financieros or ex.get("capital.rendimientos_financieros", 0))),
+        "exterior": (bool(bienes_exterior(r)), pesos(bienes_exterior(r))),
     }
     salida = []
     for tema, etiqueta in _FICHA:
@@ -1401,6 +1450,7 @@ _CAMPOS_DEL_TEMA = {
     "retenciones": {"retenciones"}, "dependientes": {"dependientes"}, "historial": {"declaraciones_previas"},
     "deducciones": {"medicina_prepagada", "intereses_vivienda", "intereses_icetex", "aportes_voluntarios"},
     "costos": {"costos_independiente"}, "patrimonio": {"bien", "deuda"}, "bienes": {"bien"},
+    "factura": {"compras_factura"}, "rendimientos": {"rendimientos"}, "aportes_pila": {"aportes_independiente"}, "exterior": {"bien"},
 }
 
 _YA_NO = {
@@ -1411,6 +1461,10 @@ _YA_NO = {
     "bienes": "no tienes bienes a tu nombre",
     "costos": "no tuviste costos de tu actividad",
     "historial": "es la primera vez que declaras",
+    "factura": "no tienes compras con factura electrónica a tu nombre",
+    "rendimientos": "no recibiste intereses del banco ni de inversiones",
+    "exterior": "no tienes bienes, cuentas ni criptomonedas fuera de Colombia",
+    "aportes_pila": "no pagaste salud y pensión como independiente",
 }
 
 
@@ -1570,7 +1624,8 @@ async def responder(t: TurnoChat, al_texto: AlTexto | None = None) -> RespuestaC
     partes.extend(notas_venta)
     if rechazadas:
         partes.append(f"No anoté {', '.join(rechazadas)} porque no encontré esa cifra en lo que escribiste; escríbela con números.")
-    nuevos_no = [x for x in descartes(t.mensaje) if x not in e.ya_preguntado and x in _YA_NO]
+    pendientes = list(p.temas) if p else []
+    nuevos_no = [x for x in descartes(t.mensaje, pendientes) if x not in e.ya_preguntado and x in _YA_NO]
     if nuevos_no:
         frase = diagnostico._lista(list(dict.fromkeys(_YA_NO[x] for x in nuevos_no)))
         if not hechas and not con_ia:
@@ -1590,7 +1645,7 @@ async def responder(t: TurnoChat, al_texto: AlTexto | None = None) -> RespuestaC
     e2 = e.model_copy(update={"anio_gravable": anio, "respuestas": r})
     vp = vista_previa(e2, r)
 
-    descartados = descartes(t.mensaje)
+    descartados = descartes(t.mensaje, pendientes)
     todos_descartados = list(dict.fromkeys([*e.descartados, *descartados]))
     ya = list(dict.fromkeys([*e.ya_preguntado, *descartados]))
     pregunta: PreguntaPendiente | None = pregunta_codigo or pregunta_venta or plan.pregunta

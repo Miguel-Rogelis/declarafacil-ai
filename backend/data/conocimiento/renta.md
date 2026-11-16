@@ -86,11 +86,11 @@ El RUT (Registro Único Tributario) es tu inscripción ante la DIAN. Para declar
 
 ## ¿Cómo firmo la declaración?
 También: firma electrónica | cómo saco la firma electrónica | no tengo firma electrónica
-En MUISCA, con tu firma electrónica de la DIAN. Si no la tienes, la habilitas en el mismo portal con tu cédula y un código que te llega al correo. DeclaraFácil no firma por ti.
+En [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/), con tu firma electrónica de la DIAN. Si no la tienes, la habilitas en el mismo portal con tu cédula y un código que te llega al correo. DeclaraFácil no firma por ti.
 
 ## ¿Cómo presento la declaración?
 También: cómo declaro | dónde declaro | cómo hago la declaración en la dian | pasos para declarar | formulario 210
-En MUISCA, en el formulario 210. Revisas la declaración sugerida, la ajustas con tus datos (aquí te ayudo con el borrador), la firmas con tu firma electrónica y, si hay saldo a pagar, generas el recibo 490.
+En [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/), en el formulario 210. Revisas la declaración sugerida, la ajustas con tus datos (aquí te ayudo con el borrador), la firmas con tu firma electrónica y, si hay saldo a pagar, generas el recibo 490.
 
 ## ¿Cómo paso mi borrador al formulario 210 de la DIAN?
 También: cómo lleno el 210 | casilla por casilla | dónde va cada valor | copiar a muisca | en qué casilla va | vista del formulario | formulario de la dian
@@ -114,7 +114,7 @@ En {anio}: el 25 % de tus pagos laborales queda exento (máximo {exenta_tope_uvt
 
 ## ¿Cómo pago la renta?
 También: dónde pago | cómo se paga | recibo 490 | pagar por pse | puedo pagar a cuotas
-Después de presentar, generas en MUISCA el recibo 490 y pagas en bancos autorizados o por PSE. Si no puedes pagar todo, puedes pedirle a la DIAN una facilidad de pago, pero mientras tanto corren intereses de mora.
+Después de presentar, generas en [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/) el recibo 490 y pagas en bancos autorizados o por PSE. Si no puedes pagar todo, puedes pedirle a la DIAN una facilidad de pago, pero mientras tanto corren intereses de mora.
 
 ## ¿Cuánto cuesta declarar?
 También: es gratis declarar | cobran por declarar | cuánto cobra un contador
@@ -243,4 +243,28 @@ Para hijos menores de 18 años, el registro civil de nacimiento. Para hijos de 1
 ## ¿Cómo sé cuánto me retuvieron?
 También: cuánto me retuvieron | dónde veo la retención | retención en la fuente que me hicieron
 Está en el certificado de ingresos y retenciones de tu empleador (formulario 220), en el certificado tributario de tu banco y en tu exógena, donde cada entidad reporta lo que te retuvo.
+
+## ¿Cómo entro a MUISCA por primera vez?
+También: no sé entrar a muisca | crear usuario en la dian | registrarme en la dian | habilitar cuenta muisca | olvidé la contraseña de la dian | cómo ingreso a la dian
+Entra a [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/) y elige «Persona natural». Si nunca has entrado, primero necesitas el RUT; luego usas «Habilitar cuenta» con tu cédula y la DIAN te manda un código al correo que tienes en el RUT. Si olvidaste la contraseña, «¿Olvidó su contraseña?» te la cambia con ese mismo correo. Ya adentro, desde el menú haces la exógena, la firma electrónica y el formulario 210.
+
+## ¿Puede DeclaraFácil presentar la declaración por mí?
+También: suban la declaración por mí | presentar automático | enviar la declaración a la dian | conectar con muisca | la app la presenta
+No. Presentar exige entrar con tu usuario y firmar con tu firma electrónica personal, y la DIAN no permite que otra aplicación lo haga por ti. Lo que sí hacemos es dejarte todo listo: en «Presentar en la DIAN» te llevamos paso a paso por [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/) con cada casilla del formulario 210 para copiar.
+
+## ¿Qué es el 1 % de las compras con factura electrónica?
+También: factura electrónica | 1 por ciento | pedir factura con mi cédula | deducción por factura | descuento de facturas
+Desde el año gravable 2023, el 1 % de lo que compraste con factura electrónica a tu nombre (pidiendo factura con tu cédula) se resta de tu renta, hasta 240 UVT, y no entra en el límite del 40 %. Sirve cualquier compra que no hayas restado por otro lado: mercado, ropa, restaurantes. Ves todas tus facturas en el [portal de facturación de la DIAN](https://catalogo-vpfe.dian.gov.co/User/Login).
+
+## ¿Cómo declaro los intereses de mis CDT y cuentas de ahorro?
+También: rendimientos financieros | intereses del cdt | intereses de ahorros | lo que me dio el banco | componente inflacionario
+Los intereses que te pagaron tus cuentas, CDT o fondos son ingresos de capital. Una parte, el componente inflacionario, no paga impuesto. El banco te da un certificado tributario con los rendimientos del año y el saldo al 31 de diciembre, que también va en tu patrimonio. Si te retuvieron sobre esos intereses, esa retención se resta de tu impuesto.
+
+## ¿Cómo declaro criptomonedas o cuentas en el exterior?
+También: bitcoin | binance | cripto | cuenta en estados unidos | bienes en el exterior | formulario 160 | activos en el exterior | dólares
+Van en tu patrimonio en pesos, con su valor al 31 de diciembre (la TRM de ese día si están en dólares). Si lo que tienes fuera de Colombia suma más de 2.000 UVT, además de la renta presentas el formulario 160 de activos en el exterior, en la misma fecha. Si vendiste cripto con ganancia, esa ganancia también se declara.
+
+## ¿Los aportes a la PILA bajan mi impuesto?
+También: pila | planilla | salud y pensión como independiente | seguridad social independiente | aportes obligatorios independiente
+Sí. Lo que pagaste de salud y pensión obligatoria como independiente en la PILA no paga impuesto: se resta de tus ingresos. Descarga las planillas pagadas en el operador donde pagas (Mi Planilla, SOI, Aportes en Línea, etc.).
 

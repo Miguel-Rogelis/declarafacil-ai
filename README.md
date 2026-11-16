@@ -138,10 +138,11 @@ Pruebas: `cd backend && pytest`. Para regenerar la exógena ficticia: `python sc
 Sin esto la app funciona igual y guarda la conversación en el navegador. Con cuentas, cada persona la guarda en la nube y tiene su propio cupo de IA (sin sesión, todos los de una misma red comparten uno).
 
 1. Crea un proyecto gratis en [supabase.com](https://supabase.com).
-2. *SQL Editor* → pega `supabase/esquema.sql` → *Run*.
+2. *SQL Editor* → pega `supabase/esquema.sql` → *Run*. Crea la tabla (una declaración por persona y por año) y el espacio privado `documentos` para los archivos. Si ya lo habías corrido antes, vuelve a correrlo: actualiza todo sin borrar nada.
 3. *Authentication* → *URL Configuration*: en *Site URL* pon la dirección de Render y en *Redirect URLs* agrega también la de GitHub Pages (con `/declarafacil-ai/` al final) y `http://localhost:5173`.
 4. Google (opcional; el enlace por correo funciona sin esto): *Authentication* → *Sign In / Providers* → *Google*, con un cliente OAuth de Google Cloud cuyo *Authorized redirect URI* sea el que muestra Supabase.
 5. *Project Settings* → *API*: copia la *Project URL* y la clave **anon public** a Render como `SUPABASE_URL` y `SUPABASE_ANON_KEY`. El sitio las lee del servidor; no hay que volver a construir.
+6. Para que la ventana de Google diga «DeclaraFácil» y no la dirección de Supabase: copia el *ID de cliente* de Google Cloud (es público) a Render como `GOOGLE_CLIENT_ID`, y en ese cliente de Google Cloud agrega en *Authorized JavaScript origins* la dirección de Render, `https://<usuario>.github.io` y `http://localhost:5173`. Si falta, se usa el inicio de sesión de siempre.
 
 ### Demo del front en GitHub Pages
 

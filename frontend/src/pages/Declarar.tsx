@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Conversacion from "../components/Conversacion";
 import { BorrarDatos } from "../components/BorrarDatos";
 import { Ficha } from "../components/Ficha";
+import { MisDocumentos } from "../components/MisDocumentos";
 import type { DocumentoCargado, Fila, Respuestas } from "../lib/api";
 import { useSesion } from "../lib/estado";
 import { GRUPOS, NOMBRES_CAMPO, pesos } from "../lib/formato";
@@ -154,7 +155,7 @@ export default function Declarar() {
       <div className="chat-columna fila-barra">
         {mensajes.length ? <BorrarDatos onBorrar={() => reiniciar({ nube: true })} nube={!!cuenta} /> : <span />}
         <button ref={boton} className="boton secundario chico" onClick={() => setAbierto(true)} aria-expanded={abierto} aria-controls="panel-datos">
-          Tus datos{cantidad ? ` (${cantidad})` : ""}{porRevisar.length ? ` · ${porRevisar.length} por confirmar` : ""}
+          {cuenta ? "Tus datos y documentos" : "Tus datos"}{cantidad ? ` (${cantidad})` : ""}{porRevisar.length ? ` · ${porRevisar.length} por confirmar` : ""}
         </button>
       </div>
       {mensajes.length ? <div className="chat-columna"><Ficha items={ficha} /></div> : null}
@@ -186,6 +187,7 @@ export default function Declarar() {
                 </div>
                 <button className="boton-texto" onClick={() => setAbierto(false)} autoFocus>Cerrar</button>
               </header>
+              <MisDocumentos onCerrar={() => setAbierto(false)} />
               <HojaTrabajo filas={filas} respuestas={respuestas} documentos={documentos} />
             </motion.aside>
           </>

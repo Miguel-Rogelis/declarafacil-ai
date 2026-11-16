@@ -888,3 +888,40 @@ main { padding-bottom: 6rem; }
   .paso-marca { width: 2rem; height: 2rem; }
   .paso-dian::before { left: calc(1rem - 1px); top: 2.2rem; }
 }
+
+/* ---------- Mis documentos (panel de datos, con cuenta) ---------- */
+.mis-documentos { margin: 1rem 1.2rem 0.4rem; padding: 1rem; border: 1px solid var(--marco); border-radius: var(--radio-control); background: var(--papel); display: grid; gap: 0.8rem; }
+.mis-documentos.invitacion { gap: 0.3rem; }
+.mis-documentos.invitacion p { margin: 0; font-size: var(--fs-sm); line-height: 1.5; }
+.mis-docs-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.mis-docs-cabeza h3 { margin: 0; font-size: var(--fs-base); font-weight: 600; }
+.mis-docs-resumen { margin: 0; display: grid; gap: 0.35rem; font-size: var(--fs-sm); }
+.mis-docs-resumen > div { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 0.6rem; }
+.mis-docs-resumen dt { color: var(--tinta-suave); }
+.mis-docs-resumen dd { margin: 0; font-weight: 550; }
+.mis-docs-lista { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--reticula); }
+.mis-docs-lista li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.7rem; padding: 0.6rem 0; border-bottom: 1px solid var(--reticula); overflow: hidden; }
+.doc-icono { width: 2rem; height: 2rem; border-radius: 8px; background: var(--sello-claro); color: var(--sello-hondo); display: grid; place-items: center; }
+.doc-icono svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; }
+.doc-info { display: grid; min-width: 0; }
+.doc-nombre { font-size: var(--fs-sm); font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-meta { font-size: var(--fs-xs); color: var(--tinta-suave); }
+.doc-quitar { width: 2rem; height: 2rem; border-radius: 50%; border: 0; background: transparent; color: var(--tinta-suave); display: grid; place-items: center; cursor: pointer; transition: background-color 160ms ease, color 160ms ease, transform 160ms var(--curva); }
+.doc-quitar svg { width: 0.9rem; height: 0.9rem; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+@media (hover: hover) { .doc-quitar:hover { background: var(--lacre-claro); color: var(--lacre); } }
+.doc-quitar:active { transform: scale(0.94); }
+.doc-quitar:focus-visible { outline: 2px solid var(--sello); outline-offset: 2px; }
+.doc-confirmar { display: inline-flex; align-items: center; gap: 0.4rem; }
+.mis-documentos > .boton { justify-self: start; }
+.nota-privada { display: flex; align-items: center; gap: 0.45rem; margin: 0; font-size: var(--fs-xs); color: var(--tinta-suave); }
+.nota-privada svg { width: 0.95rem; height: 0.95rem; flex: none; fill: none; stroke: currentColor; stroke-width: 1.3; }
+
+/* ---------- Comparado con el año anterior ---------- */
+.comparar-anios { margin-top: 2.4rem; padding: 1.3rem 1.4rem; border: 1px solid var(--marco); border-radius: var(--radio-tarjeta); background: var(--hoja); box-shadow: var(--sombra-tarjeta); }
+.comparar-anios h2 { margin: 0 0 0.9rem; }
+.comparar-anios table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: var(--fs-md); }
+.comparar-anios th, .comparar-anios td { text-align: right; padding: 0.55rem 0.4rem; border-bottom: 1px solid var(--reticula-suave); }
+.comparar-anios th:first-child, .comparar-anios td:first-child { text-align: left; }
+.comparar-anios thead th { font-weight: 600; color: var(--tinta-suave); font-size: var(--fs-sm); }
+.comparar-anios .sube { color: var(--lacre); }
+.comparar-anios .baja { color: var(--sello); }

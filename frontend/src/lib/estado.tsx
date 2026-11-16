@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { borrarLocal, guardarLocal, leerLocal, sinAnimar, type Instantanea } from "./guardado";
-import { borrarDeLaNube, guardarEnLaNube, iniciarNube, leerDeLaNube, type Cuenta } from "./nube";
+import { borrarDeLaNube, guardarEnLaNube, iniciarNube, leerDeLaNube, subirDocumento, type Cuenta } from "./nube";
 import {
   analizarDocumentos,
   api,
@@ -85,7 +85,10 @@ interface Sesion {
   enviar: (texto: string) => Promise<void>;
   deshacer: (id: number) => void;
   procesarArchivo: (f: File) => Promise<void>;
-  procesarArchivos: (f: File[]) => Promise<void>;
+  procesarArchivos: (f: File[], opciones?: { subir?: boolean }) => Promise<void>;
+  /** Cambia cada vez que se suben o borran archivos de la cuenta (el panel vuelve a listarlos). */
+  versionDocs: number;
+  refrescarDocs: () => void;
   documentos: DocumentoCargado[];
   usarEjemplo: () => Promise<void>;
   calcular: (opciones?: { silencioso?: boolean }) => Promise<void>;
@@ -156,6 +159,10 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   // Estado más reciente para los callbacks asíncronos. Se actualiza a mano cuando una
   // acción depende de un cambio que React todavía no ha aplicado (p. ej. cambiar de año y calcular).
   const ref = useRef({ anio, extraccion, filas, decididas, respuestas, resultado, ruta, mensajes });
+  const cuentaRef = useRef<Cuenta | null>(null);
+  cuentaRef.current = cuenta;
+  const [versionDocs, setVersionDocs] = useState(0);
+  const refrescarDocs = useCallback(() => setVersionDocs((v) => v + 1), []);
   ref.current = { ...ref.current, anio, extraccion, filas, decididas, respuestas, resultado, ruta, mensajes };
 
   useEffect(() => {
@@ -296,7 +303,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
 
   /** Lee uno o varios documentos (exógena y certificados) y los cruza con lo que ya había. */
   const procesarArchivos = useCallback(
-    async (archivos: File[]) => {
+    async (archivos: File[], opciones?: { subir?: boolean }) => {
       if (!archivos.length) return;
       agregar({ rol: "usuario", texto: archivos.map((a) => `📎 ${a.name}`).join("\n") });
       const idTraza = agregar({ rol: "asistente", widget: "traza_documento", eventos: [] });
@@ -357,6 +364,16 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         },
       });
       if (!leida) return;
+      // Con sesión, los archivos quedan guardados en la cuenta (carpeta privada del año)
+      if (cuentaRef.current && opciones?.subir !== false) {
+        const anioDocs = ref.current.anio;
+        void Promise.allSettled(archivos.map((a) => subirDocumento(anioDocs, a))).then((rs) => {
+          setVersionDocs((v) => v + 1);
+          if (rs.some((r) => r.status === "rejected")) {
+            agregar({ rol: "asistente", aviso: true, texto: "Leí tus documentos, pero no pude guardar alguno en tu cuenta. Puedes volver a subirlo más tarde." });
+          }
+        });
+      }
       // El agente dice qué dedujo y pregunta lo que los documentos no muestran
       setEscribiendo(true);
       try {
@@ -378,7 +395,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
 
   const usarEjemplo = useCallback(async () => {
     try {
-      await procesarArchivos(await api.documentosDemo());
+      await procesarArchivos(await api.documentosDemo(), { subir: false });
     } catch (e) {
       agregar({ rol: "asistente", texto: (e as Error).message });
     }
@@ -498,10 +515,9 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     [],
   );
 
-  /** Cambio desde el selector del encabezado. */
-  const cambiarAnio = useCallback(
+  /** Cambio de año sin cuenta (o sin declaración guardada de ese año): la conversación sigue con las reglas del año nuevo. */
+  const cambiarAnioSinCuenta = useCallback(
     (a: number) => {
-      if (a === ref.current.anio) return;
       const habia = !!ref.current.resultado;
       ponerAnio(a);
       const ex = ref.current.extraccion;
@@ -591,6 +607,35 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     ref.current = { ...ref.current, anio: g.anio, extraccion: g.extraccion, filas: g.filas, decididas: g.decididas, respuestas: g.respuestas, resultado: g.resultado, mensajes: ms };
   }, []);
 
+  /** Cambio desde el selector del encabezado. */
+  const cambiarAnio = useCallback(
+    (a: number) => {
+      if (a === ref.current.anio) return;
+      if (cuentaRef.current && !guardadoPausado.current) {
+        // Con cuenta, cada año es su propia declaración: si ya hay una guardada de ese año, se abre
+        const actual = ultima.current();
+        void guardarEnLaNube(actual).catch(() => {});
+        const conDatos = actual.mensajes.length > 0 || !!actual.extraccion;
+        void leerDeLaNube(a).then((g) => {
+          if (g) {
+            aplicar(g);
+            agregar({ rol: "asistente", aviso: true, texto: `Abrí tu declaración del año gravable ${a}.${conDatos ? ` La de ${actual.anio} sigue guardada en tu cuenta.` : ""}` });
+          } else if (conDatos) {
+            // Año nuevo, declaración nueva; la anterior queda guardada y vuelve al elegir su año
+            reiniciar({ conservarGuardado: true });
+            ponerAnio(a);
+            agregar({ rol: "asistente", aviso: true, texto: `Empezamos tu declaración del año gravable ${a}. La de ${actual.anio} quedó guardada en tu cuenta: vuelve a ella eligiendo ese año arriba.` });
+          } else {
+            cambiarAnioSinCuenta(a);
+          }
+        }).catch(() => cambiarAnioSinCuenta(a));
+        return;
+      }
+      cambiarAnioSinCuenta(a);
+    },
+    [aplicar, agregar, cambiarAnioSinCuenta, reiniciar, ponerAnio],
+  );
+
   // Al iniciar sesión: gana la versión más reciente entre la de este navegador y la de la cuenta
   const yaSincronizada = useRef<string | null>(null);
   useEffect(() => {
@@ -619,7 +664,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, cuenta, nubeActiva, sincronizando, instantanea, aplicar, pausarGuardado, decididas, trazaDocumento, respuestas,
+    versionDocs, refrescarDocs, ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, cuenta, nubeActiva, sincronizando, instantanea, aplicar, pausarGuardado, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
     procesarArchivo, procesarArchivos, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };

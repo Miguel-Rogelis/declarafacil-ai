@@ -88,7 +88,7 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
         </button>
         <h2 id="titulo-entrar" className="titular t-24">Guarda tu declaración</h2>
-        <p className="suave ventana-texto">Entra para seguirla desde cualquier dispositivo y tener tu propio cupo de respuestas con IA.</p>
+        <p className="suave ventana-texto">Entra para seguirla desde cualquier dispositivo, guardar tus documentos y tener tu propio cupo de respuestas con IA.</p>
 
         <AnimatePresence mode="popLayout" initial={false}>
           {estado === "enviado" ? (
@@ -116,7 +116,7 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
           )}
         </AnimatePresence>
         {error ? <p className="mensaje-estado error" role="alert">{error}</p> : null}
-        <p className="nota-ventana">Guardamos lo que cuentas en el chat y lo que leímos de tus documentos, nunca los archivos. Puedes borrarlo cuando quieras.</p>
+        <p className="nota-ventana">Guardamos tu borrador de cada año y los documentos que subas, en privado: solo tú los ves. Puedes borrarlos cuando quieras.</p>
       </motion.div>
     </>
   );

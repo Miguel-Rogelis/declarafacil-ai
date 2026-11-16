@@ -10,6 +10,53 @@ import { useSesion } from "../lib/estado";
 import { fechaLarga, pesos } from "../lib/formato";
 import { archivoCalendario, descargar, documentosDe } from "../lib/ayudas";
 import SpotlightCard from "../components/reactbits/SpotlightCard";
+import { leerDeLaNube } from "../lib/nube";
+import type { Resumen } from "../lib/api";
+
+/** Con cuenta: la declaración del año anterior, si está guardada, para comparar. */
+function CompararAnios({ anio }: { anio: number }) {
+  const { cuenta, resultado } = useSesion();
+  const [antes, setAntes] = useState<Resumen | null>(null);
+  useEffect(() => {
+    if (!cuenta) return setAntes(null);
+    let vivo = true;
+    leerDeLaNube(anio - 1)
+      .then((g) => vivo && setAntes(g?.resultado?.liquidacion.resumen ?? null))
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [cuenta, anio]);
+  const ahora = resultado?.liquidacion.resumen;
+  if (!antes || !ahora) return null;
+  const saldo = (r: Resumen) => r.total_a_pagar - r.saldo_favor;
+  const filas: [string, number, number][] = [
+    ["Ingresos del año", antes.ingresos_brutos_totales, ahora.ingresos_brutos_totales],
+    ["Patrimonio líquido", antes.patrimonio_liquido, ahora.patrimonio_liquido],
+    ["Impuesto de renta", antes.impuesto_neto_renta, ahora.impuesto_neto_renta],
+    ["A pagar (o a favor, con −)", saldo(antes), saldo(ahora)],
+  ];
+  return (
+    <section className="comparar-anios no-imprimir" aria-labelledby="t-comparar">
+      <h2 id="t-comparar" className="titular t-24">Comparado con tu declaración de {anio - 1}</h2>
+      <div className="tabla-scroll">
+        <table>
+          <thead><tr><th>Concepto</th><th>{anio - 1}</th><th>{anio}</th><th>Cambio</th></tr></thead>
+          <tbody>
+            {filas.map(([n, a, b]) => (
+              <tr key={n}>
+                <td>{n}</td>
+                <td>{pesos(a)}</td>
+                <td>{pesos(b)}</td>
+                <td className={b > a ? "sube" : b < a ? "baja" : ""}>{b === a ? "igual" : `${b > a ? "+" : "−"} ${pesos(Math.abs(b - a))}`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 const ORDEN = { critica: 0, advertencia: 1, info: 2 } as const;
 const TOTALES = new Set(["patrimonio_liquido", "renta_liquida_cg", "rlg_cg", "rlg_pen", "rlg_total", "impuesto_neto", "total_cargo", "saldo_pagar", "saldo_favor", "go_impuesto"]);
@@ -234,6 +281,8 @@ export default function Resultado() {
           </ul>
         </section>
       </Revelar>
+
+      <CompararAnios anio={liq.anio_gravable} />
 
       <Pestanas
         className="no-imprimir"

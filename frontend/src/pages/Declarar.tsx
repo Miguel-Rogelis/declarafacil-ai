@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import Conversacion from "../components/Conversacion";
 import { BorrarDatos } from "../components/BorrarDatos";
+import { VentanaEntrar } from "../components/CuentaBoton";
 import { Ficha } from "../components/Ficha";
 import { MisDocumentos } from "../components/MisDocumentos";
 import type { DocumentoCargado, Fila, Respuestas } from "../lib/api";
@@ -144,7 +145,35 @@ function PanelDatos({ onCerrar, anio, children }: { onCerrar: () => void; anio: 
   );
 }
 
+/** Sin sesión no hay chat: la declaración siempre queda en la cuenta de la persona. */
+function PedirEntrar() {
+  const [abierta, setAbierta] = useState(false);
+  return (
+    <div className="pedir-entrar">
+      <motion.div className="pedir-entrar-caja" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}>
+        <h1 className="titular t-36">Entra para empezar tu declaración</h1>
+        <p className="suave">Así queda guardada en tu cuenta, con tus documentos.</p>
+        <button type="button" className="boton" onClick={() => setAbierta(true)}>Entrar</button>
+      </motion.div>
+      <AnimatePresence>{abierta ? <VentanaEntrar onCerrar={() => setAbierta(false)} /> : null}</AnimatePresence>
+    </div>
+  );
+}
+
 export default function Declarar() {
+  const { cuentaLista, nubeActiva, cuenta } = useSesion();
+  if (!cuentaLista) {
+    return (
+      <div className="pedir-entrar" aria-busy="true">
+        <p className="suave">Conectando…</p>
+      </div>
+    );
+  }
+  if (nubeActiva && !cuenta) return <PedirEntrar />;
+  return <Chat />;
+}
+
+function Chat() {
   const { filas, respuestas, anio, mensajes, reiniciar, porRevisar, documentos, ficha, cuenta } = useSesion();
   const [abierto, setAbierto] = useState(false);
   const boton = useRef<HTMLButtonElement>(null);

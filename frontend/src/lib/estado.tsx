@@ -69,6 +69,8 @@ interface Sesion {
   /** Cuentas: null sin sesión; nubeActiva dice si el servidor trae Supabase configurado. */
   cuenta: Cuenta | null;
   nubeActiva: boolean;
+  /** Ya se sabe si hay sesión (o si no hay cuentas): antes de esto no se muestra ni el chat ni el «Entrar». */
+  cuentaLista: boolean;
   sincronizando: boolean;
   instantanea: () => Instantanea;
   aplicar: (s: Instantanea) => void;
@@ -127,6 +129,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [servidor, setServidor] = useState<EstadoServidor>("conectando");
   const [cuenta, setCuenta] = useState<Cuenta | null>(null);
   const [nubeActiva, setNubeActiva] = useState(false);
+  const [cuentaLista, setCuentaLista] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const guardadoPausado = useRef(false);
   const [extraccion, setExtraccion] = useState<Extraccion | null>(guardada?.extraccion ?? null);
@@ -178,10 +181,20 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setServidor("listo");
         if (e.supabase) {
           setNubeActiva(true);
-          void iniciarNube(e.supabase.url, e.supabase.anon_key, setCuenta, e.supabase.google_client_id).catch(() => setNubeActiva(false));
+          const alCambiar = (c: Cuenta | null) => {
+            setCuenta(c);
+            setCuentaLista(true);
+          };
+          void iniciarNube(e.supabase.url, e.supabase.anon_key, alCambiar, e.supabase.google_client_id).catch(() => {
+            setNubeActiva(false);
+            setCuentaLista(true);
+          });
+        } else {
+          setCuentaLista(true);
         }
       })
       .catch(() => {
+        setCuentaLista(true);
         setAnios([{ anio_gravable: 2025, estado: "vigente", uvt: 49799, descripcion: "" }]);
         setServidor("sin_conexion");
       })
@@ -676,7 +689,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const hayDatos = tieneDatos(extraccion, respuestas);
 
   const valor: Sesion = {
-    versionDocs, refrescarDocs, ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, cuenta, nubeActiva, sincronizando, instantanea, aplicar, pausarGuardado, decididas, trazaDocumento, respuestas,
+    versionDocs, refrescarDocs, ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, cuenta, nubeActiva, cuentaLista, sincronizando, instantanea, aplicar, pausarGuardado, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
     procesarArchivo, procesarArchivos, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };

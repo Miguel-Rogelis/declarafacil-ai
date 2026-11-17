@@ -1009,3 +1009,9 @@ dialog::backdrop {
   @starting-style { opacity: 0; }
 }
 dialog.panel-datos { margin: 0 0 0 auto; padding: 0; height: 100dvh; max-height: 100dvh; max-width: 100%; color: var(--tinta); border-block: 0; border-right: 0; }
+
+/* Sin sesión, el chat pide entrar primero */
+.pedir-entrar { width: 100%; min-height: calc(100dvh - 8rem); display: grid; place-items: center; padding: 2rem 1rem; text-align: center; }
+.pedir-entrar-caja { max-width: 26rem; display: grid; gap: 0.75rem; justify-items: center; }
+.pedir-entrar-caja h1, .pedir-entrar-caja p { margin: 0; }
+.pedir-entrar-caja .boton { margin-top: 0.5rem; min-width: 10rem; }

@@ -18,7 +18,7 @@ function LogoGoogle() {
   );
 }
 
-function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
+export function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
   const [correo, setCorreo] = useState("");
   const [estado, setEstado] = useState<"" | "google" | "enviando" | "enviado">("");
   const [error, setError] = useState("");

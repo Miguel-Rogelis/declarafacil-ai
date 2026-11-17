@@ -9,7 +9,7 @@ import pytest
 from app.agents import anonimizador, asistente, explicador, interprete, lector
 from app.agents.base import FilaExogena
 from app.config import settings
-from app.llm import cliente
+from app.llm import cliente, cupo
 from app.tax.modelos import DatosDeclaracion
 from app.tax.motor import liquidar
 from tests.test_agentes import FIXTURE
@@ -34,6 +34,7 @@ class _Falso:
 def con_llm(monkeypatch):
     monkeypatch.setattr(settings, "llm_mode", "openrouter")
     monkeypatch.setattr(settings, "openrouter_api_key", "sk-prueba")
+    cupo.reiniciar()  # cada prueba con su cupo: con muchas pruebas se pasaba el tope por hora
 
     def instalar(falso):
         monkeypatch.setattr(cliente, "_get_cliente", lambda: falso)
@@ -165,3 +166,36 @@ def test_la_ia_no_puede_anotar_cifras_que_el_usuario_no_dijo(con_llm):
 
 def test_extraer_json_tolera_texto_extra():
     assert cliente.extraer_json('Claro:\n```json\n{"a": {"b": 1}}\n```') == {"a": {"b": 1}}
+
+
+def test_al_modelo_no_llegan_cedula_correo_ni_cuentas_del_chat(con_llm):
+    falso = con_llm(_Falso(lambda m: json.dumps({"respuesta": "Listo, lo anoté.", "anotar": []})))
+    turno = asistente.TurnoChat(mensaje="mi cédula es 1012345621, mi correo laura@correo.com y la cuenta 4567-1234-9876; gano 4 millones al mes")
+    r = asyncio.run(asistente.responder(turno))
+    prompt = json.dumps(falso.llamadas[-1]["messages"], ensure_ascii=False)
+    assert "1012345621" not in prompt and "laura@correo.com" not in prompt and "4567-1234" not in prompt
+    assert "[terminada en 21]" in prompt and "4 millones" in prompt  # lo que el agente necesita sí llega
+    assert r.respuestas.ultimos_dos_digitos_nit == "21"  # las reglas leen el mensaje original
+    assert r.respuestas.salarios_no_reportados == 48_000_000
+
+
+def test_el_clasificador_no_toma_el_anio_del_modelo(con_llm):
+    from app.agents import clasificador
+    from app.agents.base import DocumentoLeido
+
+    falso = con_llm(_Falso(lambda m: json.dumps({"tipo": "predial", "anio": 1999, "confianza": 0.8, "motivo": "recibo"})))
+    doc = DocumentoLeido(formato="pdf", lineas=["Municipio de Ejemplo", "Liquidación oficial del tributo", "Vigencia 2025", "Valor a pagar 1.234.000"])
+    c = asyncio.run(clasificador.clasificar(doc, "recibo.pdf"))
+    assert c.tipo == "predial" and c.anio == 2025  # el año sale de las reglas: el modelo no ve dígitos
+    assert "2025" not in falso.llamadas[-1]["messages"][1]["content"]
+
+
+def test_el_interprete_no_recibe_montos_de_la_informacion_adicional(con_llm):
+    falso = con_llm(_Falso(lambda m: json.dumps({"conceptos": [{"i": 0, "campo": "revisar", "explicacion": "Un concepto que hay que revisar."}]})))
+    doc = lector.leer(FIXTURE.read_bytes(), "x.xlsx")
+    doc.filas.append(FilaExogena(id="raro2", nit_informante="900123456", informante="FONDO EJEMPLO", detalle="Movimiento sin clasificar",
+                                 valor=2_500_000, info_adicional="Saldo final 2.500.000 a 31/12"))
+    anon, ult, n = anonimizador.anonimizar(doc)
+    asyncio.run(interprete.interpretar(anon, ult, n))
+    prompt = json.dumps(falso.llamadas[-1]["messages"], ensure_ascii=False)
+    assert "2.500.000" not in prompt and "Saldo final #.###.###" in prompt

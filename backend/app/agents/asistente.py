@@ -1059,21 +1059,22 @@ CÓMO RESPONDES
 - Si la pregunta es sobre su caso y el ESTADO ya tiene el dato (su obligación, su fecha límite, la vista previa, su resultado), contéstale con su caso concreto.
 - Usa solo la BASE DE CONOCIMIENTO, los DATOS DEL AÑO y el ESTADO. No inventes normas, cifras ni fechas, y no hagas cálculos: las cifras las calcula el sistema. Tampoco decidas si le aplica un tope (por ejemplo, el del formulario 160): eso lo revisa el sistema al calcular. Si no lo sabes, dilo en una frase y remite a la DIAN o a un contador.
 - Si el mensaje no tiene que ver con impuestos ni con la app, di en una frase que solo ayudas con la declaración de renta.
+- Nunca pidas su contraseña de MUISCA, su clave de firma electrónica ni la cédula completa (para la fecha límite bastan los dos últimos dígitos). Si los escribe, dile en una frase que no hace falta compartirlos. Ni tú ni la extensión de DeclaraFácil firman ni presentan: eso lo hace la persona.
 
 ACCIONES (las ejecuta el sistema después de validar)
 - Lee TODO lo que la persona dijo en el mensaje y anota cada dato, aunque venga mezclado o escrito informal ("3 palos" = 3 millones, "400 lucas" = 400 mil). Una frase puede traer varios datos: anótalos todos.
 - Si corrige una cifra ("no, eran 4 millones no 5"), anota la cifra nueva en el mismo campo y con el mismo periodo de la que corrige.
-- Si dice que no tiene algo ("no me hicieron retención", "no tengo nada a mi nombre"), confírmalo en una frase corta y no lo vuelvas a preguntar.
+- Si dice que no tiene algo ("no me hicieron retención", "no tengo nada a mi nombre"), confírmalo en una frase corta y no lo vuelvas a preguntar. El sistema ya lo registra: solo anota 0 en "dependientes" ("no tengo hijos") y en "declaraciones_previas" ("es mi primera vez").
 - Antes de calcular, el sistema pregunta lo que falta; tú no listes lo que falta salvo que te lo pidan.
 - Cuando solo anotas datos, responde corto ("Listo, lo anoté." o una frase que diga qué anotaste) y no pidas aclaraciones de algo que ya está claro: "gano" es salario, "facturé" son honorarios.
-- "anotar": cuando la persona te da un dato suyo. Usa SOLO las claves de CAMPOS. En "valor" copia la cifra como la escribió ("4 millones", "350000"). "periodo": "mensual" o "anual" solo si lo dijo; si no está claro, NO lo anotes: pregunta. Si dice que no tiene algo ("no tengo hijos"), anota 0. Para "bien" y "deuda" agrega "concepto".
+- "anotar": cuando la persona te da un dato suyo. Usa SOLO las claves de CAMPOS. En "valor" copia la cifra como la escribió ("4 millones", "350000"). "periodo": "mensual" o "anual" solo si lo dijo; si no está claro, NO lo anotes: pregunta. Para "bien" y "deuda" agrega "concepto".
 - Si vendió un bien, no lo anotes como bien: anota {{"campo": "venta", "concepto": "carro", "precio_venta": "...", "precio_compra": "..."}} con las cifras que dijo; si no dijo en cuánto lo compró, deja "precio_compra" vacío y el sistema lo pregunta. La ganancia la calcula el sistema.
 - "quitar": [{{"campo": "...", "concepto": "..."}}] si pide borrar o corregir un dato que ya no aplica. Para corregir una cifra basta con anotar la nueva.
 - "simular": igual que anotar, cuando pregunta qué pasaría ("¿y si pago prepagada?", "¿cuánto me ahorro si aporto a AFC?"). No se anota: el sistema calcula la diferencia y la agrega a tu respuesta, así que solo di algo como "Mira la diferencia:".
 - "calcular": true si pide calcular, liquidar, ver cuánto paga o ver su borrador. El sistema puede preguntar antes lo que falte.
 - "cambiar_anio": el año gravable (2021 a 2025) si pide cambiar de año o quiere declarar otro año.
 - "mostrar": ["subir_exogena"] si quiere subir o adjuntar su exógena o sus certificados (puede subir varios a la vez); ["revisar"] si quiere confirmar los datos dudosos de sus documentos.
-- "pregunta": si tu respuesta pide un dato, {{"campos": [claves de CAMPOS que esperas], "intencion": "calcular" | "obligacion" | "vencimiento" | null}}. Si no preguntas nada, null.
+- "pregunta": si tu respuesta pide un dato, {{"campos": [claves de CAMPOS que esperas], "intencion": "calcular" | "obligacion" | "vencimiento" | "simular" | null}}. Si no preguntas nada, null.
 - "fuente": el título exacto de la sección de la BASE DE CONOCIMIENTO que usaste, o null.
 
 Responde SOLO con un objeto JSON, sin texto antes ni después:
@@ -1246,6 +1247,31 @@ def _cifras_validas(respuesta: str, permitidas: list[float]) -> bool:
     return True
 
 
+_RE_CORREO = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+")
+_RE_CEDULA = re.compile(r"(c[eé]dula|\bc\.?\s?c\.?(?=\s|\d|:)|n[uú]mero de documento|documento de identidad|\bnit\b|identificaci[oó]n)(\D{0,20}?)(\d[\d .]{4,}\d)", re.I)
+# Cuentas, tarjetas y celulares: 10 dígitos o más y que no sean una cifra en pesos ("la cuenta tiene 15000000 pesos")
+_RE_CUENTA = re.compile(r"(cuenta|tarjeta|celular|tel[eé]fono)([^\d$]{0,25}?)(\d[\d -]{8,}\d)(?!\s*(pesos|millones|mil\b|cop\b|de pesos))", re.I)
+
+
+def sin_datos_personales(texto: str) -> str:
+    """Lo que escribe la persona, sin correo, cédula completa ni números de cuenta o teléfono, antes de ir al modelo.
+
+    La cédula queda con sus dos últimos dígitos (los necesita el vencimiento); las cuentas, con los cuatro últimos.
+    Las reglas leen el mensaje original, así que no se pierde ningún dato.
+    """
+    def cedula(m: re.Match[str]) -> str:
+        d = re.sub(r"\D", "", m.group(3))
+        return f"{m.group(1)}{m.group(2)}[terminada en {d[-2:]}]" if len(d) >= 6 else m.group(0)
+
+    def cuenta(m: re.Match[str]) -> str:
+        d = re.sub(r"\D", "", m.group(3))
+        return f"{m.group(1)}{m.group(2)}****{d[-4:]}" if len(d) >= 10 else m.group(0)
+
+    t = _RE_CORREO.sub("[correo]", texto)
+    t = _RE_CEDULA.sub(cedula, t)
+    return _RE_CUENTA.sub(cuenta, t)
+
+
 def _texto_usuario(t: TurnoChat) -> str:
     """Lo que escribió el usuario en esta conversación (las cifras solo pueden salir de aquí)."""
     previos = [m.texto for m in t.historial[-10:] if m.rol == "usuario"]
@@ -1319,8 +1345,8 @@ async def _con_ia(t: TurnoChat, vp: Liquidacion | None, al_texto: AlTexto | None
         + "\n\nDATOS DEL AÑO:\n" + _datos_anio_texto(e.anio_gravable)
         + "\n\nBASE DE CONOCIMIENTO:\n" + _base_relevante(t, base)
     )
-    historial = "\n".join(f"{'Usuario' if m.rol == 'usuario' else 'Tú'}: {m.texto[:500]}" for m in t.historial[-10:])
-    usuario = f"ESTADO:\n{_estado_texto(e, vp)}\n\nCONVERSACIÓN RECIENTE:\n{historial or '(es el primer mensaje)'}\n\nMENSAJE DEL USUARIO: {t.mensaje}"
+    historial = "\n".join(f"{'Usuario' if m.rol == 'usuario' else 'Tú'}: {sin_datos_personales(m.texto[:500])}" for m in t.historial[-10:])
+    usuario = f"ESTADO:\n{_estado_texto(e, vp)}\n\nCONVERSACIÓN RECIENTE:\n{historial or '(es el primer mensaje)'}\n\nMENSAJE DEL USUARIO: {sin_datos_personales(t.mensaje)}"
 
     al_escribir = None
     if al_texto is not None:

@@ -17,12 +17,19 @@ from app.agents.base import NOMBRE_TIPO, DocumentoLeido
 from app.llm import cliente
 
 SISTEMA = (
-    "Eres un clasificador de documentos tributarios colombianos. Responde SOLO un JSON con las llaves "
-    '"tipo" (una de: ' + ", ".join(NOMBRE_TIPO) + '), "anio" (entero o null), "confianza" (0 a 1) y "motivo" (máx. 20 palabras). '
+    "Eres un clasificador de documentos tributarios colombianos. Recibes solo los títulos del documento, con los dígitos cambiados por #. "
+    'Responde SOLO un JSON con las llaves "tipo" (una de: ' + ", ".join(NOMBRE_TIPO) + '), "confianza" (0 a 1) y "motivo" (máx. 20 palabras). '
     "exogena = reporte de información exógena de la DIAN (lo que bancos, empleadores y fondos reportaron). "
     "certificado_220 = certificado de ingresos y retenciones por rentas de trabajo y de pensiones. "
-    "certificado_bancario = certificado tributario de un banco con saldos, intereses, retenciones o 4x1000. "
-    "declaracion_anterior = formulario 210 de un año anterior."
+    "certificado_bancario = certificado tributario de un banco o del ICETEX con saldos, intereses, retenciones o 4x1000. "
+    "certificado_vivienda = intereses de un crédito de vivienda o leasing habitacional. "
+    "certificado_prepagada = pagos de medicina prepagada, plan complementario o póliza de salud. "
+    "certificado_voluntarios = aportes a pensiones voluntarias o cuentas AFC/AVC. "
+    "certificado_cesantias = certificado de un fondo de cesantías. "
+    "certificado_retencion = certificado de retención en la fuente de un independiente. "
+    "predial = recibo del impuesto predial. "
+    "declaracion_anterior = formulario 210 de un año anterior. "
+    "desconocido = si no es ninguno o no estás seguro."
 )
 
 
@@ -149,7 +156,7 @@ async def clasificar(doc: DocumentoLeido, nombre_archivo: str = "") -> Clasifica
             tipo_ia = "desconocido"
         return Clasificacion(
             es_exogena=tipo_ia == "exogena",
-            anio=int(j["anio"]) if j.get("anio") else anio_de(doc.lineas),
+            anio=anio_de(doc.lineas),  # el modelo no ve dígitos: el año lo sacan las reglas
             confianza=float(j.get("confianza", 0.5)),
             motivo=str(j.get("motivo", ""))[:160],
             modelo=r.modelo,

@@ -155,6 +155,11 @@ Para cada concepto:
 Responde SOLO un JSON: {"conceptos": [{"i": <número>, "campo": "<llave>", "explicacion": "<texto>"}]}"""
 
 
+def _sin_cifras(info: str | None) -> str:
+    """La información adicional puede traer saldos o montos ("Saldo 1.234.567"): al modelo le llega sin dígitos."""
+    return re.sub(r"\d", "#", info)[:120] if info else "—"
+
+
 async def _interpretar_con_ia(pendientes: list[FilaInterpretada]) -> str | None:
     """Pide al modelo campo + explicación para las filas pendientes. Devuelve el modelo usado."""
     if not pendientes or not cliente.disponible():
@@ -165,7 +170,7 @@ async def _interpretar_con_ia(pendientes: list[FilaInterpretada]) -> str | None:
     lista = list(unicos.items())
     usuario = "CAMPOS:\n" + "\n".join(f"- {k}: {v}" for k, v in CAMPOS.items())
     usuario += "\n\nCONCEPTOS:\n" + "\n".join(
-        f'{i}. "{det}" | uso sugerido DIAN: {filas[0].uso_sugerido or "—"} | info: {(filas[0].info_adicional or "—")[:120]}'
+        f'{i}. "{det}" | uso sugerido DIAN: {filas[0].uso_sugerido or "—"} | info: {_sin_cifras(filas[0].info_adicional)}'
         for i, (det, filas) in enumerate(lista)
     )
     try:

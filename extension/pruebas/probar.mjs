@@ -82,6 +82,21 @@ const RESULTADOS = pagina(
    <p>Se encontraron 12 registros.</p>
    <a href="#" id="res:descargar" onclick="var f=document.getElementById('res');var i=document.createElement('input');i.type='hidden';i.name='res:descargar';i.value='res:descargar';f.appendChild(i);f.submit();f.removeChild(i);return false;">Descargar Excel</a></form>`,
 );
+// Como se ve la MUISCA real (17-nov-2026): en el tablero, un diálogo «Consulta Exógena» con las condiciones,
+// un botón con ícono «Aceptar» (sin casilla), el año y otro botón con ícono «Consultar»
+const TABLERO = pagina(
+  "Inicio",
+  `<div id="encabezado">A Nombre Propio · PERSONA DE PRUEBA</div><h1>Mis actividades</h1>
+   <a href="#" id="abrirExo" onclick="document.getElementById('dlg').style.display='block'; return false;">Consulta de información exógena</a>
+   <div id="dlg" style="display:none"><div>Consulta Exógena:</div>
+     <form id="frmExo" method="post" action="/WebDashboard/DefDashboard.faces"><input type="hidden" name="javax.faces.ViewState" value="t-1">
+       <input type="hidden" name="frmExo:aceptado" id="aceptado" value="no">
+       <p>CONDICIONES ACEPTACION INFORMACION REPORTADA POR TERCEROS</p><p>4. Usted deberá aceptar las condiciones aquí mencionadas.</p>
+       <input type="image" alt="Aceptar" style="width:80px;height:22px" onclick="document.getElementById('aceptado').value='si'; document.getElementById('filaAnio').style.display='block'; return false;">
+       <div id="filaAnio" style="display:none">Año : <select name="frmExo:anio"><option>2023</option><option>2024</option><option selected>2025</option></select>
+         <input type="image" name="frmExo:consultar" alt="Consultar" style="width:80px;height:22px"></div>
+     </form></div>`,
+);
 const APP_HTML = pagina(
   "DeclaraFácil (simulada)",
   `<script>
@@ -134,6 +149,12 @@ await contexto.route(`${MUISCA}/**`, async (route) => {
   peticiones.push(`${r.method()} ${url.pathname}`);
   const html = (h) => route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: h });
   if (url.pathname.startsWith("/WebFormulario")) return html(FORMULARIO_210);
+  if (url.pathname === "/WebDashboard/DefDashboard.faces") {
+    if (r.method() === "GET") return html(TABLERO);
+    if (cuerpo.includes("frmExo%3Aaceptado=si") && cuerpo.includes("frmExo%3Aanio=2025") && cuerpo.includes("frmExo%3Aconsultar"))
+      return route.fulfill({ status: 200, headers: { "content-type": "application/vnd.ms-excel", "content-disposition": 'attachment; filename="InformacionExogena2025.xlsx"' }, body: EXOGENA });
+    return html(TABLERO);
+  }
   if (url.pathname === "/WebIdentidadLogin/" && r.method() === "GET") return html(LOGIN);
   if (url.pathname === "/WebIdentidadLogin/entrar") return html(MENU);
   if (url.pathname === "/WebArquitectura/menu.faces") return html(cuerpo.includes("menu%3Aj_idt5") ? CONDICIONES : MENU);
@@ -170,7 +191,7 @@ const app = await contexto.newPage();
 await app.goto(APP);
 await app.evaluate(() => window.mandar({ tipo: "hola", id: 1 }));
 await esperarHasta(() => app.evaluate(() => window.mensajes.some((m) => m.tipo === "lista")), 5000, "el aviso de la extensión");
-assert.equal(await app.evaluate(() => document.documentElement.dataset.declarafacilExtension), "0.1.0");
+assert.equal(await app.evaluate(() => document.documentElement.dataset.declarafacilExtension), JSON.parse(readFileSync(join(EXTENSION, "manifest.json"))).version);
 await app.evaluate((b) => window.mandar({ tipo: "formulario", id: 2, datos: b }), BORRADOR);
 const resp = await esperarHasta(() => app.evaluate(() => window.mensajes.find((m) => m.tipo === "respuesta" && m.id === 2)), 5000, "la respuesta al borrador");
 assert.equal(resp.ok, true);
@@ -249,6 +270,17 @@ assert.equal(recibido2.nombre, "Exógena_2024.xlsx");
 assert.ok(Buffer.from(recibido2.base64, "base64").equals(EXOGENA));
 assert.ok(peticiones.includes("POST /WebInformacionExogena/descargar"));
 paso("también la atrapa cuando sale de un enlace de JSF después de consultar, con la sesión ya abierta");
+
+// 4c) Como en la MUISCA real: diálogo en el tablero, condiciones con botón «Aceptar» y botones con ícono
+await app.evaluate(() => {
+  window.recibido = null;
+});
+await dian.goto(`${MUISCA}/WebDashboard/DefDashboard.faces`);
+await app.evaluate(() => window.mandar({ tipo: "pedir-exogena", id: 5, anio: 2025 }));
+const recibido3 = await esperarHasta(() => app.evaluate(() => window.recibido), 30000, "la exógena desde el diálogo del tablero");
+assert.equal(recibido3.nombre, "InformacionExogena2025.xlsx");
+assert.ok(Buffer.from(recibido3.base64, "base64").equals(EXOGENA));
+paso("en el tablero real: abre «Consulta de información exógena», acepta con el botón, consulta y trae el archivo");
 
 // 5) Si DeclaraFácil estaba cerrado, la exógena queda en memoria y se entrega al abrirlo
 await sw.evaluate(async () => {

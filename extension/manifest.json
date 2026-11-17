@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "DeclaraFácil: puente con la DIAN",
   "short_name": "DeclaraFácil",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Llena en MUISCA las casillas de tu borrador del formulario 210 y trae tu exógena con tu sesión abierta. Nunca firma ni presenta.",
   "minimum_chrome_version": "112",
   "icons": {

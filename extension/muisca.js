@@ -268,6 +268,19 @@
     if (!hechos.has("acepto")) {
       const caja = Array.from(document.querySelectorAll('input[type="checkbox"], input[type="radio"]')).find((c) => !c.checked && DF.visible(c) && ACEPTA.test(textoCerca(c)));
       if (caja) return { clave: "acepto", texto: "Acepto las condiciones del servicio de consulta.", hacer: () => caja.click() };
+      // En MUISCA las condiciones se aceptan con un botón «Aceptar» debajo del texto (sin casilla)
+      if (/condiciones|terminos/.test(DF.norm(document.body?.innerText?.slice(0, 30000)))) {
+        const b = hallar(/^(aceptar|acepto|aceptar condiciones)$/);
+        if (b)
+          return {
+            clave: "acepto",
+            texto: "Acepto las condiciones del servicio de consulta.",
+            hacer: () => {
+              hechos.add("seguir"); // ese mismo botón era el «continuar»
+              b.click();
+            },
+          };
+      }
     }
     if (hechos.has("acepto") && !hechos.has("seguir")) {
       const b = hallar(SEGUIR);
@@ -301,7 +314,8 @@
   async function recorrerExogena() {
     if (!flujo) return;
     armarCaptura(true);
-    const hechos = new Set();
+    // Lo que ya se hizo en otra página del mismo pedido no se repite (aceptar las condiciones)
+    const hechos = new Set(flujo.aceptado ? ["acepto", "seguir"] : []);
     let quieto = 0;
     let avisoLogin = false;
     while (flujo && quieto < 40) {
@@ -313,7 +327,7 @@
         continue;
       }
       if (a) {
-        if (a.clave === "menu" || a.clave === "final") {
+        if (a.clave === "menu" || a.clave === "final" || a.clave === "acepto") {
           const r = await enviar({ tipo: "m:paso", clave: a.clave });
           if (!r?.seguir) {
             mostrarFlujo("Ya lo intenté varias veces y no avanzo. Hazlo tú: acepta las condiciones, elige el año y toca «Consultar». Yo atrapo el archivo.");
@@ -434,7 +448,7 @@
     const estado = await enviar({ tipo: "m:hola", principal: ES_TOP });
     if (!estado) return;
     if (estado.flujo) {
-      flujo = { anio: estado.flujo.anio };
+      flujo = { anio: estado.flujo.anio, aceptado: !!estado.flujo.aceptado };
       void recorrerExogena();
       return;
     }

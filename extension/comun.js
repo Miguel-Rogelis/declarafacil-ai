@@ -28,8 +28,9 @@
   /** Texto que se lee en un botón, enlace o elemento. */
   const textoDe = (el) => {
     if (!el) return "";
-    const t = el.tagName === "INPUT" ? el.value || el.getAttribute("aria-label") || el.title : el.innerText || el.textContent;
-    return (t || el.getAttribute?.("aria-label") || el.title || "").replace(/\s+/g, " ").trim().slice(0, 160);
+    const t = el.tagName === "INPUT" ? el.value || el.getAttribute("alt") || el.getAttribute("aria-label") || el.title : el.innerText || el.textContent;
+    const img = el.querySelector?.("img[alt]")?.getAttribute("alt"); // botones de MUISCA: un ícono con el texto en alt
+    return (t?.trim() || img || el.getAttribute?.("aria-label") || el.title || "").replace(/\s+/g, " ").trim().slice(0, 160);
   };
 
   /** Texto propio de un elemento, sin el de sus hijos (la cajita con el número de la casilla). */

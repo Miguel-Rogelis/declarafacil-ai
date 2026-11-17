@@ -22,8 +22,9 @@
 
   const texto = (el) => {
     if (!el) return "";
-    const t = el.tagName === "INPUT" ? el.value || el.title : el.innerText || el.textContent || el.title;
-    return String(t || el.getAttribute?.("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    const t = el.tagName === "INPUT" ? el.value || el.getAttribute("alt") || el.title : el.innerText || el.textContent || el.title;
+    const img = el.querySelector?.("img[alt]")?.getAttribute("alt");
+    return String(t?.trim() || img || el.getAttribute?.("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 120);
   };
 
   document.addEventListener("df-armar", (e) => {

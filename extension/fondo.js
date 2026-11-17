@@ -185,19 +185,19 @@ async function iniciarExogena(anio, appTab) {
   return { ok: true, nueva: !abiertas.length };
 }
 
-async function flujoDe(tabId) {
+async function flujoDe(tabId, opener = null) {
   const f = await sesion.leer("flujo");
   if (!f?.activo) return null;
   if (Date.now() - f.inicio > 20 * 60 * 1000) {
     await sesion.quitar("flujo");
     return null;
   }
-  if (f.dianTab !== tabId) return null;
+  if (f.dianTab !== tabId && f.dianTab !== opener) return null;
   return f;
 }
 
-async function paso(tabId, clave) {
-  const f = await flujoDe(tabId);
+async function paso(tabId, clave, opener = null) {
+  const f = await flujoDe(tabId, opener);
   if (!f) return { seguir: false };
   f.intentos[clave] = (f.intentos[clave] || 0) + 1;
   await sesion.poner({ flujo: f });
@@ -301,20 +301,21 @@ async function manejar(m, s) {
     if (!deDian(s)) throw new Error("Origen no permitido");
     const tabId = s.tab.id;
     if (tipo === "m:hola") {
-      const f = await flujoDe(tabId);
-      return { formulario: resumenBorrador(await borrador()), flujo: f ? { anio: f.anio } : null };
+      // Una pestaña que abrió MUISCA desde la consulta (ventana del reporte) también es parte del pedido
+      const f = await flujoDe(tabId, s.tab.openerTabId ?? null);
+      return { formulario: resumenBorrador(await borrador()), flujo: f ? { anio: f.anio, aceptado: (f.intentos.acepto || 0) > 0 } : null };
     }
     if (tipo === "m:llenar") return llenarEn(tabId);
     if (tipo === "m:pedir-ensenar") return pedirEnsenar(tabId);
     if (tipo === "m:ensenar") return ensenar(tabId, m.n == null ? null : Number(m.n));
     if (tipo === "m:aprendido") return aprendido(tabId, Number(m.n), m.selector);
-    if (tipo === "m:paso") return paso(tabId, String(m.clave || ""));
+    if (tipo === "m:paso") return paso(tabId, String(m.clave || ""), s.tab.openerTabId ?? null);
     if (tipo === "m:detener") {
       await sesion.quitar("flujo");
       return { ok: true };
     }
     if (tipo === "m:archivo") {
-      const f = await flujoDe(tabId);
+      const f = await flujoDe(tabId, s.tab.openerTabId ?? null);
       if (!f) return { ok: false, error: "No hay un pedido de exógena activo." };
       return entregarExogena(validarArchivo(m), tabId);
     }

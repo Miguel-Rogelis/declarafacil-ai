@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import type { Casilla, Fila, Formulario210 as F210 } from "../lib/api";
 import { pesos } from "../lib/formato";
+import { LlenarConExtension } from "./Extension";
 
 /** Casillas que siempre se muestran, aunque den cero: son las que la persona compara primero. */
 const CLAVE = new Set([29, 31, 91, 92, 97, 111, 116, 121, 126, 129, 132, 133, 136, 137]);
@@ -115,6 +116,7 @@ export function Formulario210({ f, fuentes, filas }: { f: F210; fuentes: Record<
             <input type="checkbox" checked={todas} onChange={(e) => setTodas(e.target.checked)} /> Ver todas las casillas
           </label>
           <button className="boton secundario chico" onClick={() => void copiarTodo()}>{copiadoTodo ? "Copiadas" : "Copiar las casillas que escribes"}</button>
+          <LlenarConExtension f={f} compacto />
         </div>
       </header>
       <div className="f210-leyenda">

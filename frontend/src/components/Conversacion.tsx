@@ -5,6 +5,7 @@ import { useSesion, type Mensaje } from "../lib/estado";
 import { pesos } from "../lib/formato";
 import { FASES_CALCULO, FASES_DOCUMENTO, MesaAgentes } from "./MesaAgentes";
 import { useDemo } from "../lib/demo";
+import { SugerenciaExogena, TraerExogena } from "./Extension";
 import { FadeIn } from "./Movimiento";
 import { Marca } from "./piezas";
 import { trozos, textoPlano } from "../lib/enlaces";
@@ -139,6 +140,7 @@ function SubirExogena() {
       <p className="chico suave sin-margen mt-1">
         ¿Sin documentos a mano? <button className="boton-texto chico" onClick={() => void usarEjemplo()}>Prueba con unos de ejemplo</button>
       </p>
+      <TraerExogena />
     </>
   );
 }
@@ -483,6 +485,7 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
                 {["¿Me toca declarar renta?", "Gano 4 millones al mes", "¿Qué es la exógena?"].map((s) => (
                   <button key={s} type="button" className="sugerencia" disabled={ocupado} onClick={() => mandar(s)}>{s}</button>
                 ))}
+                <SugerenciaExogena deshabilitada={ocupado} />
                 <button type="button" className="sugerencia ejemplo" disabled={ocupado} onClick={() => void usarEjemplo()}>Probar con documentos ficticios</button>
                 <button type="button" className="sugerencia demo" disabled={ocupado} onClick={demo.iniciar}>Ver la demo guiada</button>
               </div>

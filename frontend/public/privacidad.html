@@ -37,14 +37,15 @@
       <h2>Lo que no guardamos</h2>
       <ul>
         <li><strong>Tus archivos.</strong> Sin sesión, la exógena y los certificados que subes se leen en memoria para sacar las cifras y se descartan: no quedan guardados. Con sesión iniciada, además se guarda una copia en una carpeta privada de tu cuenta (en Supabase), que solo tú puedes ver, para volver a leerlos desde otro dispositivo.</li>
-        <li><strong>Tu cédula, tu nombre y tus cuentas en la IA.</strong> Antes de enviar algo a un modelo de IA los quitamos de los documentos. Las cifras de tu declaración las calcula el código, no la IA.</li>
+        <li><strong>Tu cédula, tu nombre y tus cuentas en la IA.</strong> Antes de enviar algo a un modelo de IA los quitamos de los documentos, y del chat quitamos la cédula completa, el correo y los números de cuenta o celular. Las cifras de tu declaración las calcula el código, no la IA.</li>
+        <li><strong>Tu contraseña de la DIAN.</strong> Nunca la pedimos. La extensión de DeclaraFácil para Chrome usa la sesión de MUISCA que tú abres: no lee ni guarda tu contraseña, no guarda tu exógena (la pasa directo a esta página) y no firma ni presenta nada. En tu navegador solo recuerda en qué campo de MUISCA va cada casilla, sin valores.</li>
       </ul>
 
       <h2>Lo que se guarda y dónde</h2>
       <ul>
         <li><strong>Sin iniciar sesión:</strong> la conversación y los datos que anotaste se guardan solo en tu navegador, para que no se pierdan si recargas. No salen de tu dispositivo.</li>
         <li><strong>Si inicias sesión con Google o con tu correo:</strong> guardamos tu nombre, tu correo y tu foto de perfil (los da Google al entrar), una copia de tu borrador de cada año (lo que contaste en el chat y las cifras que leímos de tus documentos) y los archivos que subiste, para que lo sigas desde cualquier dispositivo. Todo eso lo puedes ver solo tú.</li>
-        <li><strong>Mensajes del chat:</strong> se envían a modelos de IA a través de OpenRouter para responderte. No los usamos para nada más.</li>
+        <li><strong>Mensajes del chat:</strong> se envían a modelos de IA a través de OpenRouter para responderte, junto con las cifras de tus documentos que el agente necesita para contestarte sobre tu caso (sin tu identidad). No los usamos para nada más.</li>
       </ul>
 
       <h2>Para qué usamos tus datos</h2>

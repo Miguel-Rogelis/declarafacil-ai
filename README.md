@@ -31,6 +31,7 @@ Todo pasa en un **chat a pantalla completa** con un agente. El usuario lleva la 
 - Si los documentos son de otro año, el agente cambia a las reglas de ese año.
 - Puede cambiar de año gravable (2021 a 2025) desde el selector de arriba o pidiéndolo en el chat.
 - "Tus datos" abre un panel con cada cifra y de dónde sale.
+- **Extensión de Chrome** (`extension/`): con la sesión de MUISCA que la persona abrió, escribe el borrador en el formulario 210 casilla por casilla (y avisa si un total que calcula la DIAN no cuadra) y trae la exógena del año hasta el chat. Nunca inicia sesión, firma ni presenta. Ver [extension/README.md](extension/README.md).
 
 Recibe: si está obligado a declarar, el saldo a pagar o a favor, la sanción si va tarde, alertas antes de firmar y el borrador en dos vistas:
 
@@ -98,9 +99,10 @@ backend/
   data/agentes.json modelos y temperatura por agente
   data/conocimiento base de conocimiento del Asistente
   data/demo/        exógena y certificados ficticios (220 y banco) para probar
-  tests/            137 pruebas (motor por año, formulario 210 casilla por casilla, agentes, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada)
+  tests/            187 pruebas (motor por año, formulario 210 casilla por casilla, agentes, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada, cuentas y cupo)
   scripts/          generadores de la exógena y los certificados demo y de las reglas 2021-2024
 frontend/           React + Vite + TypeScript, animaciones con Motion
+extension/          extensión de Chrome (Manifest V3): llena el 210 en MUISCA y trae la exógena; pruebas/ contra páginas que imitan a MUISCA
 Dockerfile          construye el front y lo sirve desde FastAPI
 render.yaml         despliegue gratuito en Render
 ```

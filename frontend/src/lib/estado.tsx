@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { alTraerExogena, pedirExogena } from "./extension";
 import { borrarLocal, guardarLocal, leerLocal, sinAnimar, type Instantanea } from "./guardado";
 import { borrarDeLaNube, guardarEnLaNube, iniciarNube, leerDeLaNube, subirDocumento, type Cuenta } from "./nube";
 import {
@@ -88,6 +89,8 @@ interface Sesion {
   deshacer: (id: number) => void;
   procesarArchivo: (f: File) => Promise<void>;
   procesarArchivos: (f: File[], opciones?: { subir?: boolean }) => Promise<void>;
+  /** Pide a la extensión de Chrome que traiga la exógena del año desde MUISCA. */
+  traerExogena: () => Promise<void>;
   /** Cambia cada vez que se suben o borran archivos de la cuenta (el panel vuelve a listarlos). */
   versionDocs: number;
   refrescarDocs: () => void;
@@ -418,6 +421,34 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   );
   const procesarArchivo = useCallback((f: File) => procesarArchivos([f]), [procesarArchivos]);
 
+  // La extensión de Chrome trae la exógena desde MUISCA: se lee igual que si se hubiera subido a mano
+  const procesarRef = useRef(procesarArchivos);
+  procesarRef.current = procesarArchivos;
+  useEffect(
+    () =>
+      alTraerExogena(
+        (archivo) => {
+          ir("declarar");
+          void procesarRef.current([archivo]);
+        },
+        () => {
+          ir("declarar");
+          agregar({ rol: "asistente", texto: "La DIAN dejó tu exógena en tu carpeta de Descargas. Arrástrala aquí y la leo." });
+        },
+      ),
+    [ir, agregar],
+  );
+  const traerExogena = useCallback(async () => {
+    const anioPedido = ref.current.anio;
+    const r = await pedirExogena(anioPedido);
+    agregar({
+      rol: "asistente",
+      texto: r.ok
+        ? `${r.nueva ? "Abrí MUISCA en otra pestaña." : "Sigo en tu pestaña de MUISCA."} Si te pide iniciar sesión, entra tú; yo consulto tu exógena de ${anioPedido} y la traigo aquí.`
+        : (r.error ?? "No pude hablar con la extensión."),
+    });
+  }, [agregar]);
+
   const usarEjemplo = useCallback(async () => {
     try {
       await procesarArchivos(await api.documentosDemo(), { subir: false });
@@ -691,7 +722,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const valor: Sesion = {
     versionDocs, refrescarDocs, ruta, ir, anio, cambiarAnio, anios, modoLlm, extraccion, filas, decidir, cambiarDecision, elecciones, pregunta, cerrarPregunta, ficha, servidor, cuenta, nubeActiva, cuentaLista, sincronizando, instantanea, aplicar, pausarGuardado, decididas, trazaDocumento, respuestas,
     resultado, eventosCalculo, calculando, errorCalculo, mensajes, escribiendo, enviar, deshacer,
-    procesarArchivo, procesarArchivos, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
+    procesarArchivo, procesarArchivos, traerExogena, documentos: extraccion?.documentos ?? [], usarEjemplo, calcular, archivoPendiente, setArchivoPendiente, reiniciar, porRevisar, hayDatos,
   };
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

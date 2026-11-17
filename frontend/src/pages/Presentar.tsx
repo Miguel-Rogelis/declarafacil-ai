@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { LlenarConExtension } from "../components/Extension";
 import { FadeIn } from "../components/Movimiento";
 import type { Casilla } from "../lib/api";
 import { DIAN } from "../lib/ayudas";
@@ -127,6 +128,7 @@ export default function Presentar() {
       ) : casillas.length ? (
         <>
           <p>Escribe cada valor en su casilla. Las demás las calcula la DIAN.</p>
+          {liq.formulario ? <LlenarConExtension f={liq.formulario} /> : null}
           <div className="progreso-casillas" aria-hidden="true"><span style={{ transform: `scaleX(${copiadas / casillas.length})` }} /></div>
           <p className="chico suave" aria-live="polite">{copiadas} de {casillas.length} casillas listas</p>
           <ul className="casillas-dian">

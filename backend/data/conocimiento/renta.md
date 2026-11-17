@@ -18,7 +18,7 @@ Es el reporte de lo que bancos, empleadores, fondos y otras entidades le contaro
 
 ## ¿Cómo descargo mi exógena?
 También: dónde saco la exógena | cómo bajo la exógena | dónde consigo la exógena | cómo obtengo la exógena | descargar exógena
-Entra a www.dian.gov.co, elige "Usuario registrado" e inicia sesión en MUISCA con tu cédula y contraseña. Busca "Consultar información exógena" (o "Información reportada por terceros"), elige el año gravable {anio} y descarga el reporte en Excel. Ese es el archivo que adjuntas aquí.
+Entra a www.dian.gov.co, elige "Usuario registrado" e inicia sesión en MUISCA con tu cédula y contraseña. Busca "Consultar información exógena" (o "Información reportada por terceros"), elige el año gravable {anio} y descarga el reporte en Excel. Ese es el archivo que adjuntas aquí. Con la extensión de DeclaraFácil para Chrome no tienes que descargarlo: en la carga de documentos toca «Traer mi exógena de la DIAN»; si MUISCA pide iniciar sesión, entras tú y ella trae el archivo.
 
 ## ¿Qué es la UVT?
 También: cuánto vale la uvt | valor de la uvt | unidad de valor tributario
@@ -94,7 +94,7 @@ En [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/), en el formulario 210
 
 ## ¿Cómo paso mi borrador al formulario 210 de la DIAN?
 También: cómo lleno el 210 | casilla por casilla | dónde va cada valor | copiar a muisca | en qué casilla va | vista del formulario | formulario de la dian
-Cuando calculas, en "Ver el borrador completo" está la pestaña "Formulario 210" con cada valor en su casilla, igual que en la DIAN. Entra a MUISCA como usuario registrado, ve a "Diligenciar y presentar formulario 210", crea el borrador del año y elige la versión para expertos. Compara casilla por casilla con la declaración sugerida y escribe las que no coincidan; las que dicen "La calcula la DIAN" no se escriben. Al final firmas con tu firma electrónica y presentas. Para 2021 y 2022 el formulario tenía otra numeración, así que ahí usa el borrador por secciones.
+Cuando calculas, en "Ver el borrador completo" está la pestaña "Formulario 210" con cada valor en su casilla, igual que en la DIAN. Entra a MUISCA como usuario registrado, ve a "Diligenciar y presentar formulario 210", crea el borrador del año y elige la versión para expertos. Compara casilla por casilla con la declaración sugerida y escribe las que no coincidan; las que dicen "La calcula la DIAN" no se escriben. Al final firmas con tu firma electrónica y presentas. Con la extensión de DeclaraFácil para Chrome no copias a mano: en «Presentar en la DIAN» toca «Llenar con la extensión» y en MUISCA «Llenar casillas»; escribe cada valor y te avisa si un total de la DIAN no cuadra con tu borrador. Para 2021 y 2022 el formulario tenía otra numeración, así que ahí usa el borrador por secciones.
 
 ## ¿Puedo restar los intereses del crédito del ICETEX?
 También: icetex | crédito educativo | préstamo de la universidad | intereses del icetex | deducir icetex
@@ -198,7 +198,7 @@ No. DeclaraFácil prepara un borrador y te explica cada cifra. La firma y la pre
 
 ## ¿Qué pasa con mis datos?
 También: es seguro | guardan mis datos | privacidad | quién ve mi información
-El archivo se procesa en memoria y no se guarda. Antes de usar IA se quitan tu cédula, tu nombre y tus números de cuenta, y las cifras las maneja el código, no la IA.
+Sin cuenta, tus archivos se procesan en memoria y no se guardan; con cuenta, quedan en tu carpeta privada. Antes de usar IA se quitan tu cédula, tu nombre, tu correo y tus números de cuenta, y las cifras las maneja el código, no la IA. Nunca te pedimos tu contraseña de MUISCA ni tu clave de firma.
 
 ## ¿Cómo saco el certificado de ingresos y retenciones?
 También: certificado 220 | formulario 220 | certificado laboral para la renta | certificado de mi empleador | cómo pido el certificado de ingresos | dónde saco el certificado de retenciones
@@ -250,7 +250,7 @@ Entra a [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/) y elige «Person
 
 ## ¿Puede DeclaraFácil presentar la declaración por mí?
 También: suban la declaración por mí | presentar automático | enviar la declaración a la dian | conectar con muisca | la app la presenta
-No. Presentar exige entrar con tu usuario y firmar con tu firma electrónica personal, y la DIAN no permite que otra aplicación lo haga por ti. Lo que sí hacemos es dejarte todo listo: en «Presentar en la DIAN» te llevamos paso a paso por [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/) con cada casilla del formulario 210 para copiar.
+No. Presentar exige entrar con tu usuario y firmar con tu firma electrónica personal, y la DIAN no permite que otra aplicación lo haga por ti. Lo que sí hacemos es dejarte todo listo: en «Presentar en la DIAN» te llevamos paso a paso por [MUISCA](https://muisca.dian.gov.co/WebIdentidadLogin/) con cada casilla del formulario 210 para copiar, y la extensión de DeclaraFácil para Chrome puede escribirlas por ti. Firmar y presentar siempre lo haces tú.
 
 ## ¿Qué es el 1 % de las compras con factura electrónica?
 También: factura electrónica | 1 por ciento | pedir factura con mi cédula | deducción por factura | descuento de facturas
@@ -268,3 +268,6 @@ Van en tu patrimonio en pesos, con su valor al 31 de diciembre (la TRM de ese d�
 También: pila | planilla | salud y pensión como independiente | seguridad social independiente | aportes obligatorios independiente
 Sí. Lo que pagaste de salud y pensión obligatoria como independiente en la PILA no paga impuesto: se resta de tus ingresos. Descarga las planillas pagadas en el operador donde pagas (Mi Planilla, SOI, Aportes en Línea, etc.).
 
+## ¿Qué hace la extensión de DeclaraFácil?
+También: extensión | extension de chrome | plugin | complemento | que se llene solo | llenar automático | llenar la dian automático | traer la exógena automático | instalar la extensión
+Es un complemento para Chrome o Edge que usa la sesión de MUISCA que tú abriste. Hace dos cosas: escribe en el formulario 210 los valores de tu borrador, casilla por casilla, y trae tu exógena del año para leerla aquí. El inicio de sesión, la firma y la presentación los haces tú: no guarda tu contraseña ni toca esos botones. Se descarga desde «Presentar en la DIAN» y se instala en chrome://extensions con «Cargar descomprimida».

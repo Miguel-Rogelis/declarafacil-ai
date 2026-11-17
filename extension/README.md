@@ -1,4 +1,4 @@
-# Extensión de DeclaraFácil para Chrome
+# Extensión de DeclaraFácil para Chrome (también Opera y Edge)
 
 Une DeclaraFácil con MUISCA usando la sesión que la persona ya abrió en su navegador:
 
@@ -10,7 +10,7 @@ Une DeclaraFácil con MUISCA usando la sesión que la persona ya abrió en su na
 ## Instalarla (modo desarrollador)
 
 1. Descarga la carpeta `extension/` (o el `declarafacil-extension.zip` que publica la app y descomprímelo).
-2. En Chrome o Edge abre `chrome://extensions`, activa **Modo de desarrollador** y toca **Cargar descomprimida**.
+2. Abre la página de extensiones (Chrome: `chrome://extensions`; Opera u Opera GX: `opera://extensions`; Edge: `edge://extensions`), activa **Modo de desarrollador** y toca **Cargar descomprimida** («Load unpacked»).
 3. Elige la carpeta `extension`. Fija el ícono de DeclaraFácil en la barra.
 
 ## Cómo se usa

@@ -7,8 +7,8 @@ function Instalar({ para }: { para: string }) {
   return (
     <p className="chico suave sin-margen extension-instalar">
       {para}{" "}
-      <a href={DESCARGA_EXTENSION} download>Descarga la extensión</a> y cárgala en <code>chrome://extensions</code> (modo de desarrollador →
-      «Cargar descomprimida»). <a href={GUIA_EXTENSION} target="_blank" rel="noopener noreferrer">Cómo instalarla<span className="visualmente-oculto"> (se abre en otra pestaña)</span></a>
+      <a href={DESCARGA_EXTENSION} download>Descarga la extensión</a>, descomprímela y cárgala en <code>chrome://extensions</code> (en Opera,{" "}
+      <code>opera://extensions</code>; en Edge, <code>edge://extensions</code>): modo de desarrollador → «Cargar descomprimida». <a href={GUIA_EXTENSION} target="_blank" rel="noopener noreferrer">Cómo instalarla<span className="visualmente-oculto"> (se abre en otra pestaña)</span></a>
     </p>
   );
 }

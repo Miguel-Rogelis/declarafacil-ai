@@ -536,7 +536,8 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             placeholder="Pregunta algo"
             onChange={(e) => setTexto(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              // Con teclados que componen texto (IME), Enter confirma la palabra, no envía
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 mandar(texto);
               }

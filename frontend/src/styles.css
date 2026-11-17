@@ -50,6 +50,8 @@
 
   color-scheme: light;
   font-family: var(--fuente);
+  /* Mientras carga la fuente, la de respaldo se ajusta a su altura: el texto no salta */
+  font-size-adjust: from-font;
   font-size: 17px;
   line-height: 1.55;
   color: var(--tinta);
@@ -786,7 +788,8 @@ main { padding-bottom: 6rem; }
 .menu-item { width: 100%; text-align: left; min-height: 2.5rem; padding: 0 0.7rem; margin-top: 0.3rem; border: 0; border-radius: var(--radio-chico); background: transparent; color: var(--tinta); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .menu-item:hover { background: var(--papel-hondo); } }
 
-.ventana-entrar { position: fixed; z-index: 50; left: 0; right: 0; top: 0; bottom: 0; margin: auto; width: min(92vw, 25rem); height: fit-content; max-height: 92dvh; overflow-y: auto; padding: 1.8rem 1.6rem 1.3rem; border-radius: var(--radio-marco); background: var(--hoja); border: 1px solid var(--marco); box-shadow: var(--sombra-elevada); display: grid; gap: 0.9rem; }
+.ventana-entrar { margin: auto; width: min(92vw, 25rem); height: fit-content; max-height: 92dvh; overflow-y: auto; padding: 1.8rem 1.6rem 1.3rem; border-radius: var(--radio-marco); background: var(--hoja); color: var(--tinta); border: 1px solid var(--marco); box-shadow: var(--sombra-elevada); gap: 0.9rem; }
+.ventana-entrar[open] { display: grid; }
 .ventana-entrar .titular { margin-right: 2rem; }
 .ventana-texto { margin: 0; font-size: var(--fs-md); }
 .ventana-cerrar { position: absolute; top: 0.9rem; right: 0.9rem; width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 0; background: transparent; color: var(--tinta-suave); cursor: pointer; display: grid; place-items: center; transition: transform 160ms var(--curva), background-color 0.2s; }
@@ -995,3 +998,14 @@ main { padding-bottom: 6rem; }
 .paso-ruta-flecha { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: var(--tinta-suave); transition: transform 200ms var(--curva), color 200ms ease; }
 @media (max-width: 560px) { .paso-ruta { padding: 0.95rem 1rem; gap: 0.8rem; } .ruta-portada::before { left: calc(1rem + 22px); } }
 @media (prefers-reduced-motion: reduce) { .paso-ruta, .paso-ruta-flecha { transition: none; } }
+
+/* ---------- Diálogos nativos (<dialog> con showModal) ---------- */
+dialog:modal { overscroll-behavior: contain; }
+dialog::backdrop {
+  background: var(--velo, rgb(18 59 51 / 0.28));
+  overflow: hidden;
+  overscroll-behavior: contain;
+  transition: opacity 200ms ease;
+  @starting-style { opacity: 0; }
+}
+dialog.panel-datos { margin: 0 0 0 auto; padding: 0; height: 100dvh; max-height: 100dvh; max-width: 100%; color: var(--tinta); border-block: 0; border-right: 0; }

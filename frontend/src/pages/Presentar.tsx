@@ -69,6 +69,8 @@ function CasillaCopiar({ c, hecha, marcar }: { c: Casilla; hecha: boolean; marca
       <button type="button" className={`f210-copiar${copiada ? " hecho" : ""}`} onClick={() => void copiar()} aria-label={`Copiar el valor de la casilla ${c.numero}`}>
         {copiada ? "Copiado" : "Copiar"}
       </button>
+      {/* El aviso va fuera del botón: dentro de un botón no se anuncia */}
+      <span role="status" className="visualmente-oculto">{copiada ? `Casilla ${c.numero} copiada` : ""}</span>
     </li>
   );
 }

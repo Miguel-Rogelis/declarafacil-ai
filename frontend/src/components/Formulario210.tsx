@@ -59,6 +59,9 @@ function Fila210({ c, fuentes, filas }: { c: Casilla; fuentes: Record<string, st
         <button className={`f210-copiar no-imprimir${copiada ? " hecho" : ""}`} onClick={() => void copiar()} aria-label={`Copiar el valor de la casilla ${c.numero}`}>
           {copiada ? "Copiado" : "Copiar"}
         </button>
+      ) : null}
+      {c.tipo !== "calculada" && (c.valor || c.texto) ? (
+        <span role="status" className="visualmente-oculto">{copiada ? `Casilla ${c.numero} copiada` : ""}</span>
       ) : (
         <span className="f210-copiar-vacio" />
       )}

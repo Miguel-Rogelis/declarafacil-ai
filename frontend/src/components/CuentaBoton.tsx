@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useDialogoModal } from "../lib/dialogo";
 import { useSesion } from "../lib/estado";
 import { botonGoogle, entrarConCorreo, entrarConGoogle, googleDirecto, salir } from "../lib/nube";
 
@@ -21,7 +22,8 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
   const [correo, setCorreo] = useState("");
   const [estado, setEstado] = useState<"" | "google" | "enviando" | "enviado">("");
   const [error, setError] = useState("");
-  const ventana = useRef<HTMLDivElement>(null);
+  const ventana = useRef<HTMLDialogElement>(null);
+  useDialogoModal(ventana, onCerrar);
   // Con el ID de Google configurado va su botón oficial; si no carga, el de siempre (redirige por Supabase)
   const cajaGoogle = useRef<HTMLDivElement>(null);
   const [oficial, setOficial] = useState<"cargando" | "listo" | "no">(googleDirecto() ? "cargando" : "no");
@@ -31,28 +33,6 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
     void botonGoogle(cajaGoogle.current, { oscuro, alFallar: setError }).then((ok) => setOficial(ok ? "listo" : "no"));
   }, [oficial]);
 
-  // Ventana modal: Escape cierra, Tab no se sale y al cerrar el foco vuelve al botón «Entrar»
-  useEffect(() => {
-    const antes = document.activeElement as HTMLElement | null;
-    ventana.current?.querySelector<HTMLElement>("button, input")?.focus();
-    const alOprimir = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCerrar();
-      if (e.key !== "Tab" || !ventana.current) return;
-      const f = ventana.current.querySelectorAll<HTMLElement>("button:not([disabled]), input");
-      if (e.shiftKey && document.activeElement === f[0]) {
-        e.preventDefault();
-        f[f.length - 1]?.focus();
-      } else if (!e.shiftKey && document.activeElement === f[f.length - 1]) {
-        e.preventDefault();
-        f[0]?.focus();
-      }
-    };
-    document.addEventListener("keydown", alOprimir);
-    return () => {
-      document.removeEventListener("keydown", alOprimir);
-      antes?.focus();
-    };
-  }, [onCerrar]);
 
   const google = async () => {
     setError("");
@@ -80,12 +60,9 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
 
   return (
     <>
-      <motion.div className="velo" aria-hidden="true" onClick={onCerrar} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
-      <motion.div
+      <motion.dialog
         ref={ventana}
         className="ventana-entrar"
-        role="dialog"
-        aria-modal="true"
         aria-labelledby="titulo-entrar"
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -121,7 +98,7 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
               <div className="separador" role="separator"><span>o con tu correo</span></div>
               <form className="entrar-correo" onSubmit={(e) => void porCorreo(e)}>
                 <label htmlFor="correo-entrar" className="visualmente-oculto">Tu correo</label>
-                <input id="correo-entrar" className="entrada" type="email" required autoComplete="email" placeholder="tucorreo@ejemplo.com" value={correo} onChange={(e) => setCorreo(e.target.value)} />
+                <input id="correo-entrar" name="email" className="entrada" type="email" required autoComplete="email" autoCorrect="off" autoCapitalize="none" spellCheck={false} enterKeyHint="send" placeholder="tucorreo@ejemplo.com" value={correo} onChange={(e) => setCorreo(e.target.value)} />
                 <button className="boton" disabled={!correo.includes("@") || estado !== ""}>{estado === "enviando" ? "Enviando…" : "Enviarme el enlace"}</button>
               </form>
             </motion.div>
@@ -129,7 +106,7 @@ function VentanaEntrar({ onCerrar }: { onCerrar: () => void }) {
         </AnimatePresence>
         {error ? <p className="mensaje-estado error" role="alert">{error}</p> : null}
         <p className="nota-ventana">Guardamos tu borrador de cada año y los documentos que subas, en privado: solo tú los ves. Puedes borrarlos cuando quieras.</p>
-      </motion.div>
+      </motion.dialog>
     </>
   );
 }

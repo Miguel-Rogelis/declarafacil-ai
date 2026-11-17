@@ -11,14 +11,14 @@ type Topes = { patrimonio_bruto: number; ingresos_brutos: number; consumos_tarje
 const leer = (t: string) => Number(t.replace(/\D/g, "")) || 0;
 const mostrar = (n: number) => (n ? n.toLocaleString("es-CO") : "");
 
-function CampoPesos({ etiqueta, ayuda, valor, onCambio }: { etiqueta: string; ayuda: string; valor: number; onCambio: (n: number) => void }) {
+function CampoPesos({ nombre, etiqueta, ayuda, valor, onCambio }: { nombre: string; etiqueta: string; ayuda: string; valor: number; onCambio: (n: number) => void }) {
   const id = useId();
   return (
     <div className="campo-debo">
       <label htmlFor={id}>{etiqueta}</label>
       <div className="entrada-pesos">
         <span aria-hidden="true">$</span>
-        <input id={id} inputMode="numeric" autoComplete="off" placeholder="0" value={mostrar(valor)} onChange={(e) => onCambio(leer(e.target.value))} aria-describedby={`${id}-a`} />
+        <input id={id} name={nombre} inputMode="numeric" enterKeyHint="next" autoComplete="off" placeholder="0" value={mostrar(valor)} onChange={(e) => onCambio(leer(e.target.value))} aria-describedby={`${id}-a`} />
       </div>
       <span id={`${id}-a`} className="ayuda">{ayuda}</span>
     </div>
@@ -63,12 +63,12 @@ export function DeboDeclarar() {
   return (
     <div className="debo-declarar">
       <div className="debo-campos">
-        <CampoPesos etiqueta={`¿Cuánto recibiste en ${anio}?`} ayuda="Salario, honorarios, arriendos, pensión: todo junto." valor={v.ingresos} onCambio={(n) => setV({ ...v, ingresos: n })} />
-        <CampoPesos etiqueta={`¿Cuánto valía lo tuyo al 31 de diciembre?`} ayuda="Casa, carro, ahorros e inversiones, sin restar deudas." valor={v.patrimonio} onCambio={(n) => setV({ ...v, patrimonio: n })} />
-        <CampoPesos etiqueta="¿Cuánto pagaste con tarjeta de crédito?" ayuda="Lo que consumiste en el año con tus tarjetas." valor={v.tarjeta} onCambio={(n) => setV({ ...v, tarjeta: n })} />
-        <CampoPesos etiqueta="¿Cuánto compraste o consignaste en tus cuentas?" ayuda="Pon el mayor de los dos: compras del año o plata que entró a tus cuentas." valor={v.compras} onCambio={(n) => setV({ ...v, compras: n })} />
+        <CampoPesos nombre="ingresos" etiqueta={`¿Cuánto recibiste en ${anio}?`} ayuda="Salario, honorarios, arriendos, pensión: todo junto." valor={v.ingresos} onCambio={(n) => setV({ ...v, ingresos: n })} />
+        <CampoPesos nombre="patrimonio" etiqueta={`¿Cuánto valía lo tuyo al 31 de diciembre?`} ayuda="Casa, carro, ahorros e inversiones, sin restar deudas." valor={v.patrimonio} onCambio={(n) => setV({ ...v, patrimonio: n })} />
+        <CampoPesos nombre="tarjeta" etiqueta="¿Cuánto pagaste con tarjeta de crédito?" ayuda="Lo que consumiste en el año con tus tarjetas." valor={v.tarjeta} onCambio={(n) => setV({ ...v, tarjeta: n })} />
+        <CampoPesos nombre="compras" etiqueta="¿Cuánto compraste o consignaste en tus cuentas?" ayuda="Pon el mayor de los dos: compras del año o plata que entró a tus cuentas." valor={v.compras} onCambio={(n) => setV({ ...v, compras: n })} />
         <label className="check-iva">
-          <input type="checkbox" checked={iva} onChange={(e) => setIva(e.target.checked)} />
+          <input type="checkbox" name="iva" checked={iva} onChange={(e) => setIva(e.target.checked)} />
           Soy responsable de IVA (lo dice mi RUT)
         </label>
       </div>

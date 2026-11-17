@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 import { useSesion, type Ruta } from "../lib/estado";
 import { CuentaBoton } from "./CuentaBoton";
 import { LetraD } from "./piezas";
@@ -19,16 +19,44 @@ export const useTemaActual = () => useSyncExternalStore(suscribirTema, leerTema)
 /** El violeta del sello en hexadecimal (los componentes de React Bits no leen variables CSS). */
 export const selloHex = (t: Tema) => (t === "dark" ? "#b3a2ff" : "#5a3bc0");
 
+const sistema = (): Tema => (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+const guardado = (): Tema | null => {
+  try {
+    const t = localStorage.getItem("df-tema");
+    return t === "dark" || t === "light" ? t : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Dos estados: «el del sistema» (sin guardar nada) o el contrario, guardado. Volver al del sistema borra lo guardado. */
 function useTema() {
   const [tema, setTema] = useState<Tema>(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
-  const aplicar = (t: Tema) => {
+  const pintar = (t: Tema) => {
     document.documentElement.dataset.theme = t;
-    try {
-      localStorage.setItem("df-tema", t);
-    } catch {
-      /* almacenamiento no disponible */
-    }
     setTema(t);
+  };
+  useEffect(() => {
+    // Sin preferencia guardada, la página sigue al sistema cuando cambia (por ejemplo, de día a noche)
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const alCambiar = () => !guardado() && pintar(sistema());
+    // Otra pestaña cambió el tema
+    const alGuardar = (e: StorageEvent) => e.key === "df-tema" && pintar(guardado() ?? sistema());
+    mq.addEventListener("change", alCambiar);
+    window.addEventListener("storage", alGuardar);
+    return () => {
+      mq.removeEventListener("change", alCambiar);
+      window.removeEventListener("storage", alGuardar);
+    };
+  }, []);
+  const aplicar = (t: Tema) => {
+    try {
+      if (t === sistema()) localStorage.removeItem("df-tema");
+      else localStorage.setItem("df-tema", t);
+    } catch {
+      /* almacenamiento no disponible: igual se aplica */
+    }
+    pintar(t);
   };
   return [tema, aplicar] as const;
 }

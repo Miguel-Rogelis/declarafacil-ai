@@ -192,6 +192,18 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Cada «página» tiene su propio título (pestaña del navegador y lectores de pantalla)
+  useEffect(() => {
+    const titulos: Record<Ruta, string> = {
+      inicio: "DeclaraFácil — tu declaración de renta, lista para revisar",
+      declarar: "Chat · DeclaraFácil",
+      resultado: "Tu resultado · DeclaraFácil",
+      presentar: "Presentar en la DIAN · DeclaraFácil",
+      configuracion: "Reglas y agentes · DeclaraFácil",
+    };
+    document.title = titulos[ruta];
+  }, [ruta]);
+
   const ir = useCallback((r: Ruta) => {
     window.location.hash = `#/${r}`;
     window.scrollTo({ top: 0 });

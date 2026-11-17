@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>DeclaraFácil</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="iconos/icono-32.png" alt="" width="24" height="24" />
+      <strong>DeclaraFácil</strong>
+      <span class="suave" id="version"></span>
+    </header>
+
+    <section aria-labelledby="t-borrador">
+      <h2 id="t-borrador">Formulario 210</h2>
+      <p id="borrador" class="estado">Cargando…</p>
+      <button id="llenar" class="boton" disabled>Llenar las casillas en esta página</button>
+      <p id="resultado" class="resultado" aria-live="polite" hidden></p>
+      <button id="ensenar" class="boton-texto" hidden>Mostrarle dónde va una casilla</button>
+    </section>
+
+    <section aria-labelledby="t-exogena">
+      <h2 id="t-exogena">Mi exógena</h2>
+      <p class="suave">Con tu sesión de MUISCA abierta, la consulto y se la paso a DeclaraFácil. El inicio de sesión lo haces tú.</p>
+      <div class="fila">
+        <label for="anio">Año gravable</label>
+        <select id="anio"></select>
+        <button id="exogena" class="boton">Traer mi exógena</button>
+      </div>
+      <p id="estado-exogena" class="resultado" aria-live="polite" hidden></p>
+      <label class="check"><input type="checkbox" id="copia" /> Guardar también una copia en Descargas</label>
+    </section>
+
+    <details>
+      <summary>Herramientas</summary>
+      <p class="suave">El diagnóstico copia cómo está armada la página de MUISCA (nombres de campos y botones, sin valores) para mejorar la extensión. Revísalo antes de compartirlo.</p>
+      <div class="fila">
+        <button id="diagnostico" class="boton sec">Copiar diagnóstico</button>
+        <button id="mapa" class="boton sec">Copiar casillas aprendidas</button>
+      </div>
+      <p id="estado-herramientas" class="resultado" aria-live="polite" hidden></p>
+      <div class="fila">
+        <button id="borrar" class="boton-texto">Borrar mi borrador de la extensión</button>
+        <button id="olvidar" class="boton-texto">Olvidar casillas aprendidas</button>
+      </div>
+    </details>
+
+    <footer>Nunca firma ni presenta tu declaración. No guarda tu clave ni tus archivos.</footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

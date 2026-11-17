@@ -15,5 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY backend/data ./data
 COPY --from=front /front/dist /app/frontend/dist
+# La extensión de Chrome, comprimida para descargarla desde la app (sin sus pruebas)
+COPY extension /tmp/extension
+RUN rm -rf /tmp/extension/pruebas \
+    && python -c "import shutil; shutil.make_archive('/app/frontend/dist/declarafacil-extension', 'zip', '/tmp/extension')" \
+    && rm -rf /tmp/extension
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

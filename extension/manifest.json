@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "DeclaraFácil: puente con la DIAN",
+  "short_name": "DeclaraFácil",
+  "version": "0.1.0",
+  "description": "Llena en MUISCA las casillas de tu borrador del formulario 210 y trae tu exógena con tu sesión abierta. Nunca firma ni presenta.",
+  "minimum_chrome_version": "112",
+  "icons": {
+    "16": "iconos/icono-16.png",
+    "32": "iconos/icono-32.png",
+    "48": "iconos/icono-48.png",
+    "128": "iconos/icono-128.png"
+  },
+  "action": {
+    "default_title": "DeclaraFácil",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "iconos/icono-16.png",
+      "32": "iconos/icono-32.png"
+    }
+  },
+  "background": {
+    "service_worker": "fondo.js"
+  },
+  "permissions": ["storage", "scripting", "downloads"],
+  "host_permissions": ["https://*.dian.gov.co/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://*.dian.gov.co/*"],
+      "js": ["captura.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://*.dian.gov.co/*"],
+      "js": ["comun.js", "muisca.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://declarafacil.onrender.com/*",
+        "https://declarafacil-adix.onrender.com/*",
+        "https://suntzz.github.io/declarafacil-ai/*",
+        "https://miguel-rogelis.github.io/declarafacil-ai/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["puente.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

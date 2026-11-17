@@ -33,6 +33,10 @@ jobs:
         env:
           # La dirección de tu servicio de Render: variable API_URL del repo (Settings → Secrets and variables → Actions → Variables)
           VITE_API_URL: ${{ vars.API_URL || 'https://declarafacil-adix.onrender.com' }}
+      - name: Extensión de Chrome para descargar desde la app
+        run: |
+          rm -rf /tmp/ext && cp -r ../extension /tmp/ext && rm -rf /tmp/ext/pruebas
+          (cd /tmp/ext && zip -qr "$GITHUB_WORKSPACE/frontend/dist/declarafacil-extension.zip" .)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist

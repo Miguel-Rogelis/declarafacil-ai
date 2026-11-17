@@ -1,21 +1,13 @@
 import { motion } from "motion/react";
-import { Fragment, type CSSProperties } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Candado, LetraD } from "../components/piezas";
 import { DeboDeclarar } from "../components/DeboDeclarar";
-import { FadeIn, Revelar, ScaleUnblur } from "../components/Movimiento";
+import { FadeIn, Revelar } from "../components/Movimiento";
 import { selloHex, useTemaActual } from "../components/Navegacion";
 import SpotlightCard from "../components/reactbits/SpotlightCard";
-import Stepper, { Step } from "../components/reactbits/Stepper";
-import CountUp from "../components/reactbits/CountUp";
 import { useDemo } from "../lib/demo";
-import { useSesion } from "../lib/estado";
+import { useSesion, type Ruta } from "../lib/estado";
 
-const RENGLONES = [
-  { n: "R29", texto: "Patrimonio bruto", valor: 214_500_000 },
-  { n: "R30", texto: "Deudas", valor: 98_200_000 },
-  { n: "R32", texto: "Ingresos por rentas de trabajo", valor: 104_000_000 },
-  { n: "R132", texto: "Retenciones del año", valor: 2_100_000 },
-];
 
 const PALABRAS = ["Tu", "declaración", "de", "renta,", "lista", "para", "revisar."];
 const CURVA = [0.22, 1, 0.36, 1] as const;
@@ -56,32 +48,48 @@ function TituloPortada() {
   );
 }
 
-function FormularioMuestra() {
+type Paso = { n: string; titulo: string; texto: string; ruta: Ruta; icono: ReactNode };
+
+const RUTA: Paso[] = [
+  {
+    n: "1", titulo: "Cuéntale tus datos", texto: "Sube tu exógena o escribe «gano 4 millones al mes».", ruta: "declarar",
+    icono: <path d="M4 5.5h16v10H9l-5 4z" />,
+  },
+  {
+    n: "2", titulo: "Pide el cálculo", texto: "Ves cuánto pagas o te devuelven, y por qué.", ruta: "resultado",
+    icono: <><rect x="5" y="3.5" width="14" height="17" rx="2.5" /><path d="M8.5 8h7M8.5 12h2M13.5 12h2M8.5 16h2M13.5 16h2" /></>,
+  },
+  {
+    n: "3", titulo: "Preséntala en la DIAN", texto: "Te guiamos en MUISCA, casilla por casilla.", ruta: "presentar",
+    icono: <><path d="M5 12.5l4.5 4.5L19 7.5" /></>,
+  },
+];
+
+/** La ruta completa en tres tarjetas que llevan a cada parte de la app. */
+function RutaPortada({ ir, hayResultado }: { ir: (r: Ruta) => void; hayResultado: boolean }) {
   return (
-    <div className="formulario-muestra" role="figure" aria-label="Ejemplo de borrador del formulario 210">
-      <header>
-        <strong>Formulario 210</strong>
-        <span className="chico suave">Año gravable 2025</span>
-      </header>
-      {RENGLONES.map((r, i) => (
-        <div className="renglon" key={r.n}>
-          <span className="num"><span className="visualmente-oculto">Casilla </span>{r.n.slice(1)}</span>
-          <span>{r.texto}</span>
-          <span className="valor">
-            <CountUp to={r.valor} prefix="$" separator="." duration={0.9} delay={0.35 + i * 0.32} trigger="load" />
-          </span>
-        </div>
+    <ol className="ruta-portada" aria-label="Cómo funciona">
+      {RUTA.map((p, i) => (
+        <motion.li
+          key={p.n}
+          initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.6, delay: 0.35 + i * 0.12, ease: CURVA }}
+        >
+          <button type="button" className="paso-ruta" onClick={() => ir(p.ruta === "resultado" && !hayResultado ? "declarar" : p.ruta)}>
+            <span className="paso-ruta-icono" aria-hidden="true">
+              <svg viewBox="0 0 24 24">{p.icono}</svg>
+            </span>
+            <span className="paso-ruta-texto">
+              <span className="paso-ruta-num">Paso {p.n}</span>
+              <strong>{p.titulo}</strong>
+              <span>{p.texto}</span>
+            </span>
+            <svg className="paso-ruta-flecha" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5l4.5 4.5L6 12.5" /></svg>
+          </button>
+        </motion.li>
       ))}
-      <motion.div
-        aria-hidden="true"
-        className="sello-borrador"
-        initial={{ opacity: 0, scale: 2.2, rotate: -20 }}
-        animate={{ opacity: 1, scale: 1, rotate: -7 }}
-        transition={{ delay: 0.35 + RENGLONES.length * 0.32 + 0.6, type: "spring", stiffness: 480, damping: 17 }}
-      >
-        BORRADOR
-      </motion.div>
-    </div>
+    </ol>
   );
 }
 
@@ -98,25 +106,8 @@ const AGENTES = [
   { nombre: "Asistente", tarea: "Te responde, anota tus datos y calcula.", ia: true },
 ];
 
-const PASOS = [
-  { titulo: "Cuéntale tus datos", texto: "Sube tu exógena o escribe «gano 4 millones al mes»." },
-  { titulo: "Pide el cálculo", texto: "Escribe «calcula» y ves cuánto pagas o te devuelven." },
-  { titulo: "Preséntala en la DIAN", texto: "Te guiamos en MUISCA, casilla por casilla." },
-];
-
-/** El Stepper trae su propia paleta gris; la reemplazamos por los tokens de la casa (sirven en claro y en oscuro). */
-const COLORES_STEPPER = {
-  "--stepper-frame": "var(--papel-hondo)",
-  "--stepper-frame-edge": "var(--marco)",
-  "--stepper-frame-shadow": "var(--sombra-elevada)",
-  "--stepper-tile": "var(--hoja)",
-  "--stepper-tile-edge": "var(--marco)",
-  "--stepper-ink": "var(--tinta)",
-  "--stepper-muted": "var(--tinta-suave)",
-} as CSSProperties;
-
 export default function Inicio() {
-  const { ir, cuenta } = useSesion();
+  const { ir, cuenta, resultado } = useSesion();
   const tema = useTemaActual();
   const demo = useDemo();
 
@@ -146,9 +137,7 @@ export default function Inicio() {
             </p>
           )}
         </FadeIn>
-        <ScaleUnblur delay={0.15}>
-          <FormularioMuestra />
-        </ScaleUnblur>
+        <RutaPortada ir={ir} hayResultado={!!resultado} />
       </section>
 
       <Revelar className="seccion-debo">
@@ -157,30 +146,6 @@ export default function Inicio() {
         <DeboDeclarar />
       </Revelar>
 
-      <Revelar className="pasos-stepper">
-        <h2 id="titulo-pasos" className="titular t-36">Cómo funciona</h2>
-        <Stepper
-          theme={tema}
-          accentColor={selloHex(tema)}
-          width="100%"
-          radius={28}
-          backButtonText="Anterior"
-          nextButtonText="Siguiente"
-          completeButtonText="Listo"
-          onFinalStepCompleted={empezar}
-          aria-label="Cómo funciona, en tres pasos"
-          style={COLORES_STEPPER}
-        >
-          {PASOS.map((p) => (
-            <Step key={p.titulo} title={p.titulo}>
-              <div className="paso-contenido">
-                <h3>{p.titulo}</h3>
-                <p>{p.texto}</p>
-              </div>
-            </Step>
-          ))}
-        </Stepper>
-      </Revelar>
 
       <section className="agentes-portada" aria-labelledby="titulo-agentes">
         <Revelar>

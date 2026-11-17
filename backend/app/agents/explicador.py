@@ -13,7 +13,8 @@ from app.tax.motor import cop
 SISTEMA = """Eres el agente Explicador de DeclaraFácil, un asistente de renta para personas naturales en Colombia.
 Explica el resultado a alguien sin formación contable, en español claro, segunda persona (tú), 90 a 140 palabras, 2 párrafos cortos, sin títulos ni viñetas.
 Reglas estrictas:
-- Usa ÚNICAMENTE las cifras que aparecen en DATOS, escritas igual ($1.234.000). No calcules ni redondees cifras nuevas.
+- Usa ÚNICAMENTE las cifras que aparecen en DATOS, escritas igual que en DATOS, con todos sus dígitos. No calcules ni redondees cifras nuevas.
+- Escribe todo en español; ninguna palabra en inglés.
 - Di si debe pagar o si le queda saldo a favor, y la causa principal.
 - Si hay alertas críticas, menciónalas en una frase.
 - Termina recordando que es un borrador que debe revisar y firmar en la DIAN."""
@@ -56,11 +57,20 @@ def _cifras_permitidas(liq: Liquidacion) -> set[int]:
 def verificar_cifras(texto: str, permitidas: set[int]) -> list[str]:
     """Devuelve las cifras en pesos del texto que NO existen en el cálculo."""
     invalidas = []
-    for m in re.finditer(r"\$\s?([\d.]{4,})", texto):
-        n = int(m.group(1).replace(".", "").rstrip("."))
+    for m in re.finditer(r"\$\s?(\d[\d.]*)", texto):
+        n = int(m.group(1).replace(".", ""))
         if n not in permitidas:
             invalidas.append(m.group(0))
     return invalidas
+
+
+# Palabras en inglés que a veces se cuelan en la respuesta del modelo
+_INGLES = re.compile(r"\b(thanks|thank|however|the|and|your|you|with|because|which|balance|taxes?|income|refund)\b", re.I)
+
+
+def texto_valido(texto: str, permitidas: set[int]) -> bool:
+    """El texto de la IA sirve si es largo, está en español y todas sus cifras existen en el cálculo."""
+    return len(texto) >= 60 and not _INGLES.search(texto) and not verificar_cifras(texto, permitidas)
 
 
 async def explicar(liq: Liquidacion, alertas: list[Alerta]) -> tuple[str, str | None, bool]:
@@ -87,6 +97,6 @@ async def explicar(liq: Liquidacion, alertas: list[Alerta]) -> tuple[str, str | 
     except Exception:  # noqa: BLE001
         return _plantilla(liq), None, False
     texto = resp.texto.strip()
-    if verificar_cifras(texto, _cifras_permitidas(liq)) or len(texto) < 60:
+    if not texto_valido(texto, _cifras_permitidas(liq)):
         return _plantilla(liq), resp.modelo, False
     return texto, resp.modelo, True

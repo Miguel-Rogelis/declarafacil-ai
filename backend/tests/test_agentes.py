@@ -118,3 +118,12 @@ def test_reglas_y_agentes_se_pueden_consultar():
     assert {a["anio_gravable"] for a in c.get("/api/reglas").json()} >= {2025, 2026}
     assert c.get("/api/reglas/2025").json()["uvt"] == 49799
     assert "interprete" in c.get("/api/agentes").json()
+
+
+def test_explicador_rechaza_cifras_cortas_y_ingles():
+    permitidas = {879_000, 46_000, 925_000}
+    malo = "Te queda saldo a favor de $879.000. Sin embargo, thanks a las retenciones por $1 pagas menos de lo normal."
+    assert explicador.verificar_cifras(malo, permitidas) == ["$1"]
+    assert not explicador.texto_valido(malo, permitidas)
+    bueno = "Te queda saldo a favor de $879.000. Tu impuesto es $46.000 y las retenciones de $925.000 lo cubren de sobra."
+    assert explicador.texto_valido(bueno, permitidas)

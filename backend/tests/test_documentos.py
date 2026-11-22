@@ -146,14 +146,14 @@ def test_documento_desconocido_pregunta_cada_cifra():
     assert filas and all(f.tratamiento == "revisar" and f.pregunta and f.opciones for f in filas)
 
 
-def test_foto_no_se_lee():
+def test_foto_danada_da_un_error_claro():
     archivos = [(b"\xff\xd8\xff\xe0 jpg", "certificado.jpg")]
 
     async def correr():
         return [x async for x in orquestador.procesar_documentos(archivos, 2025)]
 
     salida = asyncio.run(correr())
-    assert isinstance(salida[-1], orquestador.ErrorFlujo) and "PDF" in salida[-1].mensaje
+    assert isinstance(salida[-1], orquestador.ErrorFlujo) and ("foto" in salida[-1].mensaje or "PDF" in salida[-1].mensaje)
 
 
 # ---------- Cruce con la exógena ----------

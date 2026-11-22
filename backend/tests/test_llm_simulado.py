@@ -35,6 +35,7 @@ def con_llm(monkeypatch):
     monkeypatch.setattr(settings, "llm_mode", "openrouter")
     monkeypatch.setattr(settings, "openrouter_api_key", "sk-prueba")
     cupo.reiniciar()  # cada prueba con su cupo: con muchas pruebas se pasaba el tope por hora
+    cliente.reiniciar_cache()
 
     def instalar(falso):
         monkeypatch.setattr(cliente, "_get_cliente", lambda: falso)
@@ -199,3 +200,27 @@ def test_el_interprete_no_recibe_montos_de_la_informacion_adicional(con_llm):
     asyncio.run(interprete.interpretar(anon, ult, n))
     prompt = json.dumps(falso.llamadas[-1]["messages"], ensure_ascii=False)
     assert "2.500.000" not in prompt and "Saldo final #.###.###" in prompt
+
+
+def test_prompt_del_chat_cabe_en_el_presupuesto_de_tokens(con_llm):
+    """RNF-08 / KPI-12: un turno típico (con exógena y certificados cargados) entra con menos de 5.000 tokens."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    falso = con_llm(_Falso(lambda m: json.dumps({"respuesta": "Listo, lo anoté."})))
+    demo = settings.data_dir / "demo"
+    archivos = [("archivos", (n, (demo / n).read_bytes())) for n in ("exogena_demo_2025.xlsx", "certificado_220_demo_2025.pdf", "certificado_banco_demo_2025.pdf")]
+    r = TestClient(app).post("/api/documentos/analizar", files=archivos, data={"anio_gravable": "2025"})
+    datos = [json.loads(x[5:]) for x in r.text.splitlines() if x.startswith("data:")]
+    ext = datos[-1]["extraccion"]
+    estado = asistente.EstadoChat(tiene_exogena=True, anio_exogena=2025, filas=ext["filas"], topes=ext["topes"])
+    asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="tengo 2 hijos menores que dependen de mí", estado=estado)))
+    m = falso.llamadas[-1]["messages"]
+    tokens = cliente.estimar_tokens(m[0]["content"] + m[1]["content"])
+    assert tokens <= 5000, tokens
+    sistema = m[0]["content"]
+    # Los campos raros (exterior, pérdidas, comparación patrimonial) solo van cuando la conversación los toca
+    assert "- salario_exterior:" not in sistema and "rentas del exterior y sociedades del exterior (ECE)" in sistema
+    asyncio.run(asistente.responder(asistente.TurnoChat(mensaje="también me pagaron un salario desde España", estado=estado)))
+    assert "- salario_exterior:" in falso.llamadas[-1]["messages"][0]["content"]

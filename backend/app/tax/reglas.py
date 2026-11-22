@@ -2,12 +2,17 @@
 
 Cada año vive en un archivo JSON (data/reglas/agAAAA.json). Para soportar un año
 nuevo basta con clonar el anterior y ajustar los valores; el motor no cambia.
+
+Lo que se edita desde la pantalla de administración se guarda en el almacén persistente
+(clave «reglas:AAAA») con su historial de versiones, y manda sobre el archivo: así un cambio
+sobrevive a los reinicios del servidor y se puede revertir.
 """
 
 import json
 from pathlib import Path
 from typing import Any
 
+from app import almacen
 from app.config import settings
 
 CAMPOS_OBLIGATORIOS = [
@@ -32,16 +37,23 @@ def _ruta(anio: int) -> Path:
     return settings.reglas_dir / f"ag{anio}.json"
 
 
+def _clave(anio: int) -> str:
+    return f"reglas:{anio}"
+
+
 def anios_disponibles() -> list[dict[str, Any]]:
+    anios = {int(a.stem[2:]) for a in settings.reglas_dir.glob("ag*.json")}
+    anios |= {int(k.split(":")[1]) for k in almacen.obtener().claves("reglas:") if k.split(":")[1].isdigit()}
     salida = []
-    for archivo in sorted(settings.reglas_dir.glob("ag*.json"), reverse=True):
-        datos = json.loads(archivo.read_text(encoding="utf-8"))
+    for anio in sorted(anios, reverse=True):
+        datos = cargar(anio)
         salida.append(
             {
                 "anio_gravable": datos["anio_gravable"],
                 "estado": datos.get("estado", "vigente"),
                 "uvt": datos["uvt"],
                 "descripcion": datos.get("descripcion", ""),
+                "editado": almacen.obtener().leer(_clave(anio)) is not None,
             }
         )
     return salida
@@ -56,11 +68,26 @@ def uvt_del_anio(anio: int) -> float | None:
     return float(valor) if valor else None
 
 
+def uvt_provisional(anio: int) -> bool:
+    """La UVT de ese año todavía es una estimación (la DIAN aún no publica la resolución)."""
+    ruta = settings.data_dir / "uvt.json"
+    return ruta.exists() and str(anio) in json.loads(ruta.read_text(encoding="utf-8")).get("provisionales", {})
+
+
 def cargar(anio: int) -> dict[str, Any]:
+    editado = almacen.obtener().leer(_clave(anio))
+    if editado is not None:
+        return editado
     ruta = _ruta(anio)
     if not ruta.exists():
         raise ReglasNoEncontradas(f"No hay reglas para el año gravable {anio}")
     return json.loads(ruta.read_text(encoding="utf-8"))
+
+
+def del_archivo(anio: int) -> dict[str, Any] | None:
+    """Las reglas tal como vienen en el repositorio (sin los cambios hechos en pantalla)."""
+    ruta = _ruta(anio)
+    return json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else None
 
 
 def validar(datos: dict[str, Any]) -> list[str]:
@@ -78,16 +105,37 @@ def validar(datos: dict[str, Any]) -> list[str]:
     return errores
 
 
-def guardar(anio: int, datos: dict[str, Any]) -> None:
+def guardar(anio: int, datos: dict[str, Any], autor: str = "sistema") -> int:
+    """Valida y guarda en el almacén persistente. Devuelve el número de versión."""
     datos["anio_gravable"] = anio
     errores = validar(datos)
     if errores:
         raise ValueError("; ".join(errores))
-    _ruta(anio).write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    return almacen.obtener().escribir(_clave(anio), datos, autor)
 
 
-def clonar(origen: int, destino: int, uvt: float | None = None) -> dict[str, Any]:
-    if _ruta(destino).exists():
+def revertir(anio: int, version: int | None, autor: str = "sistema") -> dict[str, Any]:
+    """Vuelve a una versión anterior del historial, o al archivo del repositorio si version es None."""
+    if version is None:
+        original = del_archivo(anio)
+        if original is None:
+            raise ReglasNoEncontradas(f"El año {anio} no tiene archivo en el repositorio")
+        almacen.obtener().escribir(_clave(anio), original, f"{autor} (restauró el archivo del repositorio)")
+        return original
+    v = almacen.obtener().version(version)
+    if not v or v.get("clave") != _clave(anio):
+        raise ReglasNoEncontradas(f"No hay una versión {version} de las reglas de {anio}")
+    guardar(anio, v["datos"], f"{autor} (revirtió a la versión {version})")
+    return cargar(anio)
+
+
+def historial(anio: int, limite: int = 30) -> list[dict[str, Any]]:
+    return almacen.obtener().historial(_clave(anio), limite)
+
+
+def clonar(origen: int, destino: int, uvt: float | None = None, autor: str = "sistema") -> dict[str, Any]:
+    existe = _ruta(destino).exists() or almacen.obtener().leer(_clave(destino)) is not None
+    if existe:
         raise ValueError(f"Ya existen reglas para {destino}")
     datos = cargar(origen)
     datos["anio_gravable"] = destino
@@ -96,5 +144,5 @@ def clonar(origen: int, destino: int, uvt: float | None = None) -> dict[str, Any
     datos["vencimientos"] = {}
     if uvt:
         datos["uvt"] = uvt
-    guardar(destino, datos)
+    guardar(destino, datos, autor)
     return datos

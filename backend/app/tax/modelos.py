@@ -80,6 +80,40 @@ class Descuentos(BaseModel):
     donaciones_alimentos: float = Field(default=0, description="Donaciones de alimentos a bancos de alimentos (37 % desde 2025)")
 
 
+class RentasExterior(BaseModel):
+    """Rentas de fuente extranjera de un residente, en pesos (TRM de cada pago o del 31 de diciembre)."""
+
+    salarios: float = Field(default=0, description="Salarios pagados por un empleador del exterior (casilla 32)")
+    honorarios: float = Field(default=0, description="Honorarios o servicios cobrados en el exterior")
+    rentas_capital: float = Field(default=0, description="Intereses, arriendos o regalías del exterior (casilla 58)")
+    otras_rentas: float = Field(default=0, description="Otras rentas no laborales del exterior (casilla 74)")
+    pensiones: float = Field(default=0, description="Pensiones del exterior (casilla 99)")
+    dividendos: float = Field(default=0, description="Dividendos de sociedades del exterior (casilla 109)")
+    dividendos_exentos: float = Field(default=0, description="Parte exenta de esos dividendos, p. ej. de la Comunidad Andina (casilla 110)")
+    ganancias_ocasionales: float = Field(default=0, description="Ganancias ocasionales del exterior (casilla 112)")
+    impuesto_pagado_renta: float = Field(default=0, description="Impuesto de renta pagado en el exterior sobre esas rentas (art. 254 ET)")
+    impuesto_pagado_go: float = Field(default=0, description="Impuesto pagado en el exterior sobre ganancias ocasionales")
+    ece_rentas_pasivas_capital: float = Field(default=0, description="Rentas pasivas de capital de una ECE (casilla 62, arts. 882-893 ET)")
+    ece_rentas_pasivas_no_laborales: float = Field(default=0, description="Rentas pasivas no laborales de una ECE (casilla 79)")
+
+
+class Perdidas(BaseModel):
+    """Pérdidas fiscales de años anteriores que aún se pueden compensar (12 años, arts. 147 y 330 ET)."""
+
+    trabajo_no_laboral: float = Field(default=0, description="De rentas de trabajo sin relación laboral (casilla 56)")
+    capital: float = Field(default=0, description="De rentas de capital (casilla 72)")
+    no_laborales: float = Field(default=0, description="De rentas no laborales (casilla 89)")
+    anios_2018_y_anteriores: float = Field(default=0, description="De los años gravables 2018 y anteriores (casilla 94)")
+
+
+class ComparacionPatrimonial(BaseModel):
+    """Datos para la renta por comparación patrimonial (arts. 236 a 239 ET)."""
+
+    patrimonio_liquido_anterior: float | None = Field(default=None, description="Patrimonio líquido del 31 de diciembre del año anterior")
+    impuestos_pagados_en_el_anio: float | None = Field(default=None, description="Impuesto de renta pagado durante el año (art. 237)")
+    causas_justificativas: float = Field(default=0, description="Aumentos que la persona puede probar: valorizaciones, ingresos no gravados, préstamos…")
+
+
 class ItemPatrimonio(BaseModel):
     concepto: str
     valor: float
@@ -127,6 +161,9 @@ class DatosDeclaracion(BaseModel):
     ganancias_ocasionales: GananciasOcasionales = GananciasOcasionales()
     deducciones: Deducciones = Deducciones()
     descuentos: Descuentos = Descuentos()
+    exterior: RentasExterior = RentasExterior()
+    perdidas: Perdidas = Perdidas()
+    comparacion: ComparacionPatrimonial = ComparacionPatrimonial()
     patrimonio: Patrimonio = Patrimonio()
     indicadores: Indicadores = Indicadores()
     pagos: Pagos = Pagos()

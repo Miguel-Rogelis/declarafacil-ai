@@ -13,6 +13,7 @@ from app.agents.base import FilaInterpretada, OpcionRevision
 from app.tax import reglas as repo_reglas
 
 _NOMBRES = {
+    "comparacion.patrimonio_liquido_anterior": "tu patrimonio líquido del año anterior",
     "laboral.salarios_y_pagos_laborales": "parte de tu salario",
     "laboral.cesantias_e_intereses": "cesantías",
     "independiente.honorarios_y_servicios": "honorarios por tu trabajo independiente",

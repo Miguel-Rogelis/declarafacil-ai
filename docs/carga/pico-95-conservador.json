@@ -1,0 +1,112 @@
+{
+  "supuestos": {
+    "declaraciones": 95,
+    "concurrencia": 95,
+    "escala_latencia": 1.0,
+    "perfil": "pago",
+    "modelos_asistente": [
+      "anthropic/claude-haiku-4.5",
+      "anthropic/claude-sonnet-5"
+    ],
+    "tokens_salida_por_agente": {
+      "clasificador": 60,
+      "interprete": 900,
+      "explicador": 400,
+      "asistente": 300
+    },
+    "cache": false,
+    "cupo": {
+      "por_hora_por_persona": 40,
+      "tope_diario": 3000
+    }
+  },
+  "duracion_s": 74.8,
+  "declaraciones_ok": 95,
+  "rechazos_por_cupo": 0,
+  "errores_5xx": 0,
+  "fallas": [],
+  "llamadas_ia": 1425,
+  "llamadas_por_declaracion": 15.0,
+  "todas_sin_retencion": true,
+  "por_agente": {
+    "interprete": {
+      "llamadas": 95,
+      "entrada_mediana": 759,
+      "entrada_max": 759,
+      "salida_total": 85500
+    },
+    "explicador": {
+      "llamadas": 190,
+      "entrada_mediana": 270,
+      "entrada_max": 271,
+      "salida_total": 76000
+    },
+    "asistente": {
+      "llamadas": 1140,
+      "entrada_mediana": 4841,
+      "entrada_max": 5093,
+      "salida_total": 342000
+    }
+  },
+  "costo_total_usd": 8.1566,
+  "costo_por_declaracion_usd": 0.0859,
+  "latencia_ms": {
+    "documentos": {
+      "p50": 16343,
+      "p95": 16457,
+      "n": 95
+    },
+    "liquidar": {
+      "p50": 4506,
+      "p95": 5618,
+      "n": 190
+    },
+    "chat": {
+      "p50": 3757,
+      "p95": 4595,
+      "n": 1140
+    }
+  },
+  "kpi": {
+    "KPI-03": {
+      "valor": 4578.706,
+      "meta": "<= 3000 ms",
+      "estado": "no_cumple"
+    },
+    "KPI-05": {
+      "valor": 16007.3264,
+      "meta": "<= 10000 ms",
+      "estado": "no_cumple"
+    },
+    "KPI-07": {
+      "valor": 100.0,
+      "meta": ">= 70 %",
+      "estado": "cumple"
+    },
+    "KPI-08": {
+      "valor": 15.0,
+      "meta": "<= 20 llamadas",
+      "estado": "cumple"
+    },
+    "KPI-09": {
+      "valor": 0.0859,
+      "meta": "<= 0.3 USD",
+      "estado": "cumple"
+    },
+    "KPI-10": {
+      "valor": 0.0,
+      "meta": "<= 10 %",
+      "estado": "cumple"
+    },
+    "KPI-11": {
+      "valor": 0.0,
+      "meta": "<= 1 %",
+      "estado": "cumple"
+    },
+    "KPI-12": {
+      "valor": 4841.5,
+      "meta": "<= 5000 tokens",
+      "estado": "cumple"
+    }
+  }
+}

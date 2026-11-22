@@ -39,7 +39,29 @@ class Settings:
     supabase_anon_key: str = field(default_factory=lambda: os.getenv("SUPABASE_ANON_KEY", ""))
     # ID de cliente de Google (público): con él, el botón de Google dice «DeclaraFácil» y no la dirección de Supabase
     google_client_id: str = field(default_factory=lambda: os.getenv("GOOGLE_CLIENT_ID", "").strip())
-    max_upload_mb: int = 5
+    # Clave de servicio de Supabase (secreta, solo en el servidor): guarda reglas, agentes, métricas y cupo
+    supabase_service_key: str = field(default_factory=lambda: os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip())
+    almacen: str = field(default_factory=lambda: os.getenv("ALMACEN", "").strip().lower())
+    almacen_dir: Path = field(default_factory=lambda: Path(os.getenv("ALMACEN_DIR", BASE_DIR / "estado")))
+    # Correos que pueden administrar reglas y agentes iniciando sesión (además de ADMIN_TOKEN)
+    admin_emails: list[str] = field(
+        default_factory=lambda: [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
+    )
+    # Perfil de modelos: «gratis» (agentes.json) o «pago» (agentes_pago.json, para el piloto)
+    perfil_modelos: str = field(default_factory=lambda: os.getenv("PERFIL_MODELOS", "gratis").strip().lower())
+    # Pide a OpenRouter solo proveedores que no guardan ni entrenan con los datos
+    sin_retencion: bool = field(default_factory=lambda: os.getenv("OPENROUTER_SIN_RETENCION", "") in ("1", "true", "si"))
+    max_upload_mb: int = 8
+
+    @property
+    def almacen_modo(self) -> str:
+        if self.almacen in ("memoria", "archivo", "supabase"):
+            return self.almacen
+        if self.supabase_url and self.supabase_service_key:
+            return "supabase"
+        if os.getenv("ALMACEN_DIR"):
+            return "archivo"
+        return "memoria"
 
     @property
     def reglas_dir(self) -> Path:

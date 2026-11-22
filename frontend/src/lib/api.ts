@@ -290,6 +290,42 @@ export interface Estado {
   admin_protegido: boolean;
   ia_restante_hoy?: number;
   supabase?: { url: string; anon_key: string; google_client_id?: string | null } | null;
+  perfil_modelos?: string;
+  almacen?: string;
+  version_consentimiento?: string;
+}
+
+export interface VersionHistorial {
+  id: number;
+  clave: string;
+  autor: string | null;
+  creada: string;
+}
+
+export interface Kpi {
+  id: string;
+  nombre: string;
+  formula: string;
+  meta: number;
+  comparacion: string;
+  unidad: string;
+  fuente: "sistema" | "piloto";
+  criterio: string;
+  valor: number | null;
+  n: number;
+  estado: "cumple" | "no_cumple" | "sin_datos" | "muestra_pequena";
+  nota?: string | null;
+}
+
+export interface ResumenMetricas {
+  dias: number;
+  eventos: number;
+  sesiones: number;
+  sesiones_con_documentos: number;
+  sesiones_con_borrador: number;
+  kpis: Kpi[];
+  por_perfil: Record<string, { sesiones: number; borradores: number; pct: number | null }>;
+  llamadas_ia: { total: number; ok: number; cache: number; error: number; sin_cupo: number };
 }
 
 export interface AgenteConfig {
@@ -401,9 +437,31 @@ let sinIa = false;
 export const usarSinIa = (v: boolean) => {
   sinIa = v;
 };
+export const enModoDemo = () => sinIa;
+
+/** Identificador aleatorio de esta pestaña para las métricas (HU-41): no se relaciona con la cuenta ni con datos personales. */
+function sesionMetricas(): string {
+  try {
+    let id = sessionStorage.getItem("df-sesion");
+    if (!id) {
+      id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 10)}`;
+      sessionStorage.setItem("df-sesion", id);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+}
+
 const cabeceras = (h?: HeadersInit): HeadersInit => {
   const token = tokenActual();
-  return { ...(sinIa ? { "X-Sin-IA": "1" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(h as Record<string, string>) };
+  const sesion = sesionMetricas();
+  return {
+    ...(sinIa ? { "X-Sin-IA": "1" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(sesion ? { "X-Sesion": sesion } : {}),
+    ...(h as Record<string, string>),
+  };
 };
 
 /** Lee una respuesta Server-Sent Events de un POST y despacha cada evento. */
@@ -526,6 +584,39 @@ export const api = {
       body: JSON.stringify(cambios),
     }),
   probarAgente: (id: string) => json<{ ok: boolean; modelo?: string; detalle?: string }>(`${API}/api/agentes/${id}/probar`, { method: "POST" }),
+  historialReglas: (anio: number, token: string) =>
+    json<VersionHistorial[]>(`${API}/api/reglas/${anio}/historial`, { headers: { "X-Admin-Token": token } }),
+  revertirReglas: (anio: number, version: number | null, token: string) =>
+    json<Record<string, unknown>>(`${API}/api/reglas/${anio}/revertir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      body: JSON.stringify({ version }),
+    }),
+  historialAgentes: (token: string) => json<VersionHistorial[]>(`${API}/api/agentes/historial`, { headers: { "X-Admin-Token": token } }),
+  revertirAgentes: (version: number | null, token: string) =>
+    json<Record<string, AgenteConfig>>(`${API}/api/agentes/revertir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      body: JSON.stringify({ version }),
+    }),
+  metricas: (dias: number, token: string) => json<ResumenMetricas>(`${API}/api/metricas?dias=${dias}`, { headers: { "X-Admin-Token": token } }),
+  guardarKpiManual: (kpi: string, valor: number, n: number, nota: string, token: string) =>
+    json<Record<string, unknown>>(`${API}/api/metricas/manuales/${kpi}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      body: JSON.stringify({ valor, n, nota }),
+    }),
+  /** Descarga el CSV de eventos (sin datos personales) con la clave de administrador. */
+  descargarMetricas: async (dias: number, token: string) => {
+    const r = await fetch(`${API}/api/metricas/eventos.csv?dias=${dias}`, { headers: cabeceras({ "X-Admin-Token": token }) });
+    if (!r.ok) throw new Error(r.status === 401 ? "La clave de administrador no es válida." : `El servidor respondió ${r.status}.`);
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "declarafacil-metricas.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   modelosGratis: () => json<{ id: string; nombre: string; contexto: number }[]>(`${API}/api/agentes/modelos-gratis`),
   diagnostico: (estado: EstadoChat) =>
     json<RespuestaChat>(`${API}/api/chat/diagnostico`, {

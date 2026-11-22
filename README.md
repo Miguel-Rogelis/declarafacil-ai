@@ -1,6 +1,6 @@
 # DeclaraFácil AI
 
-Asistente agéntico que convierte el reporte de **información exógena** de la DIAN y los **certificados** de cada persona (ingresos y retenciones, banco, vivienda, prepagada…) en un **borrador de la declaración de renta** de personas naturales residentes en Colombia (formulario 210, años gravables 2021 a 2025), explicado en lenguaje simple y con cada cifra trazable hasta su origen.
+Asistente agéntico que convierte el reporte de **información exógena** de la DIAN y los **certificados** de cada persona (ingresos y retenciones, banco, vivienda, prepagada…) en un **borrador de la declaración de renta** de personas naturales residentes en Colombia (formulario 210, años gravables 2021 a 2026), explicado en lenguaje simple y con cada cifra trazable hasta su origen.
 
 Proyecto del curso *Problem Discovery & Solution Design with AI*, Ingeniería de Sistemas, Universidad Católica de Colombia.
 
@@ -29,7 +29,9 @@ Todo pasa en un **chat a pantalla completa** con un agente. El usuario lleva la 
 - **Varios documentos a la vez**: con el clip (o arrastrando) sube de una vez la exógena y sus certificados, y puede agregar más en cualquier momento. El agente reconoce cada uno: exógena, certificado de ingresos y retenciones (220), certificado tributario del banco, intereses de vivienda, medicina prepagada, aportes voluntarios o AFC, cesantías, retenciones de independientes, predial y la declaración del año anterior. Si no reconoce un documento, propone sus cifras y las pregunta una por una.
 - **Cruza los documentos para no contar nada dos veces**: si un certificado y la exógena traen el mismo dato de la misma entidad, usa el del certificado (la fuente directa) y avisa si no coinciden ("Retención de tu empleador: la exógena dice $2.100.000 y el certificado $2.350.000"). También dice qué trajo el certificado que la exógena no tenía, no vuelve a leer un archivo repetido y usa lo que el documento deja ver: el dependiente que registra el 220, el impuesto y el anticipo de la declaración anterior.
 - Si los documentos son de otro año, el agente cambia a las reglas de ese año.
-- Puede cambiar de año gravable (2021 a 2025) desde el selector de arriba o pidiéndolo en el chat.
+- Puede cambiar de año gravable (2021 a 2026) desde el selector de arriba o pidiéndolo en el chat. El año gravable 2026 (que se declara en 2027) usa los valores que ya se conocen y marca como provisionales los que aún no publica la DIAN (UVT 2027 y componente inflacionario).
+- **Fotos y PDF escaneados**: si el certificado es una foto o un escaneo, lo lee con OCR (Tesseract, en el servidor) y cada cifra que sale así queda «por confirmar» hasta que la persona la revise. La exógena no se acepta por foto: hay que descargar el Excel.
+- **Autorización de datos (Ley 1581)**: antes de leer el primer documento pide la autorización, guarda qué versión aceptó y deja retirarla con «Borrar mis datos».
 - "Tus datos" abre un panel con cada cifra y de dónde sale.
 - **Extensión de Chrome** (`extension/`): con la sesión de MUISCA que la persona abrió, escribe el borrador en el formulario 210 casilla por casilla (y avisa si un total que calcula la DIAN no cuadra) y trae la exógena del año hasta el chat. Nunca inicia sesión, firma ni presenta. Ver [extension/README.md](extension/README.md).
 
@@ -39,6 +41,8 @@ Recibe: si está obligado a declarar, el saldo a pagar o a favor, la sanción si
 - **Explicado por secciones**, con la norma de cada línea y las filas de la exógena o del certificado de donde sale.
 
 Cubre la cédula general por subcédula como el formulario (rentas de trabajo, trabajo sin relación laboral con costos, capital y no laborales), con cada renta exenta y deducción imputada a su subcédula y el límite del 40 % repartido en el orden del instructivo; pensiones; dividendos (subcédulas 1 y 2, impuesto del art. 240 y descuento del art. 254-1); ganancias ocasionales; patrimonio; descuento por donaciones (arts. 257 y 258); anticipo (art. 807) y sanción por extemporaneidad (arts. 639-641). Beneficios incluidos: 25 % exento, cesantías según el salario, aportes voluntarios y AFC, intereses de vivienda, intereses del ICETEX (hasta 100 UVT), dependientes (10 % y 72 UVT adicionales), medicina prepagada, 50 % del 4x1000, 1 % de compras con factura electrónica y gastos de los inmuebles que se arriendan. Para independientes elige solo lo más favorable entre restar costos (casilla 43) o el 25 % exento (casilla 32).
+
+También cubre **rentas del exterior** (salarios, honorarios, capital, pensiones —exentas desde 2023—, dividendos y ganancias ocasionales del exterior, con el descuento del art. 254 limitado al impuesto colombiano que corresponde a esas rentas), **rentas pasivas de sociedades controladas del exterior (ECE)**, **pérdidas** de cada subcédula (los costos ya no se cortan en cero: la pérdida queda para compensar en los 12 años siguientes, arts. 147 y 330) y su compensación, y la **renta por comparación patrimonial** (arts. 236 y 237: si el patrimonio líquido creció más que lo que se justifica con las rentas, la diferencia se suma como renta gravable, con alerta crítica).
 
 ## Arquitectura: un agente, una responsabilidad
 
@@ -79,11 +83,11 @@ El **orquestador** (`backend/app/orquestador.py`) es un flujo fijo y trazable: c
 ### Decisiones de diseño (ética y riesgo)
 
 - **La IA no calcula.** El mayor riesgo identificado en la evaluación ética era que la IA inventara un valor y el usuario lo firmara. Por eso todas las cifras salen de reglas y de las filas originales.
-- **Privacidad (Ley 1581).** Sin cuenta, los archivos se procesan en memoria y no se guardan; con cuenta, quedan en la carpeta privada de la persona. Antes de cualquier llamada a un modelo se quitan la cédula, los nombres, las direcciones y los números de cuenta de los documentos (Anonimizador), y la cédula completa, el correo y los números de cuenta o celular de lo que se escribe en el chat. El Clasificador y el Intérprete no reciben montos. El Explicador y el Asistente sí reciben cifras, sin identidad (las del cálculo y las de sus documentos), porque las necesitan para explicar el resultado y responder sobre el caso; por eso el código descarta cualquier respuesta con una cifra que no esté en esos datos. Los proveedores gratuitos de OpenRouter pueden entrenar con lo que reciben.
+- **Privacidad (Ley 1581).** Sin cuenta, los archivos se procesan en memoria y no se guardan; con cuenta, quedan en la carpeta privada de la persona. Antes de cualquier llamada a un modelo se quitan la cédula, los nombres, las direcciones y los números de cuenta de los documentos (Anonimizador), y la cédula completa, el correo y los números de cuenta o celular de lo que se escribe en el chat. El Clasificador y el Intérprete no reciben montos. El Explicador y el Asistente sí reciben cifras, sin identidad (las del cálculo y las de sus documentos), porque las necesitan para explicar el resultado y responder sobre el caso; por eso el código descarta cualquier respuesta con una cifra que no esté en esos datos. Los proveedores gratuitos de OpenRouter pueden entrenar con lo que reciben; con `PERFIL_MODELOS=pago` (o `OPENROUTER_SIN_RETENCION=1`) cada llamada exige proveedores que no guardan ni entrenan con los datos. Las métricas de uso no llevan datos personales (esquema cerrado por tipo de evento) y se borran al año.
 - **Revisión humana obligatoria.** Lo que las reglas no reconocen o lo que ubica la IA queda marcado para que el usuario lo confirme.
 - **El certificado manda.** Cuando dos documentos traen el mismo dato, se usa la fuente directa (el certificado de la entidad) y la exógena queda como referencia; las diferencias se muestran, no se esconden.
-- **Reglas por año, no en el código.** `backend/data/reglas/agAAAA.json` guarda UVT, topes, tablas, límites, tarifas, calendario de vencimientos y sanciones. Para un año nuevo se clona el anterior desde la pantalla *Reglas y agentes*.
-- **Modelos intercambiables.** `backend/data/agentes.json` define los modelos de cada agente en orden de preferencia. Si uno falla o llega al límite, pasa al siguiente. Se cambian desde la pantalla sin volver a desplegar.
+- **Reglas por año, no en el código.** `backend/data/reglas/agAAAA.json` guarda UVT, topes, tablas, límites, tarifas, calendario de vencimientos y sanciones. Para un año nuevo se clona el anterior desde la pantalla *Configuración*. Lo que se edita ahí queda guardado (Supabase o archivo) con historial de versiones, autor y botón para volver atrás.
+- **Modelos intercambiables.** `backend/data/agentes.json` define los modelos de cada agente en orden de preferencia. Si uno falla o llega al límite, pasa al siguiente. Se cambian desde la pantalla sin volver a desplegar. `agentes_pago.json` es el perfil de pago (Claude Haiku 4.5 con Sonnet de respaldo); los precios por millón de tokens están en `precios.json` para calcular el costo de cada llamada. Las respuestas del Clasificador, el Intérprete y el Explicador se guardan 24 horas en caché: una pregunta idéntica no gasta cupo ni plata.
 
 ## Estructura
 
@@ -91,19 +95,22 @@ El **orquestador** (`backend/app/orquestador.py`) es un flujo fijo y trazable: c
 backend/
   app/agents/       un archivo por agente (el Asistente usa conocimiento.py para la base por año y diagnostico.py para deducir y saber qué falta)
   app/tax/          motor tributario, formulario 210 casilla por casilla y modelos (sin IA)
-  app/llm/          cliente de OpenRouter con respaldo entre modelos
+  app/llm/          cliente de OpenRouter con respaldo entre modelos, caché, costo por tokens y cupo
+  app/almacen.py    configuración editada (con historial), métricas y cupo que sobreviven a un reinicio
+  app/metricas.py   eventos de uso sin datos personales; app/kpis.py calcula los 16 KPI con su meta
   app/orquestador.py
   app/routers/api.py
-  data/reglas/      ag2021 a ag2025 (vigentes), ag2026 (borrador)
+  data/reglas/      ag2021 a ag2026 (vigentes; en 2026 los valores aún sin publicar van marcados como provisionales)
   data/uvt.json     UVT de cada año (para la sanción según el año en que se presenta)
-  data/agentes.json modelos y temperatura por agente
+  data/agentes.json modelos y temperatura por agente (agentes_pago.json: perfil de pago; precios.json: USD por millón de tokens)
   data/conocimiento base de conocimiento del Asistente
   data/demo/        exógena y certificados ficticios (220 y banco) para probar
-  tests/            187 pruebas (motor por año, formulario 210 casilla por casilla, agentes, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada, cuentas y cupo)
-  scripts/          generadores de la exógena y los certificados demo y de las reglas 2021-2024
+  tests/            226 pruebas (motor por año, exterior, pérdidas y comparación patrimonial, formulario 210 casilla por casilla, agentes, OCR, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada, cuentas, cupo, almacén, métricas y KPI)
+  scripts/          generadores de la exógena y los certificados demo y de las reglas 2021-2024; carga.py: prueba de carga y costo
+docs/carga/         resultados de la prueba de carga del pico de temporada
 frontend/           React + Vite + TypeScript, animaciones con Motion
-extension/          extensión de Chrome (Manifest V3): llena el 210 en MUISCA y trae la exógena; pruebas/ contra páginas que imitan a MUISCA
-Dockerfile          construye el front y lo sirve desde FastAPI
+extension/          extensión de Chrome (Manifest V3): llena el 210 en MUISCA y trae la exógena; pruebas/ contra páginas que imitan a MUISCA; tienda/ ficha y empaquetado para Chrome Web Store
+Dockerfile          construye el front, corre las pruebas (si fallan, no hay imagen) y lo sirve desde FastAPI con Tesseract para el OCR
 render.yaml         despliegue gratuito en Render
 ```
 
@@ -125,7 +132,7 @@ npm install
 npm run dev        # http://localhost:5173, redirige /api al backend (DF_API=http://127.0.0.1:8001 si usas otro puerto)
 ```
 
-Pruebas: `cd backend && pytest`. Para regenerar la exógena ficticia: `python scripts/generar_exogena_demo.py`.
+Pruebas: `cd backend && pytest` (el OCR necesita `tesseract-ocr` y `tesseract-ocr-spa`; sin ellos, esas pruebas se saltan). Punta a punta: `cd frontend && npm run build && npx playwright test`. Extensión: `node extension/pruebas/probar.mjs`. Carga y costo: `cd backend && python scripts/carga.py` (ver [docs/carga](docs/carga/README.md)). Para regenerar la exógena ficticia: `python scripts/generar_exogena_demo.py`.
 
 ## Desplegar gratis (Render + OpenRouter)
 
@@ -162,19 +169,25 @@ Límites a tener en cuenta:
 - **OpenRouter gratis** permite 20 solicitudes por minuto y 50 al día sin créditos (1.000 al día si se compran 10 USD una vez). Cada análisis usa de 1 a 3 llamadas y **cada mensaje del chat usa una**. Cuando se acaba el cupo, el chat sigue respondiendo con reglas y la base de conocimiento.
 - Modelos por defecto (revisados el 1 de noviembre de 2026): `nvidia/nemotron-3-ultra-550b-a55b:free`, `nvidia/nemotron-3.5-lightning:free` y `nvidia/nemotron-3.5-super-vl:free`, con `openrouter/free` de respaldo. Gemma 4 devolvía 429 de su proveedor, Inkling solo funciona con herramientas de agente y Nemotron 3 Super dejó de ser gratis.
 - Casi todos los modelos gratis razonan antes de responder y ese razonamiento gasta tokens. Por eso cada agente pide razonamiento corto y oculto (`"razonamiento": "low"` en `agentes.json`); si un proveedor no acepta el parámetro, se reintenta sin él.
-- Los modelos `:free` cambian seguido. En *Reglas y agentes* → *Agentes* → *Consultar OpenRouter* ves los disponibles hoy y los reemplazas. `openrouter/free` funciona como último respaldo.
-- Lo que se edite desde la pantalla de configuración dura hasta que el servicio se reinicie. Para dejarlo fijo, descarga el JSON y súbelo al repositorio.
+- Los modelos `:free` cambian seguido. En *Configuración* → *Agentes* → *Consultar OpenRouter* ves los disponibles hoy y los reemplazas. `openrouter/free` funciona como último respaldo.
+- Lo que se edite desde la pantalla de configuración queda guardado si está `SUPABASE_SERVICE_ROLE_KEY` (tablas `df_config`, `df_config_historial` y `df_metricas` de `supabase/esquema.sql`); sin ella, dura hasta que el servicio se reinicie.
+
+### Operación: métricas, KPI y modelos de pago
+
+- *Configuración* → *Métricas y KPI* muestra los 16 KPI con su meta, su valor, el tamaño de la muestra y su criterio de aceptación (Dado/Cuando/Entonces), y deja descargar los eventos en CSV. Los KPI del piloto (exactitud frente al contador, errores críticos sin alerta y SUS) se registran ahí a mano.
+- Se entra con `ADMIN_TOKEN` o iniciando sesión con un correo de `ADMIN_EMAILS`; cada cambio queda con su autor.
+- Para el pico de temporada: `PERFIL_MODELOS=pago` y créditos en OpenRouter. El cupo sube solo a 40 llamadas por hora por persona y 3.000 al día (`IA_POR_HORA`, `IA_TOPE_DIARIO` para cambiarlo). La prueba de carga mide USD 0,07 a 0,09 por declaración y ningún rechazo con 95 declaraciones a la vez.
 
 ## Alcance y supuestos
 
 - Personas naturales **residentes**, no obligadas a llevar contabilidad.
-- No cubre: rentas del exterior, régimen SIMPLE, descuento por donaciones, renta presuntiva (0 % desde 2021) ni el cálculo de renta por comparación patrimonial (el Auditor solo la advierte).
-- Años 2021 y 2022 usan las reglas anteriores a la Ley 2277 (límite de 5.040 UVT, renta exenta de 2.880 UVT, dividendos con tabla propia, ganancias ocasionales al 10 %). Los vencimientos de los años 2021 a 2024 se generaron con la regla de cada decreto de calendario (el método reproduce el calendario oficial 2026); conviene revisarlos contra el calendario publicado.
+- No cubre: régimen SIMPLE (se declara en el formulario 260, no en el 210), renta presuntiva (0 % desde 2021), el aporte voluntario del art. 244-1, residentes con beneficios de convenios para evitar la doble imposición ni la presunción de primera declaración del art. 238 (solo se advierte).
+- Años 2021 y 2022 usan las reglas anteriores a la Ley 2277 (límite de 5.040 UVT, renta exenta de 2.880 UVT, dividendos con tabla propia, ganancias ocasionales al 10 %). Los vencimientos de 2021 a 2025 se generaron con la regla de cada decreto de calendario y se verificaron contra los calendarios publicados; los de 2026 (que vencen en 2027) siguen la regla permanente del Decreto 2229 de 2023 y deben confirmarse cuando salga el calendario 2027.
 - La sanción se estima con la reducción del art. 640 si el usuario indica que no ha sido sancionado en los últimos dos años; no incluye intereses de mora.
 - Los renglones R29, R30, R32 y R132 que se mencionan vienen de la columna *Uso declaración sugerida* de la propia exógena.
-- La DIAN no recibe archivos de terceros para el 210: se diligencia en su formulario virtual en MUISCA (versión para expertos) y se firma ahí. La vista casilla por casilla es para copiar esos valores; no es un documento oficial. No cubre casillas de rentas del exterior, ECE, compensaciones de pérdidas, rentas gravables por comparación patrimonial (el Auditor la advierte) ni el aporte voluntario del art. 244-1.
-- Los certificados se leen con reglas sobre su texto: funcionan con los PDF que descargan las entidades (con texto), no con fotos ni escaneos. Los formatos de cada banco varían; lo que no se reconoce con seguridad se pregunta antes de usarlo. Los certificados de ejemplo son ficticios y se generan con `scripts/demo_certificados.py`.
+- La DIAN no recibe archivos de terceros para el 210: se diligencia en su formulario virtual en MUISCA (versión para expertos) y se firma ahí. La vista casilla por casilla es para copiar esos valores; no es un documento oficial. Incluye las casillas de rentas del exterior, ECE, pérdidas y compensaciones, y renta por comparación patrimonial.
+- Los certificados se leen con reglas sobre su texto. Los PDF con texto (los que descargan las entidades) son la vía exacta; las fotos y escaneos pasan por OCR y todo lo que sale de ahí se confirma antes de usarse. Los formatos de cada banco varían; lo que no se reconoce con seguridad se pregunta antes de usarlo. Los certificados de ejemplo son ficticios y se generan con `scripts/demo_certificados.py`.
 
 ## Fuentes normativas
 
-Estatuto Tributario (arts. 119, 206, 241, 242, 254-1, 257, 258, 259, 307, 311-1, 314, 317, 331, 336, 387, 639-641, 807); Ley 2277 de 2022; Ley 2380 de 2024 (donaciones de alimentos); Resolución DIAN 000044 de 2024 (formulario 210 para el año gravable 2023 y siguientes) y Resolución 000120 de 2024 (instructivo), compiladas en la Resolución Única 000227 de 2025; resoluciones DIAN de UVT de cada año (2021: $36.308; 2022: $38.004; 2023: $42.412; 2024: $47.065; 2025: $49.799); Resolución DIAN 000238 de 2025 (UVT 2026: $52.374); Decreto 0898 de 2026 (componente inflacionario AG 2025: 55,43 %); Decreto 2229 de 2023 (calendario tributario); calendario 2026 para personas naturales.
+Estatuto Tributario (arts. 119, 147, 206, 236-239, 241, 242, 254, 254-1, 257, 258, 259, 307, 311-1, 314, 317, 330, 331, 336, 387, 639-641, 807, 882-893); Ley 2277 de 2022; Ley 2380 de 2024 (donaciones de alimentos); Resolución DIAN 000044 de 2024 (formulario 210 para el año gravable 2023 y siguientes) y Resolución 000120 de 2024 (instructivo), compiladas en la Resolución Única 000227 de 2025; resoluciones DIAN de UVT de cada año (2021: $36.308; 2022: $38.004; 2023: $42.412; 2024: $47.065; 2025: $49.799); Resolución DIAN 000238 de 2025 (UVT 2026: $52.374); Decreto 0898 de 2026 (componente inflacionario AG 2025: 55,43 %); Decreto 2229 de 2023 (calendario tributario permanente); DUR 1625 de 2016, art. 1.2.1.19.2 (comparación patrimonial); calendario 2026 para personas naturales; Ley 1581 de 2012 y Decreto 1377 de 2013 (datos personales).

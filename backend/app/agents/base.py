@@ -99,7 +99,8 @@ class FilaExogena(BaseModel):
 
 
 class DocumentoLeido(BaseModel):
-    formato: Literal["xlsx", "pdf"]
+    formato: Literal["xlsx", "pdf", "imagen"]
+    ocr: bool = False  # el texto salió de una foto o un escaneo: cada cifra se confirma
     titulo: str = ""
     anio: int | None = None
     identificacion: str | None = None
@@ -124,6 +125,7 @@ class DocumentoCargado(BaseModel):
     nit: str | None = None
     anio: int | None = None
     cifras: int = 0
+    ocr: bool = False
     resumen: str = ""
     pistas: list[str] = []  # lo que el documento deja ver sin ser una cifra (p. ej. "dependiente")
 

@@ -1,11 +1,13 @@
 """DeclaraFácil AI — API y sitio web en un solo servicio."""
 
 import logging
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app import cuentas
+from app import cuentas, metricas
 from app.config import settings
 from app.llm import cupo
 from app.routers import api
@@ -32,7 +34,17 @@ async def identificar(request: Request, call_next):  # noqa: ANN001, ANN201
     cupo.quien.set(f"usuario:{usuario}" if usuario else ip)
     cupo.sin_ia.set(request.headers.get("x-sin-ia") == "1")
     cupo.limitado.set(False)
-    return await call_next(request)
+    metricas.fijar_sesion(request.headers.get("x-sesion"))
+    t0 = time.perf_counter()
+    try:
+        respuesta = await call_next(request)
+    except Exception:  # noqa: BLE001 - se cuenta como error 5xx y se responde sin detalles internos
+        logging.getLogger(__name__).exception("Error no controlado en %s", request.url.path)
+        respuesta = JSONResponse({"detail": "Error interno"}, status_code=500)
+    ruta = getattr(request.scope.get("route"), "path", None)
+    if request.url.path.startswith("/api/") and request.url.path != "/api/salud" and ruta:
+        metricas.registrar("http", ruta=ruta, estado=respuesta.status_code, ms=(time.perf_counter() - t0) * 1000)
+    return respuesta
 
 
 @app.get("/api/salud")

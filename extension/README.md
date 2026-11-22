@@ -13,6 +13,10 @@ Une DeclaraFácil con MUISCA usando la sesión que la persona ya abrió en su na
 2. Abre la página de extensiones (Chrome: `chrome://extensions`; Opera u Opera GX: `opera://extensions`; Edge: `edge://extensions`), activa **Modo de desarrollador** y toca **Cargar descomprimida** («Load unpacked»).
 3. Elige la carpeta `extension`. Fija el ícono de DeclaraFácil en la barra.
 
+## Publicarla en Chrome Web Store
+
+Todo está listo en `tienda/`: `python extension/tienda/empaquetar.py --tienda` arma el .zip sin pruebas ni direcciones de desarrollo, y `tienda/ficha.md` trae la descripción, la justificación de cada permiso, las prácticas de privacidad y las imágenes (`tienda/capturas/`). Falta solo el paso humano: la cuenta de desarrollador (USD 5, una vez), subir el .zip y enviarlo a revisión.
+
 ## Cómo se usa
 
 **Llenar el 210**

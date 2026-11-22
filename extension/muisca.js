@@ -162,7 +162,7 @@
       nodos.push(
         distintas.length
           ? P.el("p", "mal", "Totales que MUISCA calculó distinto: " + distintas.map((c) => `${c.n} (MUISCA ${pesos(c.muisca)}, borrador ${pesos(c.borrador)})`).join("; ") + ".")
-          : P.el("p", "ok", `Los ${res.calculadas.length} totales que calcula MUISCA cuadran con tu borrador.`),
+          : P.el("p", "ok", res.calculadas.length === 1 ? "El total que calcula MUISCA cuadra con tu borrador." : `Los ${res.calculadas.length} totales que calcula MUISCA cuadran con tu borrador.`),
       );
     }
     if (res.noEncontradas.length) {

@@ -71,11 +71,12 @@ def _uvt(n: float) -> str:
 class _Calculo:
     """Una liquidación completa para una opción de independiente dada."""
 
-    def __init__(self, d: DatosDeclaracion, r: dict[str, Any], opcion_ind: str):
+    def __init__(self, d: DatosDeclaracion, r: dict[str, Any], opcion_ind: str, adicional: float = 0.0):
         self.d = d
         self.r = r
         self.uvt = float(r["uvt"])
         self.opcion_ind = opcion_ind
+        self.adicional = adicional  # rentas gravables (casilla 96): la renta por comparación patrimonial
         self.secciones: list[Seccion] = []
         self.alertas: list[Alerta] = []
         self.valores: dict[str, Any] = {}  # cifras intermedias para el formulario 210
@@ -87,8 +88,11 @@ class _Calculo:
     def cedula_general(self) -> dict[str, float]:
         d, cg = self.d, self.r["cedula_general"]
         lab, ind, cap, nl, ded = d.laboral, d.independiente, d.capital, d.no_laborales, d.deducciones
+        ex, per = d.exterior, d.perdidas
+        con_costos = self.opcion_ind == "costos"
 
-        ingresos_lab = lab.salarios_y_pagos_laborales + lab.cesantias_e_intereses
+        # Las rentas del exterior van en la misma subcédula que las del país (residentes: renta mundial, art. 9 ET)
+        ingresos_lab = lab.salarios_y_pagos_laborales + lab.cesantias_e_intereses + ex.salarios
         vol_rais = min(
             lab.aportes_voluntarios_rais,
             ingresos_lab * cg["aportes_voluntarios_rais_pct"],
@@ -97,20 +101,32 @@ class _Calculo:
         incr_lab = lab.aportes_obligatorios_pension + lab.aportes_obligatorios_salud + vol_rais
         neto_lab = max(ingresos_lab - incr_lab, 0)
 
-        ingresos_ind = ind.honorarios_y_servicios
+        ingresos_ind = ind.honorarios_y_servicios + ex.honorarios
         incr_ind = ind.aportes_obligatorios_pension + ind.aportes_obligatorios_salud
         neto_ind = max(ingresos_ind - incr_ind, 0)
-        costos_ind = min(ind.costos_gastos_procedentes, neto_ind) if self.opcion_ind == "costos" else 0
+        # Los costos se declaran completos: si pasan de los ingresos queda una pérdida (casillas 55, 71 y 88)
+        costos_ind_total = ind.costos_gastos_procedentes if con_costos else 0.0
+        costos_ind = min(costos_ind_total, neto_ind)
 
-        ingresos_cap = cap.rendimientos_financieros + cap.arrendamientos + cap.regalias_y_otros
+        ingresos_cap = cap.rendimientos_financieros + cap.arrendamientos + cap.regalias_y_otros + ex.rentas_capital
         incr_cap = cap.rendimientos_financieros * cg["componente_inflacionario_rendimientos_pct"]
-        costos_cap = min(cap.costos_gastos_procedentes, max(ingresos_cap - incr_cap, 0))
-        neto_cap = max(ingresos_cap - incr_cap - costos_cap, 0)
+        costos_cap_total = cap.costos_gastos_procedentes
+        costos_cap = min(costos_cap_total, max(ingresos_cap - incr_cap, 0))
+        ece_cap = ex.ece_rentas_pasivas_capital
+        neto_cap = max(ingresos_cap - incr_cap - costos_cap, 0) + ece_cap
 
-        ingresos_nl = nl.ingresos
+        ingresos_nl = nl.ingresos + ex.otras_rentas
         incr_nl = min(nl.ingresos_no_constitutivos, ingresos_nl)
-        costos_nl = min(nl.costos_gastos_procedentes, ingresos_nl - incr_nl)
-        neto_nl = max(ingresos_nl - incr_nl - costos_nl, 0)
+        costos_nl_total = nl.costos_gastos_procedentes
+        costos_nl = min(costos_nl_total, ingresos_nl - incr_nl)
+        ece_nl = ex.ece_rentas_pasivas_no_laborales
+        neto_nl = max(ingresos_nl - incr_nl - costos_nl, 0) + ece_nl
+
+        perdidas_ejercicio = {
+            "43": max(costos_ind_total - neto_ind, 0) if con_costos else 0.0,
+            "cap": max(costos_cap_total - max(ingresos_cap - incr_cap, 0), 0),
+            "nl": max(costos_nl_total - (ingresos_nl - incr_nl), 0),
+        }
 
         ingresos_total = ingresos_lab + ingresos_ind + ingresos_cap + ingresos_nl
         incr_total = incr_lab + incr_ind + incr_cap + incr_nl
@@ -118,7 +134,6 @@ class _Calculo:
 
         # Subcédulas como en el formulario 210. Los honorarios van con las rentas de trabajo
         # (casilla 32) si toman el 25 % exento, o en su propia sección (casilla 43) si restan costos.
-        con_costos = self.opcion_ind == "costos"
         rl_trab = neto_lab + (0 if con_costos else neto_ind)
         rl_43 = max(neto_ind - costos_ind, 0) if con_costos else 0.0
         renta_liquida = rl_trab + rl_43 + neto_cap + neto_nl
@@ -193,6 +208,19 @@ class _Calculo:
                 )
             )
 
+        # Proporción de lo aceptado que son rentas exentas (para la comparación patrimonial, art. 237)
+        reclamado = sum(sum(v.values()) for v in sub.values())
+        exentas_reclamadas = sum(v["afc"] + v["otras_exentas"] for v in sub.values())
+        exentas_aceptadas = aceptadas * exentas_reclamadas / reclamado if reclamado else 0.0
+
+        # Compensación de pérdidas de años anteriores: cada una contra su misma subcédula (art. 330 ET)
+        comp = {
+            "43": min(per.trabajo_no_laboral, max(rl["43"] - limitadas["43"], 0)),
+            "cap": min(per.capital, max(rl["cap"] - limitadas["cap"], 0)),
+            "nl": min(per.no_laborales, max(rl["nl"] - limitadas["nl"], 0)),
+        }
+        comp_sub = sum(comp.values())
+
         # Fuera del límite
         n_72 = 0
         if hay_trabajo and ded.dependientes > 0:
@@ -202,16 +230,34 @@ class _Calculo:
                 n_72 = min(max(ded.dependientes - 1, 0), cg["dependiente_adicional_max"])
         dep_72 = n_72 * self.u(cg["dependiente_adicional_uvt"])
         factura = min(ded.compras_factura_electronica * cg["factura_electronica_pct"], self.u(cg["factura_electronica_tope_uvt"]))
-        fuera = min(dep_72 + factura, max(renta_liquida - aceptadas, 0))
+        fuera = min(dep_72 + factura, max(renta_liquida - comp_sub - aceptadas, 0))
 
-        rlg = max(renta_liquida - aceptadas - fuera, 0)
+        rlo = max(renta_liquida - comp_sub - aceptadas - fuera, 0)
+        comp_2018 = min(per.anios_2018_y_anteriores, rlo)  # pérdidas de 2018 y anteriores (casilla 94)
+        rlg = max(rlo - comp_2018 + self.adicional, 0)
+
+        for k, nombre in (("43", "rentas de trabajo sin relación laboral"), ("cap", "rentas de capital"), ("nl", "rentas no laborales")):
+            if perdidas_ejercicio[k] > 1000:
+                self.alertas.append(Alerta(nivel="info", titulo=f"Pérdida en {nombre}",
+                                           detalle=f"Tus costos superan tus ingresos de {nombre} en {cop(perdidas_ejercicio[k])}. Esa pérdida no se resta de otras rentas, "
+                                                   "pero puedes compensarla contra la misma cédula en los próximos 12 años (arts. 147 y 330 ET). Guarda esta declaración como soporte."))
+        compensado = comp_sub + comp_2018
+        pedido = per.trabajo_no_laboral + per.capital + per.no_laborales + per.anios_2018_y_anteriores
+        if pedido > compensado + 1000:
+            self.alertas.append(Alerta(nivel="info", titulo="Pérdidas que quedan para otros años",
+                                       detalle=f"De {cop(pedido)} en pérdidas por compensar, este año alcanzas a usar {cop(compensado)}: cada pérdida solo se resta de "
+                                               "la renta de su misma subcédula. El resto sigue disponible dentro de los 12 años."))
 
         # Lo que necesita el formulario 210, casilla por casilla
         self.valores["cg"] = {
             "trab": {"ingresos": ingresos_lab + (0 if con_costos else ingresos_ind), "incr": incr_lab + (0 if con_costos else incr_ind), "rl": rl_trab},
-            "43": {"ingresos": ingresos_ind if con_costos else 0.0, "incr": incr_ind if con_costos else 0.0, "costos": costos_ind, "rl": rl_43},
-            "cap": {"ingresos": ingresos_cap, "incr": incr_cap, "costos": costos_cap, "rl": neto_cap},
-            "nl": {"ingresos": ingresos_nl, "incr": incr_nl, "costos": costos_nl, "rl": neto_nl},
+            "43": {"ingresos": ingresos_ind if con_costos else 0.0, "incr": incr_ind if con_costos else 0.0, "costos": costos_ind_total, "rl": rl_43},
+            "cap": {"ingresos": ingresos_cap, "incr": incr_cap, "costos": costos_cap_total, "rl": neto_cap, "ece": ece_cap},
+            "nl": {"ingresos": ingresos_nl, "incr": incr_nl, "costos": costos_nl_total, "rl": neto_nl, "ece": ece_nl},
+            "comp": comp,
+            "comp_2018": comp_2018,
+            "rentas_gravables": self.adicional,
+            "exentas_aceptadas": exentas_aceptadas,
             "sub": sub,
             "limitadas": limitadas,
             "factura": factura,
@@ -223,17 +269,19 @@ class _Calculo:
         }
 
         lineas = [
-            Linea(clave="ing_lab", concepto="Ingresos por rentas de trabajo (salarios y cesantías)", valor=ingresos_lab, norma="Art. 103 ET", campos=["laboral.salarios_y_pagos_laborales", "laboral.cesantias_e_intereses"]),
+            Linea(clave="ing_lab", concepto="Ingresos por rentas de trabajo (salarios y cesantías)", valor=ingresos_lab, norma="Art. 103 ET", campos=["laboral.salarios_y_pagos_laborales", "laboral.cesantias_e_intereses", "exterior.salarios"]),
             Linea(clave="incr_lab", concepto="Aportes obligatorios a pensión y salud (no constituyen renta)", valor=incr_lab, norma="Arts. 55 y 56 ET", campos=["laboral.aportes_obligatorios_pension", "laboral.aportes_obligatorios_salud", "laboral.aportes_voluntarios_rais"]),
-            Linea(clave="ing_ind", concepto="Ingresos por honorarios y servicios (independiente)", valor=ingresos_ind, norma="Art. 335 ET", campos=["independiente.honorarios_y_servicios"]),
+            Linea(clave="ing_ind", concepto="Ingresos por honorarios y servicios (independiente)", valor=ingresos_ind, norma="Art. 335 ET", campos=["independiente.honorarios_y_servicios", "exterior.honorarios"]),
             Linea(clave="incr_ind", concepto="Aportes a seguridad social como independiente", valor=incr_ind, campos=["independiente.aportes_obligatorios_pension", "independiente.aportes_obligatorios_salud"]),
             Linea(clave="costos_ind", concepto="Costos y gastos del independiente", valor=costos_ind, norma="Num. 4 art. 336 ET", campos=["independiente.costos_gastos_procedentes"]),
-            Linea(clave="ing_cap", concepto="Ingresos por rentas de capital (intereses, arriendos)", valor=ingresos_cap, norma="Art. 338 ET", campos=["capital.rendimientos_financieros", "capital.arrendamientos", "capital.regalias_y_otros"]),
+            Linea(clave="ing_cap", concepto="Ingresos por rentas de capital (intereses, arriendos)", valor=ingresos_cap, norma="Art. 338 ET", campos=["capital.rendimientos_financieros", "capital.arrendamientos", "capital.regalias_y_otros", "exterior.rentas_capital"]),
             Linea(clave="incr_cap", concepto="Componente inflacionario de los rendimientos (no constituye renta)", valor=incr_cap, norma="Art. 38 ET y decreto anual", campos=["capital.rendimientos_financieros"]),
             Linea(clave="costos_cap", concepto="Costos y gastos de rentas de capital", valor=costos_cap, campos=["capital.costos_gastos_procedentes"]),
-            Linea(clave="ing_nl", concepto="Ingresos por rentas no laborales", valor=ingresos_nl, norma="Art. 340 ET", campos=["no_laborales.ingresos"]),
+            Linea(clave="ing_nl", concepto="Ingresos por rentas no laborales", valor=ingresos_nl, norma="Art. 340 ET", campos=["no_laborales.ingresos", "exterior.otras_rentas"]),
             Linea(clave="incr_nl", concepto="Ingresos no constitutivos de rentas no laborales", valor=incr_nl, campos=["no_laborales.ingresos_no_constitutivos"]),
             Linea(clave="costos_nl", concepto="Costos y gastos de rentas no laborales", valor=costos_nl, campos=["no_laborales.costos_gastos_procedentes"]),
+            Linea(clave="ece", concepto="Rentas pasivas de entidades controladas del exterior (ECE)", valor=ece_cap + ece_nl, norma="Arts. 882 a 893 ET",
+                  campos=["exterior.ece_rentas_pasivas_capital", "exterior.ece_rentas_pasivas_no_laborales"]),
             Linea(clave="renta_liquida_cg", concepto="Renta líquida de la cédula general", valor=renta_liquida),
             Linea(clave="dep_387", concepto="Deducción por dependiente (10 % de los ingresos de trabajo)", valor=dep_387, norma="Art. 387 ET", campos=["deducciones.dependientes"]),
             Linea(clave="prepagada", concepto="Medicina prepagada", valor=prepagada, norma="Art. 387 ET", campos=["deducciones.medicina_prepagada"]),
@@ -247,6 +295,10 @@ class _Calculo:
             Linea(clave="aceptadas", concepto="Rentas exentas y deducciones que sí se restan", valor=aceptadas, norma="Art. 336 ET"),
             Linea(clave="dep_72", concepto=f"Deducción adicional por {n_72} dependiente(s) (72 UVT c/u)", valor=dep_72, norma="Num. 3 art. 336 ET", campos=["deducciones.dependientes"]),
             Linea(clave="factura_1", concepto="1 % de compras con factura electrónica (máx. 240 UVT)", valor=factura, norma="Num. 5 art. 336 ET", campos=["deducciones.compras_factura_electronica"]),
+            Linea(clave="comp_perdidas", concepto="Compensación de pérdidas de años anteriores", valor=comp_sub + comp_2018, norma="Arts. 147 y 330 ET",
+                  campos=["perdidas.trabajo_no_laboral", "perdidas.capital", "perdidas.no_laborales", "perdidas.anios_2018_y_anteriores"]),
+            Linea(clave="renta_comparacion", concepto="Renta gravable por comparación patrimonial", valor=self.adicional, norma="Arts. 236 a 239 ET",
+                  campos=["comparacion.patrimonio_liquido_anterior", "patrimonio.bienes", "patrimonio.deudas"]),
             Linea(clave="rlg_cg", concepto="Renta líquida gravable de la cédula general", valor=rlg, norma="Art. 336 ET"),
         ]
         self.secciones.append(
@@ -260,35 +312,57 @@ class _Calculo:
 
     # ---------- Pensiones ----------
     def cedula_pensiones(self) -> dict[str, float]:
-        p = self.d.pensiones
-        if p.pensiones_nacionales <= 0:
+        p, ext = self.d.pensiones, self.d.exterior.pensiones
+        if p.pensiones_nacionales + ext <= 0:
             return {"ingresos": 0, "rlg": 0}
-        neto = max(p.pensiones_nacionales - p.aportes_salud, 0)
-        exenta = min(neto, self.u(self.r["cedula_pensiones"]["renta_exenta_mensual_uvt"] * 12))
+        rp = self.r["cedula_pensiones"]
+        neto = max(p.pensiones_nacionales + ext - p.aportes_salud, 0)
+        # Desde la Ley 2277 (AG 2023) las pensiones del exterior tienen la misma exención (par. 3 art. 206 ET)
+        exterior_exenta = rp.get("pensiones_exterior_exentas", self.d.anio_gravable >= 2023)
+        base_exenta = neto if exterior_exenta else max(p.pensiones_nacionales - p.aportes_salud, 0)
+        exenta = min(base_exenta, self.u(rp["renta_exenta_mensual_uvt"] * 12))
         rlg = neto - exenta
-        self.valores["pen"] = {"ingresos": p.pensiones_nacionales, "incr": p.aportes_salud, "rl": neto, "exenta": exenta, "rlg": rlg}
+        if ext and not exterior_exenta:
+            self.alertas.append(Alerta(nivel="info", titulo="Pensión del exterior sin exención",
+                                       detalle=f"Para el año {self.d.anio_gravable} la exención de pensiones no cubría las del exterior (salvo convenios). Revisa con un contador si hay un convenio con ese país."))
+        self.valores["pen"] = {"ingresos": p.pensiones_nacionales + ext, "incr": p.aportes_salud, "rl": neto, "exenta": exenta, "rlg": rlg}
         self.secciones.append(
             Seccion(
                 id="cedula_pensiones",
                 titulo="Cédula de pensiones",
                 lineas=[
-                    Linea(clave="ing_pen", concepto="Ingresos por pensiones", valor=p.pensiones_nacionales, norma="Art. 337 ET", campos=["pensiones.pensiones_nacionales"]),
+                    Linea(clave="ing_pen", concepto="Ingresos por pensiones", valor=p.pensiones_nacionales + ext, norma="Art. 337 ET", campos=["pensiones.pensiones_nacionales", "exterior.pensiones"]),
                     Linea(clave="incr_pen", concepto="Aportes a salud", valor=p.aportes_salud, campos=["pensiones.aportes_salud"]),
                     Linea(clave="exenta_pen", concepto="Renta exenta (hasta 1.000 UVT mensuales)", valor=exenta, norma="Num. 5 art. 206 ET"),
                     Linea(clave="rlg_pen", concepto="Renta líquida gravable de pensiones", valor=rlg),
                 ],
             )
         )
-        return {"ingresos": p.pensiones_nacionales, "rlg": rlg}
+        return {"ingresos": p.pensiones_nacionales + ext, "rlg": rlg}
 
     # ---------- Dividendos ----------
     def cedula_dividendos(self) -> dict[str, float]:
         dv, rd = self.d.dividendos, self.r["dividendos"]
         sub1, sub2 = dv.no_gravados_subcedula1, dv.gravados_subcedula2
+        # Dividendos del exterior: van aparte (casilla 109) con la tarifa del art. 240 (casilla 120)
+        ex = self.d.exterior
+        div_ext = ex.dividendos
+        ext_exentos = min(ex.dividendos_exentos, div_ext)
+        imp_ext = (div_ext - ext_exentos) * rd.get("tarifa_subcedula_gravada", 0.35)
+        self.valores["div_ext"] = {"ingresos": div_ext, "exentos": ext_exentos, "impuesto": imp_ext, "neto": div_ext - ext_exentos}
+        lineas_ext = [
+            Linea(clave="div_ext", concepto="Dividendos recibidos del exterior", valor=div_ext, norma="Arts. 242 y 245 ET", campos=["exterior.dividendos"]),
+            Linea(clave="div_ext_exentos", concepto="Parte exenta de los dividendos del exterior", valor=ext_exentos, campos=["exterior.dividendos_exentos"]),
+            Linea(clave="imp_div_ext", concepto=f"Impuesto sobre dividendos del exterior ({rd.get('tarifa_subcedula_gravada', 0.35):.0%})", valor=imp_ext, norma="Art. 240 ET"),
+        ] if div_ext else []
         if sub1 + sub2 <= 0:
-            return {"ingresos": 0, "base_241": 0, "impuesto_sub2": 0, "descuento": 0}
+            if div_ext:
+                self.secciones.append(Seccion(id="cedula_dividendos", titulo="Cédula de dividendos y participaciones", lineas=lineas_ext))
+            return {"ingresos": div_ext, "base_241": 0, "impuesto_sub2": 0, "descuento": 0, "impuesto_ext": imp_ext}
         if rd.get("regimen") == "tabla_propia":
-            return self._dividendos_tabla_propia(sub1, sub2, rd)
+            out = self._dividendos_tabla_propia(sub1, sub2, rd)
+            self.secciones[-1].lineas += lineas_ext
+            return {**out, "ingresos": out["ingresos"] + div_ext, "impuesto_ext": imp_ext}
         impuesto_sub2 = sub2 * rd["tarifa_subcedula_gravada"]
         base_241 = sub1 + (sub2 - impuesto_sub2)
         descuento = max(base_241 / self.uvt - rd["descuento_art254_1_umbral_uvt"], 0) * rd["descuento_art254_1_pct"] * self.uvt
@@ -303,10 +377,11 @@ class _Calculo:
                     Linea(clave="imp_sub2", concepto="Impuesto del 35 % sobre dividendos gravados", valor=impuesto_sub2, norma="Art. 240 ET"),
                     Linea(clave="div_base", concepto="Dividendos que se suman a la tabla del art. 241", valor=base_241, norma="Art. 331 ET"),
                     Linea(clave="desc_div", concepto="Descuento por dividendos (19 % sobre lo que pase de 1.090 UVT)", valor=descuento, norma="Art. 254-1 ET"),
+                    *lineas_ext,
                 ],
             )
         )
-        return {"ingresos": sub1 + sub2, "base_241": base_241, "impuesto_sub2": impuesto_sub2, "descuento": descuento}
+        return {"ingresos": sub1 + sub2 + div_ext, "base_241": base_241, "impuesto_sub2": impuesto_sub2, "descuento": descuento, "impuesto_ext": imp_ext}
 
     def _dividendos_tabla_propia(self, sub1: float, sub2: float, rd: dict[str, Any]) -> dict[str, float]:
         """Antes de la Ley 2277 (AG 2021-2022): los dividendos tributan aparte con su propia tabla."""
@@ -344,14 +419,18 @@ class _Calculo:
             ("Herencia o legado recibido como heredero", g.herencia_porcion_heredero, min(g.herencia_porcion_heredero, self.u(rg["exencion_herencia_porcion_heredero_uvt"])), "Num. 3 art. 307 ET"),
             ("Donaciones recibidas", g.donaciones_recibidas, min(g.donaciones_recibidas * rg["exencion_donaciones_pct"], self.u(rg["exencion_donaciones_tope_uvt"])), "Num. 4 art. 307 ET"),
             ("Indemnizaciones de seguros de vida", g.seguros_vida, min(g.seguros_vida, self.u(rg["exencion_seguros_vida_uvt"])), "Art. 303-1 ET"),
+            ("Ganancias ocasionales del exterior", self.d.exterior.ganancias_ocasionales, 0, "Arts. 299 y 300 ET"),
         ]
         bruto = sum(p[1] for p in partes) + g.loterias_premios
         if bruto <= 0:
-            return {"ingresos": 0, "impuesto": 0}
+            return {"ingresos": 0, "impuesto": 0, "desc_ext": 0}
         exentas = sum(p[2] for p in partes)
         gravable_general = sum(p[1] - p[2] for p in partes)
         impuesto = gravable_general * rg["tarifa_general"] + g.loterias_premios * rg["tarifa_loterias"]
-        self.valores["go"] = {"ingresos": bruto, "exentas": exentas, "gravables": gravable_general + g.loterias_premios, "impuesto": impuesto}
+        # Descuento por impuestos pagados en el exterior sobre esas ganancias (art. 254), hasta el impuesto colombiano que les toca
+        ex = self.d.exterior
+        desc_ext = min(ex.impuesto_pagado_go, ex.ganancias_ocasionales * rg["tarifa_general"], impuesto)
+        self.valores["go"] = {"ingresos": bruto, "exentas": exentas, "gravables": gravable_general + g.loterias_premios, "impuesto": impuesto, "desc_ext": desc_ext}
         lineas = [Linea(clave=f"go_{i}", concepto=p[0], valor=p[1], norma=p[3]) for i, p in enumerate(partes) if p[1]]
         if g.loterias_premios:
             lineas.append(Linea(clave="go_loterias", concepto="Loterías, rifas y premios (tarifa 20 %)", valor=g.loterias_premios, norma="Art. 317 ET"))
@@ -360,6 +439,9 @@ class _Calculo:
             Linea(clave="go_gravables", concepto="Ganancias ocasionales gravables", valor=gravable_general + g.loterias_premios),
             Linea(clave="go_impuesto", concepto="Impuesto de ganancias ocasionales", valor=impuesto, norma="Arts. 314 y 317 ET"),
         ]
+        if desc_ext:
+            lineas.append(Linea(clave="go_desc_ext", concepto="Descuento por impuestos pagados en el exterior por ganancias ocasionales", valor=desc_ext,
+                                norma="Art. 254 ET", campos=["exterior.impuesto_pagado_go"]))
         self.secciones.append(Seccion(id="ganancias_ocasionales", titulo="Ganancias ocasionales", lineas=lineas))
         if g.utilidad_venta_casa_habitacion and not g.cumple_requisitos_exencion_casa:
             self.alertas.append(
@@ -369,7 +451,7 @@ class _Calculo:
                     detalle="Para que las primeras 5.000 UVT de la utilidad queden exentas, el dinero debe ir a una cuenta AFC, a otra vivienda o al crédito hipotecario.",
                 )
             )
-        return {"ingresos": bruto, "impuesto": impuesto}
+        return {"ingresos": bruto, "impuesto": impuesto, "desc_ext": desc_ext}
 
     # ---------- Ejecución ----------
     def ejecutar(self) -> dict[str, Any]:
@@ -380,22 +462,35 @@ class _Calculo:
 
         rlg_total = cg["rlg"] + pen["rlg"] + div["base_241"]
         impuesto_241 = impuesto_tabla_241(rlg_total, self.uvt, self.r["tabla_renta_art241"])
-        impuesto_renta = impuesto_241 + div["impuesto_sub2"]
-        # Descuentos: dividendos (art. 254-1) y donaciones (arts. 257 y 258: máximo 25 % del impuesto);
-        # en total no pueden pasar del impuesto (art. 259 ET)
+        impuesto_ext = div.get("impuesto_ext", 0.0)
+        impuesto_renta = impuesto_241 + div["impuesto_sub2"] + impuesto_ext
+        # Descuentos: impuestos pagados en el exterior (art. 254), dividendos (art. 254-1) y donaciones
+        # (arts. 257 y 258: máximo 25 % del impuesto); en total no pueden pasar del impuesto (art. 259 ET)
         rdesc = self.r.get("descuentos", {})
-        dn = self.d.descuentos
+        dn, ex = self.d.descuentos, self.d.exterior
         donaciones = (dn.donaciones * rdesc.get("donaciones_pct", 0.25) + dn.donaciones_alimentos * rdesc.get("donaciones_alimentos_pct", 0.25))
         donaciones = min(donaciones, impuesto_renta * rdesc.get("limite_donaciones_pct_impuesto", 0.25))
         desc_div = min(div["descuento"], impuesto_241)
-        descuentos = min(desc_div + donaciones, impuesto_renta)
-        donaciones = max(descuentos - desc_div, 0)
+        # El descuento por impuestos del exterior no pasa del impuesto colombiano de esas mismas rentas:
+        # la parte del impuesto de la tabla que corresponde a su peso en los ingresos, más el de los dividendos del exterior
+        ext_ingresos = ex.salarios + ex.honorarios + ex.rentas_capital + ex.otras_rentas + ex.pensiones
+        ing_cg_pen = cg["ingresos"] + pen["ingresos"]
+        atribuible = impuesto_241 * (ext_ingresos / ing_cg_pen if ing_cg_pen else 0) + impuesto_ext
+        desc_ext = min(ex.impuesto_pagado_renta, atribuible)
+        if ex.impuesto_pagado_renta > desc_ext + 1000:
+            self.alertas.append(Alerta(nivel="info", titulo="Descuento por impuestos del exterior limitado",
+                                       detalle=f"Pagaste {cop(ex.impuesto_pagado_renta)} en el exterior, pero solo puedes descontar {cop(desc_ext)}: lo que te cobraría Colombia "
+                                               "por esas mismas rentas (art. 254 ET). Guarda el certificado del impuesto pagado afuera."))
+        descuentos = min(desc_ext + desc_div + donaciones, impuesto_renta)
+        desc_ext = min(desc_ext, descuentos)
+        desc_div = min(desc_div, max(descuentos - desc_ext, 0))
+        donaciones = max(descuentos - desc_div - desc_ext, 0)
         impuesto_neto = max(impuesto_renta - descuentos, 0)
         if donaciones:
             self.alertas.append(Alerta(nivel="info", titulo="Descuento por donaciones",
                                        detalle=f"Restaste {cop(donaciones)} del impuesto por tus donaciones. Necesitas el certificado de la entidad que recibió la donación."))
-        self.valores["liq"] = {"rlg_total": rlg_total, "impuesto_241": impuesto_241, "impuesto_sub2": div["impuesto_sub2"],
-                               "desc_div": desc_div, "desc_donaciones": donaciones, "impuesto_neto": impuesto_neto}
+        self.valores["liq"] = {"rlg_total": rlg_total, "impuesto_241": impuesto_241, "impuesto_sub2": div["impuesto_sub2"], "impuesto_ext": impuesto_ext,
+                               "desc_ext": desc_ext, "desc_div": desc_div, "desc_donaciones": donaciones, "impuesto_neto": impuesto_neto}
         return {
             "cg": cg,
             "pen": pen,
@@ -485,6 +580,47 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
     bruto = sum(b.valor for b in d.patrimonio.bienes)
     deudas = sum(x.valor for x in d.patrimonio.deudas)
     liquido = max(bruto - deudas, 0)
+
+    # Renta por comparación patrimonial (arts. 236 a 239 ET): si el patrimonio líquido creció más que lo que
+    # explican las rentas del año, la diferencia es renta gravable (casilla 96), salvo causas justificativas
+    cp = d.comparacion
+    rentas_justificadas = (res["rlg_total"] + calc.valores.get("div_ext", {}).get("neto", 0.0) + calc.valores["cg"]["exentas_aceptadas"]
+                           + calc.valores.get("pen", {}).get("exenta", 0.0) + res["go"]["ingresos"])
+    impuestos_pagados = cp.impuestos_pagados_en_el_anio if cp.impuestos_pagados_en_el_anio is not None else d.pagos.impuesto_neto_anio_anterior
+    justificado = rentas_justificadas - impuestos_pagados + cp.causas_justificativas
+    comparacion = None
+    if cp.patrimonio_liquido_anterior is not None:
+        incremento = liquido - cp.patrimonio_liquido_anterior
+        renta_comp = _redondear(max(incremento - justificado, 0), redondeo)
+        comparacion = (incremento, renta_comp)
+        if renta_comp > 0:
+            alertas_previas = [a for a in calc.alertas if a.titulo.startswith("Elegimos")]
+            calc = _Calculo(d, r, calc.opcion_ind, adicional=renta_comp)
+            res = calc.ejecutar()
+            calc.alertas += alertas_previas
+            calc.alertas.append(Alerta(
+                nivel="critica", titulo="Renta por comparación patrimonial",
+                detalle=f"Tu patrimonio líquido creció {cop(incremento)}, pero tus rentas del año (más exentas y ganancias ocasionales, menos impuestos pagados) "
+                        f"solo explican {cop(max(justificado, 0))}. La diferencia, {cop(renta_comp)}, se suma como renta gravable (arts. 236 y 237 ET). "
+                        "Si el aumento tiene otra causa (valorizaciones, un préstamo, ingresos no gravados, errores del año pasado), anótala como causa justificativa con sus soportes.",
+            ))
+    elif d.pagos.declaraciones_previas == 0 and liquido > max(justificado, 0) + 1000:
+        calc.alertas.append(Alerta(
+            nivel="info", titulo="Primera declaración: tu patrimonio frente a tus rentas",
+            detalle=f"Como es tu primera declaración, la DIAN puede comparar tu patrimonio líquido ({cop(liquido)}) con las rentas de este año (art. 238 ET). "
+                    "Si lo construiste en años anteriores, guarda los soportes: escrituras, extractos, herencias o préstamos.",
+        ))
+    if comparacion:
+        incremento, renta_comp = comparacion
+        calc.secciones.append(Seccion(id="comparacion_patrimonial", titulo="Comparación patrimonial", lineas=[
+            Linea(clave="pl_actual", concepto="Patrimonio líquido a 31 de diciembre", valor=liquido, campos=["patrimonio.bienes", "patrimonio.deudas"]),
+            Linea(clave="pl_anterior", concepto="Patrimonio líquido del año anterior", valor=cp.patrimonio_liquido_anterior, campos=["comparacion.patrimonio_liquido_anterior"]),
+            Linea(clave="pl_incremento", concepto="Aumento del patrimonio líquido", valor=max(incremento, 0), norma="Art. 236 ET"),
+            Linea(clave="pl_justificado", concepto="Rentas, exentas y ganancias ocasionales menos impuestos pagados", valor=max(justificado, 0), norma="Art. 237 ET",
+                  campos=["comparacion.impuestos_pagados_en_el_anio", "comparacion.causas_justificativas"]),
+            Linea(clave="pl_renta", concepto="Renta gravable por comparación patrimonial", valor=renta_comp, norma="Arts. 236 y 237 ET"),
+        ]))
+
     calc.secciones.insert(
         0,
         Seccion(
@@ -520,7 +656,7 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
     impuesto_neto = res["impuesto_neto"]
     anticipo = anticipo_de(impuesto_neto, pagos.retenciones_renta)
 
-    total_cargo = impuesto_neto + res["go"]["impuesto"]
+    total_cargo = max(impuesto_neto + res["go"]["impuesto"] - res["go"].get("desc_ext", 0.0), 0)
     saldo_sin_sancion = total_cargo + anticipo - pagos.anticipo_anio_anterior - pagos.saldo_favor_anterior - pagos.retenciones_renta
     favor_sin_sancion = max(-saldo_sin_sancion, 0)
 
@@ -550,6 +686,7 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
                     f"Tu plazo era el {venc.fecha.strftime('%d/%m/%Y')}. Con {venc.meses_retraso} mes(es) o fracción de retraso, "
                     f"la sanción estimada es de {cop(sancion)}"
                     + (" (ya reducida al 50 % por el art. 640, si no te han sancionado por lo mismo en los últimos 2 años)" if d.control.sin_sanciones_ultimos_2_anios else "")
+                    + (f", con la UVT {venc.fecha_presentacion.year} estimada porque la DIAN aún no la publica" if repo_reglas.uvt_provisional(venc.fecha_presentacion.year) else "")
                     + ". Entre más pronto declares, menor es."
                 ),
             )
@@ -567,9 +704,11 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
                 Linea(clave="rlg_total", concepto="Renta líquida gravable (general + pensiones + dividendos)", valor=res["rlg_total"], norma="Art. 331 ET"),
                 Linea(clave="impuesto_241", concepto="Impuesto según la tabla del art. 241", valor=res["impuesto_241"], norma="Art. 241 ET", nota=f"{res['rlg_total'] / uvt:,.0f} UVT".replace(",", ".")),
                 Linea(clave="impuesto_renta", concepto="Impuesto sobre la renta", valor=res["impuesto_renta"]),
-                Linea(clave="descuentos", concepto="Descuentos tributarios", valor=res["descuentos"], norma="Arts. 254-1 y 259 ET"),
+                Linea(clave="descuentos", concepto="Descuentos tributarios", valor=res["descuentos"], norma="Arts. 254, 254-1, 257, 258 y 259 ET"),
                 Linea(clave="impuesto_neto", concepto="Impuesto neto de renta", valor=impuesto_neto),
                 Linea(clave="impuesto_go", concepto="Impuesto de ganancias ocasionales", valor=res["go"]["impuesto"]),
+                Linea(clave="desc_go_ext", concepto="Menos: descuento por impuestos de ganancias ocasionales pagados en el exterior", valor=res["go"].get("desc_ext", 0.0),
+                      norma="Art. 254 ET", campos=["exterior.impuesto_pagado_go"]),
                 Linea(clave="total_cargo", concepto="Total impuesto a cargo", valor=total_cargo),
                 Linea(clave="anticipo_sig", concepto=f"Anticipo del año siguiente ({pct:.0%})", valor=anticipo, norma="Art. 807 ET", campos=["pagos.declaraciones_previas", "pagos.impuesto_neto_anio_anterior"]),
                 Linea(clave="anticipo_ant", concepto="Menos: anticipo liquidado el año anterior", valor=pagos.anticipo_anio_anterior, campos=["pagos.anticipo_anio_anterior"]),

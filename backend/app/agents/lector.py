@@ -1,13 +1,17 @@
-"""Agente Lector: convierte un archivo (Excel o PDF) en filas y texto estructurados.
+"""Agente Lector: convierte un archivo (Excel, PDF o foto) en filas y texto estructurados.
 
 - Si es el reporte de exógena, saca sus filas (informante, concepto, valor, uso sugerido).
 - Para cualquier documento guarda además el texto línea por línea y las tablas, que es lo
   que usa el Extractor con los certificados (banco, 220, vivienda, prepagada…).
+- Si el PDF no tiene texto (escaneo) o es una foto, lo lee con OCR (Tesseract, en español) y
+  marca el documento: cada cifra que salga de ahí se le confirma a la persona antes de usarla.
 Responsabilidad única: leer. No interpreta conceptos ni toca montos.
 """
 
 import io
 import re
+import shutil
+import subprocess
 import unicodedata
 from datetime import datetime
 from typing import Any
@@ -197,6 +201,91 @@ def _leer_pdf(contenido: bytes) -> DocumentoLeido:
     return doc
 
 
+MAX_PAGINAS_OCR = 4
+_IMAGEN = re.compile(r"\.(jpe?g|png|webp|tiff?|bmp)$")
+
+
+def ocr_disponible() -> bool:
+    return shutil.which("tesseract") is not None
+
+
+def _ocr(imagen) -> str:  # noqa: ANN001 - imagen de Pillow
+    """Texto de una imagen con Tesseract (español). La imagen se pasa en gris y agrandada si es pequeña."""
+    from PIL import ImageOps
+
+    img = ImageOps.exif_transpose(imagen).convert("L")
+    if img.width < 1600:
+        factor = 1600 / img.width
+        img = img.resize((int(img.width * factor), int(img.height * factor)))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    r = subprocess.run(["tesseract", "stdin", "stdout", "-l", "spa", "--psm", "6"], input=buf.getvalue(),
+                       capture_output=True, timeout=60, check=False)
+    return r.stdout.decode("utf-8", "ignore")
+
+
+_COLUMNAS = re.compile(r"saldo|intereses|rendimientos|retenci[oó]n|gmf|4x1000|gravamen|valor|pagos|aportes")
+_NUMERO = re.compile(r"(?<![\w*\"'+])\d{1,3}(?:[.,]\d{3})+(?:,\d{1,2})?(?!\d)|(?<![\w*\"'+.,])\d{1,9}(?![\d.,])")
+
+
+def _tabla_de_lineas(lineas: list[str]) -> list[list[str]]:
+    """Rearma la tabla de un certificado a partir del texto del OCR (que no trae celdas).
+
+    Busca el encabezado (saldo, intereses, retención, 4x1000…) y toma de cada fila siguiente sus
+    últimos números, uno por columna. La primera celda es el producto o concepto de la fila.
+    """
+    for i, linea in enumerate(lineas):
+        n = "".join(((_norm(ch) or ch)[:1]).lower() if ch.strip() else " " for ch in linea)  # misma longitud que la línea
+        marcas = [m.start() for m in _COLUMNAS.finditer(n)]
+        inicios = [x for j, x in enumerate(marcas) if j == 0 or x - marcas[j - 1] > 6]
+        if len(inicios) < 2 or len(re.findall(r"\d{1,3}(?:[.,]\d{3})+", linea)) >= 2:
+            continue  # un encabezado nombra columnas; no trae cifras
+        columnas = [linea[a:b].strip() for a, b in zip(inicios, inicios[1:] + [len(linea)])]
+        tabla = [[linea[: inicios[0]].strip() or "Concepto", *columnas]]
+        for fila in lineas[i + 1 :]:
+            numeros = list(_NUMERO.finditer(fila))
+            if len(numeros) < len(columnas):
+                break
+            ultimos = numeros[-len(columnas):]
+            etiqueta = re.sub(r"[*+\"'#]+\d+", "", fila[: ultimos[0].start()]).strip(" :-")
+            tabla.append([etiqueta, *[m.group(0) for m in ultimos]])
+        if len(tabla) > 1:
+            return tabla
+    return []
+
+
+def _doc_de_texto(textos: list[str], formato: str) -> DocumentoLeido:
+    doc = DocumentoLeido(formato=formato, ocr=True)  # type: ignore[arg-type]
+    filas: list[list[Any]] = []
+    for texto in textos:
+        lineas = [re.sub(r"[|]", " ", x).strip() for x in texto.splitlines() if x.strip()]
+        for linea in lineas[:15]:
+            filas.append([linea.split(":")[0] + ":" if ":" in linea else linea, linea.split(":", 1)[1].strip() if ":" in linea else None])
+        doc.lineas.extend(lineas)
+    _filas_tabulares(doc, filas)
+    doc.filas = []  # una exógena nunca se toma de una foto: se descarga en Excel
+    doc.lineas = doc.lineas[:_MAX_LINEAS]
+    if tabla := _tabla_de_lineas(doc.lineas):
+        doc.tablas.append(tabla)
+    return doc
+
+
+def _ocr_pdf(contenido: bytes) -> DocumentoLeido:
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(contenido)
+    textos = []
+    for i in range(min(len(pdf), MAX_PAGINAS_OCR)):
+        textos.append(_ocr(pdf[i].render(scale=300 / 72).to_pil()))
+    return _doc_de_texto(textos, "pdf")
+
+
+def _ocr_imagen(contenido: bytes) -> DocumentoLeido:
+    from PIL import Image
+
+    return _doc_de_texto([_ocr(Image.open(io.BytesIO(contenido)))], "imagen")
+
+
 def leer(contenido: bytes, nombre_archivo: str) -> DocumentoLeido:
     nombre = nombre_archivo.lower()
     if nombre.endswith(".xlsx") or contenido[:2] == b"PK":
@@ -206,9 +295,22 @@ def leer(contenido: bytes, nombre_archivo: str) -> DocumentoLeido:
             raise ArchivoNoSoportado(f"No pude abrir el Excel: {e}") from e
     if nombre.endswith(".pdf") or contenido[:4] == b"%PDF":
         try:
-            return _leer_pdf(contenido)
+            doc = _leer_pdf(contenido)
         except Exception as e:  # noqa: BLE001
             raise ArchivoNoSoportado(f"No pude abrir el PDF: {e}") from e
-    if re.search(r"\.(jpe?g|png|heic|webp|gif)$", nombre):
-        raise ArchivoNoSoportado("Por ahora leo PDF y Excel, no fotos. Descarga el certificado en PDF desde el portal de la entidad")
-    raise ArchivoNoSoportado("Sube tus documentos en Excel (.xlsx) o PDF")
+        if doc.filas or any(len(x) > 3 for x in doc.lineas) or not ocr_disponible():
+            return doc
+        try:
+            return _ocr_pdf(contenido)  # PDF escaneado: sin texto, se lee con OCR
+        except Exception as e:  # noqa: BLE001
+            raise ArchivoNoSoportado(f"El PDF parece escaneado y no pude leerlo con OCR: {e}") from e
+    if re.search(r"\.(heic|heif)$", nombre):
+        raise ArchivoNoSoportado("Las fotos HEIC del iPhone no se pueden leer: tómala en JPG (Ajustes › Cámara › Formatos › Más compatible) o descarga el PDF de la entidad")
+    if _IMAGEN.search(nombre) or contenido[:3] == b"\xff\xd8\xff" or contenido[:8] == b"\x89PNG\r\n\x1a\n":
+        if not ocr_disponible():
+            raise ArchivoNoSoportado("Este servidor no tiene OCR para leer fotos. Descarga el certificado en PDF desde el portal de la entidad")
+        try:
+            return _ocr_imagen(contenido)
+        except Exception as e:  # noqa: BLE001
+            raise ArchivoNoSoportado(f"No pude leer la foto: {e}") from e
+    raise ArchivoNoSoportado("Sube tus documentos en Excel (.xlsx), PDF o una foto (JPG o PNG)")

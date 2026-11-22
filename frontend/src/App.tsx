@@ -1,6 +1,7 @@
 import { MotionConfig } from "motion/react";
 import { AvisoServidor } from "./components/AvisoServidor";
 import { ControlDemo } from "./components/ControlDemo";
+import { DialogoConsentimiento } from "./components/DialogoConsentimiento";
 import { ProveedorDemo } from "./lib/demo";
 import { Encabezado } from "./components/Navegacion";
 import Noise from "./components/reactbits/Noise";
@@ -39,6 +40,7 @@ function Marco() {
       <Encabezado />
       <AvisoServidor />
       <ControlDemo />
+      <DialogoConsentimiento />
       <Paginas />
     </div>
   );

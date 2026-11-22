@@ -98,5 +98,6 @@ async def explicar(liq: Liquidacion, alertas: list[Alerta]) -> tuple[str, str | 
         return _plantilla(liq), None, False
     texto = resp.texto.strip()
     if not texto_valido(texto, _cifras_permitidas(liq)):
+        cliente.olvidar(resp)  # no se vuelve a servir desde la caché
         return _plantilla(liq), resp.modelo, False
     return texto, resp.modelo, True

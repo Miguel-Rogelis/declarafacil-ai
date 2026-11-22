@@ -234,6 +234,27 @@ const guardado = await sw.evaluate(async () => JSON.stringify(await chrome.stora
 assert.ok(!guardado.includes("3000000") && !guardado.includes("250000000"), "en el disco no quedan valores");
 paso("aprende dónde va una casilla y la usa la vez siguiente (sin guardar valores en el disco)");
 
+// Capturas para la ficha de Chrome Web Store (1280×800): CAPTURAS=extension/tienda/capturas
+if (process.env.CAPTURAS) {
+  const { mkdirSync } = await import("node:fs");
+  mkdirSync(process.env.CAPTURAS, { recursive: true });
+  const idExt = new URL(sw.url()).host;
+  const popup = await contexto.newPage();
+  await popup.setViewportSize({ width: 1280, height: 800 });
+  await popup.goto(`chrome-extension://${idExt}/popup.html`);
+  await popup.waitForTimeout(600);
+  await popup.addStyleTag({ content: `html{background:#eef1ee;min-height:100%;display:grid;place-items:center}body{box-shadow:0 18px 50px #0003;border-radius:12px;zoom:1.3}` });
+  await popup.screenshot({ path: join(process.env.CAPTURAS, "ventanita.png") });
+  await popup.close();
+  const promo = await contexto.newPage();
+  await promo.setViewportSize({ width: 440, height: 280 });
+  await promo.goto(`chrome-extension://${idExt}/tienda/promo.html`).catch(() => {});
+  if (!(await promo.title()).includes("DeclaraFácil")) await promo.goto("file://" + join(EXTENSION, "tienda", "promo.html"));
+  await promo.screenshot({ path: join(process.env.CAPTURAS, "promo-440x280.png") });
+  await promo.close();
+  console.log(`· capturas en ${process.env.CAPTURAS}`);
+}
+
 // 4) Traer la exógena: la persona inicia sesión; la extensión hace el resto.
 // (MUISCA ya está abierto en una pestaña: las pestañas que abre la extensión no pasan por context.route)
 await f210.close();

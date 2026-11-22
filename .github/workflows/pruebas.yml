@@ -28,11 +28,16 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
-      - name: Backend · dependencias
-        run: pip install -r backend/requirements-dev.txt
+      - name: Backend · dependencias (y Tesseract para las pruebas de OCR)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-spa
+          pip install -r backend/requirements-dev.txt
       - name: Backend · pruebas
         working-directory: backend
         run: python -m pytest -q
+      - name: Backend · carga y costo (10 declaraciones a la vez, latencia del modelo acelerada)
+        working-directory: backend
+        run: python scripts/carga.py --declaraciones 10 --concurrencia 10 --escala 0.05 > /dev/null
 
       - uses: actions/setup-node@v4
         with:
@@ -54,8 +59,10 @@ jobs:
         env:
           PYTHON: python
         run: npx playwright test
-      - name: Extensión de Chrome (contra páginas que imitan a MUISCA)
-        run: node extension/pruebas/probar.mjs
+      - name: Extensión de Chrome (contra páginas que imitan a MUISCA) y paquete para la tienda
+        run: |
+          node extension/pruebas/probar.mjs
+          python extension/tienda/empaquetar.py --tienda
       - name: Rastro de la prueba si falló
         if: failure()
         uses: actions/upload-artifact@v4

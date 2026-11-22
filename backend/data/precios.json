@@ -1,0 +1,7 @@
+{
+  "nota": "USD por millón de tokens (entrada y salida). Los modelos «:free» y openrouter/free cuestan 0. Precios de referencia de la Unidad 6 (sept. 2026); revísalos en openrouter.ai/models antes del piloto.",
+  "modelos": {
+    "anthropic/claude-haiku-4.5": {"entrada": 1.0, "salida": 5.0},
+    "anthropic/claude-sonnet-5": {"entrada": 2.0, "salida": 10.0}
+  }
+}

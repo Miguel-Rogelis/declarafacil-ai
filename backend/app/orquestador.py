@@ -36,13 +36,17 @@ from app.agents.base import (
     FilaInterpretada,
     Traza,
 )
+from app import metricas
 from app.agents.consejos import Consejo
 from app.tax import reglas as repo_reglas
 from app.tax.modelos import (
+    ComparacionPatrimonial,
     DatosDeclaracion,
     GananciasOcasionales,
     ItemPatrimonio,
     Liquidacion,
+    Perdidas,
+    RentasExterior,
 )
 from app.tax.motor import liquidar
 
@@ -81,6 +85,9 @@ class Respuestas(BaseModel):
     fecha_presentacion: date | None = None
     sin_sanciones_ultimos_2_anios: bool = True
     responsable_iva: bool = False
+    exterior: RentasExterior = RentasExterior()
+    perdidas: Perdidas = Perdidas()
+    comparacion: ComparacionPatrimonial = ComparacionPatrimonial()
 
 
 class SolicitudLiquidacion(BaseModel):
@@ -145,6 +152,7 @@ async def procesar_documentos(archivos: list[tuple[bytes, str]], anio_esperado: 
     """Lee uno o varios documentos (exógena y certificados), los cruza con lo que ya había y devuelve todo unido."""
     previas = previas or Previas()
     traza = Traza()
+    t_inicio = time.perf_counter()
     vistos = {d.id for d in previas.documentos}
     nuevas: list[FilaInterpretada] = []
     nuevos: list[DocumentoCargado] = []
@@ -170,11 +178,14 @@ async def procesar_documentos(archivos: list[tuple[bytes, str]], anio_esperado: 
             errores.append(ErrorArchivo(nombre=nombre, mensaje=str(e)))
             continue
         if not doc.filas and not any(len(x) > 3 for x in doc.lineas):
-            msg = "no tiene texto que pueda leer (parece escaneado). Descárgalo en PDF desde el portal de la entidad"
+            msg = ("no pude sacar texto ni con OCR: toma la foto con buena luz, de frente y sin sombras, o descarga el PDF de la entidad"
+                   if doc.ocr else "no tiene texto que pueda leer (parece escaneado). Descárgalo en PDF desde el portal de la entidad")
             yield traza.fin("lector", f"{corto}: {msg}", t0, "error")
             errores.append(ErrorArchivo(nombre=nombre, mensaje=msg[:1].upper() + msg[1:]))
             continue
-        yield traza.fin("lector", f"{corto}: " + (f"{len(doc.filas)} filas y {len(doc.topes)} topes" if doc.filas else f"{len(doc.lineas)} líneas de texto") + f" ({doc.formato.upper()})", t0)
+        yield traza.fin("lector", f"{corto}: " + (f"{len(doc.filas)} filas y {len(doc.topes)} topes" if doc.filas else f"{len(doc.lineas)} líneas de texto")
+                        + (" leídas con OCR, para confirmar" if doc.ocr else f" ({doc.formato.upper()})"), t0, "advertencia" if doc.ocr else "ok")
+        es_ocr = doc.ocr
 
         yield traza.inicio("anonimizador", f"Quitando datos personales de {corto}…")
         t0 = time.perf_counter()
@@ -199,6 +210,10 @@ async def procesar_documentos(archivos: list[tuple[bytes, str]], anio_esperado: 
             estado, msg = "advertencia", msg + f". Ojo: elegiste el año {anio_esperado}"
         yield traza.fin("clasificador", msg, t0, estado, clas.modelo)  # type: ignore[arg-type]
 
+        if tipo == "exogena" and es_ocr:
+            msg = "la exógena no se puede leer de una foto o un escaneo: descárgala en Excel desde MUISCA (o tráela con la extensión)"
+            errores.append(ErrorArchivo(nombre=nombre, mensaje=msg[:1].upper() + msg[1:]))
+            continue
         if tipo == "exogena":
             yield traza.inicio("interprete", "Ubicando cada concepto de tu exógena en la declaración…")
             t0 = time.perf_counter()
@@ -231,12 +246,29 @@ async def procesar_documentos(archivos: list[tuple[bytes, str]], anio_esperado: 
             yield traza.fin("extractor", f"{corto}: {msg}", t0, "advertencia")
             errores.append(ErrorArchivo(nombre=nombre, mensaje=msg[:1].upper() + msg[1:]))
             continue
+        if es_ocr:
+            # Lo leído con OCR puede traer errores de lectura: ninguna cifra entra sin que la persona la confirme
+            documento.ocr = True
+            for f in filas:
+                if f.tratamiento == "suma":
+                    f.tratamiento = "revisar"
+                    extractor.preguntar(f, nombre)
+                    f.ayuda = "Lo leí de una foto o un escaneo; confirma que la cifra coincida con tu documento antes de usarla."
         revisar = sum(1 for f in filas if f.tratamiento == "revisar")
         yield traza.fin("extractor", f"{corto}: {documento.cifras} cifras" + (f", {revisar} para confirmar" if revisar else ""), t0, "advertencia" if revisar else "ok")
         nuevas.extend(filas)
         nuevos.append(documento)
 
+    def registrar(perfil: Any = None) -> None:
+        metricas.registrar(
+            "documentos", n=min(len(archivos), MAX_ARCHIVOS), n_ok=len(nuevos), n_error=len(errores), ocr=sum(1 for d in nuevos if d.ocr),
+            ms=(time.perf_counter() - t_inicio) * 1000, tipos=[d.tipo for d in nuevos],
+            **({"asalariado": perfil.empleado, "independiente": perfil.independiente, "pensionado": perfil.pensionado,
+                "capital": perfil.rentas_capital or perfil.dividendos} if perfil else {}),
+        )
+
     if not nuevos and errores:
+        registrar()
         yield ErrorFlujo(mensaje="; ".join(f"{e.nombre}: {e.mensaje}" for e in errores), agente="lector")
         return
     if not nuevos:
@@ -264,6 +296,7 @@ async def procesar_documentos(archivos: list[tuple[bytes, str]], anio_esperado: 
         anio=anio, ultimos_dos_digitos_nit=ultimos, filas=filas, datos=datos, perfil=perfil, resumen_campos=resumen,
         datos_enmascarados=enmascarados, topes=topes, documentos=documentos,
     )
+    registrar(perfil)
     yield ResultadoDocumento(
         extraccion=extraccion, nuevos=nuevos, cruces=cruces, errores=errores, mensaje=mensaje_lectura(nuevos, cruces, errores, enmascarados - previas.datos_enmascarados),
         clasificacion=clasificacion_exogena, traza=traza.eventos,
@@ -355,11 +388,23 @@ def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
     d.control.fecha_presentacion = r.fecha_presentacion or date.today()
     d.control.sin_sanciones_ultimos_2_anios = r.sin_sanciones_ultimos_2_anios
     d.indicadores.responsable_iva = r.responsable_iva
+    for modelo, destino in ((r.exterior, d.exterior), (r.perdidas, d.perdidas)):
+        for k, v in modelo.model_dump().items():
+            if v:
+                setattr(destino, k, getattr(destino, k) + v)
+                d.fuentes.setdefault("usuario", []).append(k)
+    cp = r.comparacion
+    if cp.patrimonio_liquido_anterior is not None:  # lo que dice la persona manda sobre la declaración anterior subida
+        d.comparacion.patrimonio_liquido_anterior = cp.patrimonio_liquido_anterior
+    if cp.impuestos_pagados_en_el_anio is not None:
+        d.comparacion.impuestos_pagados_en_el_anio = cp.impuestos_pagados_en_el_anio
+    d.comparacion.causas_justificativas += cp.causas_justificativas
     return d
 
 
 async def procesar_liquidacion(sol: SolicitudLiquidacion) -> AsyncIterator[Salida]:
     traza = Traza()
+    t_inicio = time.perf_counter()
 
     yield traza.inicio("motor", "Aplicando las reglas del año gravable…")
     t0 = time.perf_counter()
@@ -391,4 +436,39 @@ async def procesar_liquidacion(sol: SolicitudLiquidacion) -> AsyncIterator[Salid
         sugerencias = consejos.consejos(datos, liq, reglas)
     except Exception:  # noqa: BLE001 - un consejo nunca debe tumbar el resultado
         sugerencias = []
+    _registrar_liquidacion(datos, liq, t_inicio, modelo, con_ia)
     yield ResultadoLiquidacion(datos=datos, liquidacion=liq, explicacion=texto, explicacion_con_ia=con_ia, traza=traza.eventos, consejos=sugerencias)
+
+
+def casillas_sin_origen(liq: Liquidacion) -> list[int]:
+    """Casillas del 210 que se escriben (no las calcula la DIAN), tienen valor y no dicen de dónde salen (KPI-02)."""
+    if not liq.formulario or not liq.formulario.disponible:
+        return []
+    return [c.numero for s in liq.formulario.secciones for c in s.casillas if c.tipo == "dato" and c.valor and not c.campos]
+
+
+def perfil_metricas(d: DatosDeclaracion) -> dict[str, bool]:
+    """Perfil del declarante para medir por grupo (equidad), sin cifras."""
+    ex = d.exterior
+    return {
+        "asalariado": d.laboral.salarios_y_pagos_laborales > 0,
+        "independiente": d.independiente.honorarios_y_servicios > 0,
+        "pensionado": d.pensiones.pensiones_nacionales > 0,
+        "capital": d.capital.rendimientos_financieros + d.capital.arrendamientos + d.dividendos.no_gravados_subcedula1 + d.dividendos.gravados_subcedula2 > 0,
+        "primerizo": d.pagos.declaraciones_previas == 0,
+        "exterior": any(v for k, v in ex.model_dump().items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0),
+    }
+
+
+def _registrar_liquidacion(d: DatosDeclaracion, liq: Liquidacion, t_inicio: float, modelo: str | None, con_ia: bool) -> None:
+    r = liq.resumen
+    metricas.registrar(
+        "liquidacion", ms=(time.perf_counter() - t_inicio) * 1000, anio=d.anio_gravable,
+        formulario=bool(liq.formulario and liq.formulario.disponible),
+        alertas_criticas=sum(1 for a in liq.alertas if a.nivel == "critica"),
+        alertas_advertencia=sum(1 for a in liq.alertas if a.nivel == "advertencia"),
+        explicacion_ia=con_ia, explicacion_descartada=bool(modelo) and not con_ia,
+        casillas_sin_origen=len(casillas_sin_origen(liq)),
+        resultado="pagar" if r.saldo_pagar > 0 else "favor" if r.saldo_favor > 0 else "cero",
+        **perfil_metricas(d),
+    )

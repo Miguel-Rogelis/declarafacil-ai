@@ -188,7 +188,9 @@ _RDECLARACION = [
     Regla(r"saldo a favor .*(anterior|sin solicitud)", None, "Saldo a favor de un año anterior", "Viene de otra declaración; ya se usó."),
     Regla(r"total saldo a favor|^\W*(\d{1,3}\s*)?saldo a favor", "pagos.saldo_favor_anterior", "Saldo a favor de tu declaración anterior",
           "Si no pediste que te lo devolvieran, se resta de lo que debes pagar este año.", revisar=True),
-    Regla(r"total patrimonio (bruto|liquido)|patrimonio (bruto|liquido)", None, "Patrimonio declarado el año anterior", "Sirve para comparar; no se suma."),
+    Regla(r"total patrimonio liquido|patrimonio liquido", "comparacion.patrimonio_liquido_anterior", "Patrimonio líquido del año anterior",
+          "Sirve para la comparación patrimonial (arts. 236 y 237 ET): no se suma a tus bienes."),
+    Regla(r"total patrimonio bruto|patrimonio bruto", None, "Patrimonio bruto del año anterior", "Sirve de referencia; no se suma."),
     Regla(r"total impuesto a cargo|saldo a pagar|total saldo a pagar|renta liquida gravable", None, "Valor de la declaración anterior", "Sirve de referencia; no se suma."),
 ]
 
@@ -565,6 +567,7 @@ _RESUMEN = {
     "pagos.anticipo_anio_anterior": "anticipo para este año",
     "pagos.saldo_favor_anterior": "saldo a favor",
     "no_laborales.ingresos": "otros ingresos",
+    "comparacion.patrimonio_liquido_anterior": "patrimonio líquido",
 }
 
 

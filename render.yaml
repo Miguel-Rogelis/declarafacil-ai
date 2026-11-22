@@ -17,6 +17,18 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
+      # Clave de servicio (secreta): guarda reglas, agentes, métricas y cupo para que sobrevivan a los reinicios
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Correos que administran reglas y agentes con su cuenta (separados por coma); quedan como autores en el historial
+      - key: ADMIN_EMAILS
+        sync: false
+      # «gratis» (modelos :free) o «pago» (Claude Haiku 4.5 para el piloto, ver backend/data/agentes_pago.json)
+      - key: PERFIL_MODELOS
+        value: gratis
+      # 1 = solo proveedores de OpenRouter que no guardan ni entrenan con los datos (recomendado con el perfil de pago)
+      - key: OPENROUTER_SIN_RETENCION
+        value: "0"
       # ID de cliente de Google (Google Cloud → Credenciales). Opcional: hace que Google muestre «DeclaraFácil»
       - key: GOOGLE_CLIENT_ID
         sync: false

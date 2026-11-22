@@ -102,7 +102,7 @@ export function Encabezado() {
     { ruta: "declarar", texto: "Chat" },
     ...(resultado ? [{ ruta: "resultado" as Ruta, texto: "Resultado" }] : []),
     { ruta: "presentar", texto: "Presentar en la DIAN", corto: "DIAN" },
-    { ruta: "configuracion", texto: "Reglas y agentes", corto: "Reglas" },
+    { ruta: "configuracion", texto: "Configuración", corto: "Config." },
   ];
   const lista = useRef<HTMLUListElement>(null);
   const [pastilla, setPastilla] = useState<{ x: number; ancho: number } | null>(null);

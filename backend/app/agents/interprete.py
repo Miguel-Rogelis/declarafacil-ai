@@ -49,8 +49,9 @@ CAMPOS: dict[str, str] = {
     "pagos.impuesto_neto_anio_anterior": "Impuesto neto de renta del año anterior",
     "patrimonio.bienes": "Bienes (patrimonio bruto)",
     "patrimonio.deudas": "Deudas",
+    "comparacion.patrimonio_liquido_anterior": "Patrimonio líquido del año anterior (para la comparación patrimonial)",
 }
-_MAXIMO = {"laboral.salario_promedio_mensual_6m"}
+_MAXIMO = {"laboral.salario_promedio_mensual_6m", "comparacion.patrimonio_liquido_anterior"}
 
 
 def _n(texto: str | None) -> str:

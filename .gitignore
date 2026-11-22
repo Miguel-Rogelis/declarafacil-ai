@@ -19,3 +19,6 @@ data-in/
 *.tsbuildinfo
 test-results/
 playwright-report/
+extension/dist/
+# Almacén local (configuración editada, métricas y cupo)
+backend/estado/

@@ -173,7 +173,9 @@ def test_cambia_de_anio_cuando_lo_pide():
     j, _ = _turno("quiero declarar el 2023", {"anio_gravable": 2025})
     assert j["cambiar_anio"] == 2023
     j, _ = _turno("hazlo con las reglas del 2026", {"anio_gravable": 2025})
-    assert j["cambiar_anio"] is None  # 2026 es borrador, no vigente
+    assert j["cambiar_anio"] == 2026  # AG 2026 ya está vigente (HU-37)
+    j, _ = _turno("hazlo con las reglas del 2027", {"anio_gravable": 2025})
+    assert j["cambiar_anio"] is None  # 2027 no tiene reglas todavía
     j, _ = _turno("qué cambió con la reforma de 2022", {"anio_gravable": 2025})
     assert j["cambiar_anio"] is None and "1.340" in j["respuesta"]
 
@@ -571,3 +573,21 @@ def test_el_160_no_se_menciona_por_debajo_del_tope(monkeypatch):
     monkeypatch.setattr(asistente, "_con_ia", falso)
     j = Charla()("tengo 10 millones en bitcoin")
     assert "160" not in j["respuesta"] and j["respuesta"].startswith("Listo")
+
+
+# ---------- HU-39: rentas del exterior y comparación patrimonial desde el chat (sin IA) ----------
+
+
+def test_anota_pension_del_exterior_al_mes():
+    j, _ = _turno("recibo una pensión de Estados Unidos de 5 millones al mes", {"anio_gravable": 2025})
+    assert j["respuestas"]["exterior"]["pensiones"] == 60_000_000
+
+
+def test_anota_impuesto_pagado_en_el_exterior():
+    j, _ = _turno("pagué 3 millones de impuestos en el exterior", {"anio_gravable": 2025})
+    assert j["respuestas"]["exterior"]["impuesto_pagado_renta"] == 3_000_000
+
+
+def test_anota_patrimonio_liquido_del_anio_pasado():
+    j, _ = _turno("mi patrimonio líquido del año pasado era de 200 millones", {"anio_gravable": 2025})
+    assert j["respuestas"]["comparacion"]["patrimonio_liquido_anterior"] == 200_000_000

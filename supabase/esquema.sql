@@ -47,3 +47,31 @@ create policy "docs: cambiar los míos" on storage.objects for update to authent
   using (bucket_id = 'documentos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 create policy "docs: borrar los míos" on storage.objects for delete to authenticated
   using (bucket_id = 'documentos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- 3. Solo para el servidor (clave de servicio): configuración editable con historial, métricas sin datos
+--    personales y contadores del cupo de IA. RLS activo y SIN políticas: el navegador no las puede leer.
+create table if not exists public.df_config (
+  clave text primary key,
+  datos jsonb not null,
+  autor text,
+  actualizada timestamptz not null default now()
+);
+create table if not exists public.df_config_historial (
+  id bigint generated always as identity primary key,
+  clave text not null,
+  datos jsonb not null,
+  autor text,
+  creada timestamptz not null default now()
+);
+create index if not exists df_config_historial_clave on public.df_config_historial (clave, id desc);
+create table if not exists public.df_metricas (
+  id bigint generated always as identity primary key,
+  sesion text,
+  tipo text not null,
+  datos jsonb not null,
+  creado timestamptz not null default now()
+);
+create index if not exists df_metricas_creado on public.df_metricas (creado);
+alter table public.df_config enable row level security;
+alter table public.df_config_historial enable row level security;
+alter table public.df_metricas enable row level security;

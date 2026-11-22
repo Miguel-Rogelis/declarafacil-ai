@@ -1,14 +1,15 @@
 {
   "anio_gravable": 2026,
-  "estado": "borrador",
-  "descripcion": "Borrador para el año gravable 2026 (se presenta en 2027): mismas reglas de la Ley 2277 de 2022 con la UVT 2026. Verificar cambios normativos, componente inflacionario y calendario antes de usarlo.",
+  "estado": "vigente",
+  "descripcion": "Año gravable 2026 (se presenta en 2027). Reglas de la Ley 2277 de 2022 con la UVT 2026; ninguna reforma aprobada cambia el AG 2026 (el Decreto 1474 de 2025 fue retirado por la Corte Constitucional y los proyectos de 2026 aplicarían desde 2027). Provisionales hasta que salgan sus normas: UVT 2027 (sanciones), componente inflacionario y calendario 2027.",
   "uvt": 52374,
-  "uvt_anio_presentacion": null,
+  "uvt_anio_presentacion": 55684,
   "fuentes": [
-    "UVT 2026: Resolución DIAN 000238 de 2025",
-    "Pendiente: componente inflacionario AG 2026, calendario 2027, UVT 2027",
-    "Intereses ICETEX: par. 4 art. 119 ET (máx. 100 UVT al año, dentro del límite del 40 %)",
-    "Donaciones: arts. 257 y 258 ET (25 %; 37 % para alimentos desde 2025, Ley 2380 de 2024; máximo 25 % del impuesto)"
+    "UVT 2026: Resolución DIAN 000238 de 2025 ($52.374)",
+    "Ley 2277 de 2022 (vigente para el AG 2026)",
+    "Corte Constitucional: suspensión (Auto 082 de 2026) e inexequibilidad del Decreto 1390 de 2025 (C-075 de 2026) y del Decreto 1474 de 2025 (C-079 de 2026)",
+    "Calendario: Decreto 2229 de 2023 (plazos permanentes) y festivos de 2027",
+    "Estatuto Tributario arts. 206, 241, 242, 254, 254-1, 307, 311-1, 314, 317, 331, 336, 387, 639, 641, 807"
   ],
   "topes_obligacion_uvt": {
     "patrimonio_bruto": 4500,
@@ -138,7 +139,11 @@
     "exencion_donaciones_tope_uvt": 1625,
     "exencion_seguros_vida_uvt": 3250
   },
-  "descuentos": {"donaciones_pct": 0.25, "donaciones_alimentos_pct": 0.37, "limite_donaciones_pct_impuesto": 0.25},
+  "descuentos": {
+    "donaciones_pct": 0.25,
+    "donaciones_alimentos_pct": 0.37,
+    "limite_donaciones_pct_impuesto": 0.25
+  },
   "anticipo": {
     "pct_primera_declaracion": 0.25,
     "pct_segunda_declaracion": 0.5,
@@ -154,5 +159,61 @@
     "reduccion_art640_pct": 0.5
   },
   "redondeo_pesos": 1000,
-  "vencimientos": {}
+  "vencimientos": {
+    "01-02": "2027-08-10",
+    "03-04": "2027-08-11",
+    "05-06": "2027-08-12",
+    "07-08": "2027-08-13",
+    "09-10": "2027-08-17",
+    "11-12": "2027-08-18",
+    "13-14": "2027-08-19",
+    "15-16": "2027-08-20",
+    "17-18": "2027-08-23",
+    "19-20": "2027-08-24",
+    "21-22": "2027-08-25",
+    "23-24": "2027-08-26",
+    "25-26": "2027-08-27",
+    "27-28": "2027-09-01",
+    "29-30": "2027-09-02",
+    "31-32": "2027-09-03",
+    "33-34": "2027-09-06",
+    "35-36": "2027-09-07",
+    "37-38": "2027-09-08",
+    "39-40": "2027-09-09",
+    "41-42": "2027-09-10",
+    "43-44": "2027-09-13",
+    "45-46": "2027-09-14",
+    "47-48": "2027-09-15",
+    "49-50": "2027-09-16",
+    "51-52": "2027-09-17",
+    "53-54": "2027-09-20",
+    "55-56": "2027-09-21",
+    "57-58": "2027-09-22",
+    "59-60": "2027-09-23",
+    "61-62": "2027-09-24",
+    "63-64": "2027-09-27",
+    "65-66": "2027-09-28",
+    "67-68": "2027-10-01",
+    "69-70": "2027-10-04",
+    "71-72": "2027-10-05",
+    "73-74": "2027-10-06",
+    "75-76": "2027-10-07",
+    "77-78": "2027-10-08",
+    "79-80": "2027-10-11",
+    "81-82": "2027-10-12",
+    "83-84": "2027-10-13",
+    "85-86": "2027-10-14",
+    "87-88": "2027-10-15",
+    "89-90": "2027-10-19",
+    "91-92": "2027-10-20",
+    "93-94": "2027-10-21",
+    "95-96": "2027-10-22",
+    "97-98": "2027-10-25",
+    "99-00": "2027-10-26"
+  },
+  "provisional": {
+    "uvt_anio_presentacion": "UVT 2027 estimada con la inflación de clase media a octubre de 2026 (6,32 %); se reemplaza por la resolución de la DIAN.",
+    "componente_inflacionario": "Se usa el del AG 2025 (55,43 %) hasta el decreto del AG 2026, que sale en 2027.",
+    "vencimientos": "Calculados con la regla permanente del Decreto 2229 de 2023 (del 7.º día hábil de agosto al 17.º de octubre) y los festivos de 2027; se confirman con el calendario tributario 2027."
+  }
 }

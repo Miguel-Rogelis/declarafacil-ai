@@ -2,9 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { alTraerExogena, pedirExogena } from "./extension";
 import { borrarLocal, guardarLocal, leerLocal, sinAnimar, type Instantanea } from "./guardado";
 import { borrarDeLaNube, guardarEnLaNube, iniciarNube, leerDeLaNube, subirDocumento, type Cuenta } from "./nube";
+import { pedirConsentimiento } from "./consentimiento";
 import {
   analizarDocumentos,
   api,
+  enModoDemo,
   liquidar,
   respuestasIniciales,
   type Anotacion,
@@ -215,7 +217,7 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
       declarar: "Chat · DeclaraFácil",
       resultado: "Tu resultado · DeclaraFácil",
       presentar: "Presentar en la DIAN · DeclaraFácil",
-      configuracion: "Reglas y agentes · DeclaraFácil",
+      configuracion: "Reglas, agentes y métricas · DeclaraFácil",
     };
     document.title = titulos[ruta];
   }, [ruta]);
@@ -333,6 +335,11 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
   const procesarArchivos = useCallback(
     async (archivos: File[], opciones?: { subir?: boolean }) => {
       if (!archivos.length) return;
+      // Ley 1581: la primera vez que suben documentos reales se pide la autorización (la demo usa documentos ficticios)
+      if (!enModoDemo() && !(await pedirConsentimiento())) {
+        agregar({ rol: "asistente", texto: "No leí tus documentos. Cuando quieras, súbelos de nuevo y autoriza el tratamiento de tus datos; mientras tanto puedo responder tus dudas o anotar lo que me cuentes." });
+        return;
+      }
       agregar({ rol: "usuario", texto: archivos.map((a) => `📎 ${a.name}`).join("\n") });
       const idTraza = agregar({ rol: "asistente", widget: "traza_documento", eventos: [] });
       const acumulado: EventoAgente[] = [];

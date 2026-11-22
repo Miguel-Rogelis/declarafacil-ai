@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type AgenteConfig } from "../lib/api";
+import { api, type AgenteConfig, type Kpi, type ResumenMetricas, type VersionHistorial } from "../lib/api";
 import { FadeIn } from "../components/Movimiento";
 import { Pestanas } from "../components/piezas";
 import { useSesion } from "../lib/estado";
@@ -51,15 +51,74 @@ function useToken() {
   return [token, setToken] as const;
 }
 
+let almacenServidor: Promise<string | undefined> | null = null;
+/** Dónde guarda el servidor lo que se edita aquí: «supabase» o «archivo» sobreviven a un reinicio; «memoria», no. */
+function useAlmacen() {
+  const [almacen, setAlmacen] = useState<string | undefined>();
+  useEffect(() => {
+    almacenServidor ??= api.estado().then((e) => e.almacen).catch(() => undefined);
+    void almacenServidor.then(setAlmacen);
+  }, []);
+  return { almacen, persiste: almacen === "supabase" || almacen === "archivo" };
+}
+
+/** Versiones guardadas (quién cambió qué y cuándo) con botón para volver a una o al archivo del repositorio. */
+function Historial({ cargar, revertir, cambio }: {
+  cargar: () => Promise<VersionHistorial[]>;
+  revertir: (version: number | null) => Promise<unknown>;
+  cambio: number;
+}) {
+  const [versiones, setVersiones] = useState<VersionHistorial[] | null>(null);
+  const [msg, setMsg] = useState<{ texto: string; error?: boolean } | null>(null);
+  const { persiste } = useAlmacen();
+  const recargar = () => cargar().then(setVersiones).catch((e) => setMsg({ texto: (e as Error).message, error: true }));
+  useEffect(() => {
+    void recargar();
+  }, [cambio]); // eslint-disable-line react-hooks/exhaustive-deps
+  const volver = async (v: number | null) => {
+    try {
+      await revertir(v);
+      setMsg({ texto: v === null ? "Restauré los valores del repositorio." : `Volví a la versión ${v}.` });
+      void recargar();
+    } catch (e) {
+      setMsg({ texto: (e as Error).message, error: true });
+    }
+  };
+  return (
+    <section className="mt-3">
+      <h3 className="titular t-21">Historial de cambios</h3>
+      <p className="chico suave">
+        {persiste
+          ? "Cada cambio queda guardado con su autor y sobrevive a los reinicios del servidor."
+          : "Cada cambio queda con su autor, pero este servidor guarda en memoria: se pierde al reiniciar (configura SUPABASE_SERVICE_ROLE_KEY o ALMACEN_DIR)."}
+      </p>
+      {versiones?.length ? (
+        <ul className="lista-historial chico">
+          {versiones.map((v) => (
+            <li key={v.id}>
+              <span>Versión {v.id} · {new Date(v.creada).toLocaleString("es-CO")} · {v.autor ?? "sin autor"}</span>
+              <button className="boton-texto chico" onClick={() => void volver(v.id)}>Volver a esta</button>
+            </li>
+          ))}
+        </ul>
+      ) : versiones ? <p className="chico suave">Sin cambios guardados: se usan los valores del repositorio.</p> : null}
+      <button className="boton secundario chico mt-1" onClick={() => void volver(null)}>Restaurar los valores del repositorio</button>
+      {msg ? <p className={`mensaje-estado${msg.error ? " error" : ""}`} role="status">{msg.texto}</p> : null}
+    </section>
+  );
+}
+
 function PanelReglas({ token }: { token: string }) {
   const { anios } = useSesion();
   const [anio, setAnio] = useState(2025);
   const [reglas, setReglas] = useState<Reglas | null>(null);
   const [msg, setMsg] = useState<{ texto: string; error?: boolean } | null>(null);
   const [destino, setDestino] = useState("");
+  const { persiste } = useAlmacen();
   const [uvtNueva, setUvtNueva] = useState("");
 
   const [errorCarga, setErrorCarga] = useState("");
+  const [cambio, setCambio] = useState(0);
 
   useEffect(() => {
     setReglas(null);
@@ -72,6 +131,7 @@ function PanelReglas({ token }: { token: string }) {
     try {
       setReglas(await api.guardarReglas(anio, reglas, token));
       setMsg({ texto: `Reglas del año ${anio} guardadas.` });
+      setCambio((c) => c + 1);
     } catch (e) {
       setMsg({ texto: (e as Error).message, error: true });
     }
@@ -136,7 +196,10 @@ function PanelReglas({ token }: { token: string }) {
           </table>
           </div>
           <p className="chico suave">
-            Los cambios guardados aquí duran hasta que el servidor se reinicie. Para dejarlos fijos, descarga el JSON y reemplaza backend/data/reglas/ag{anio}.json en el repositorio.
+            {persiste
+              ? "Los cambios guardados aquí quedan en el almacén del servidor con su historial. Para llevarlos al repositorio, descarga el JSON y reemplaza "
+              : "Este servidor guarda en memoria: los cambios duran hasta que se reinicie. Para dejarlos fijos, descarga el JSON y reemplaza "}
+            backend/data/reglas/ag{anio}.json.
           </p>
           <p className="chico suave">
             Calendario de vencimientos: {Object.keys(reglas.vencimientos ?? {}).length ? `${Object.keys(reglas.vencimientos).length} fechas cargadas` : "sin cargar"}. Fuentes: {(reglas.fuentes ?? []).join("; ")}.
@@ -170,6 +233,13 @@ function PanelReglas({ token }: { token: string }) {
         <p className="mensaje-estado error" role="alert">{errorCarga}</p>
       ) : <p className="suave" role="status">Cargando reglas…</p>}
       {msg ? <p className={`mensaje-estado${msg.error ? " error" : ""}`} role="status">{msg.texto}</p> : null}
+      {token ? (
+        <Historial
+          cambio={cambio + anio}
+          cargar={() => api.historialReglas(anio, token)}
+          revertir={async (v) => setReglas(await api.revertirReglas(anio, v, token))}
+        />
+      ) : null}
     </div>
   );
 }
@@ -256,20 +326,113 @@ function PanelAgentes({ token }: { token: string }) {
             {gratis.map((m) => <li key={m.id}><code>{m.id}</code></li>)}
           </ul>
         ) : null}
+        {token ? <Historial cambio={0} cargar={() => api.historialAgentes(token)} revertir={async (v) => setAgentes(await api.revertirAgentes(v, token))} /> : null}
       </aside>
     </div>
   );
 }
 
+const FORMATO_KPI = (k: Kpi) => {
+  if (k.valor === null) return "—";
+  const n = k.unidad === "USD" ? k.valor.toLocaleString("es-CO", { maximumFractionDigits: 3 }) : k.valor.toLocaleString("es-CO", { maximumFractionDigits: 1 });
+  return `${k.unidad === "USD" ? "USD " : ""}${n}${k.unidad === "%" ? " %" : k.unidad === "USD" ? "" : ` ${k.unidad}`}`;
+};
+const ESTADO_KPI: Record<Kpi["estado"], string> = { cumple: "Cumple", no_cumple: "No cumple", sin_datos: "Sin datos", muestra_pequena: "Muestra pequeña" };
+
+/** KPI con su meta y su criterio de aceptación (HU-41). Ningún evento lleva datos personales. */
+function PanelMetricas({ token }: { token: string }) {
+  const [dias, setDias] = useState(30);
+  const [datos, setDatos] = useState<ResumenMetricas | null>(null);
+  const [error, setError] = useState("");
+  const [manual, setManual] = useState({ kpi: "KPI-14", valor: "", n: "", nota: "" });
+  const [servidor, setServidor] = useState<{ perfil?: string; almacen?: string }>({});
+  useEffect(() => {
+    api.estado().then((e) => setServidor({ perfil: e.perfil_modelos, almacen: e.almacen })).catch(() => {});
+  }, []);
+  const cargar = () => {
+    setError("");
+    api.metricas(dias, token).then(setDatos).catch((e) => setError((e as Error).message));
+  };
+  useEffect(() => {
+    if (token) cargar();
+  }, [dias, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  const guardarManual = async () => {
+    try {
+      await api.guardarKpiManual(manual.kpi, Number(manual.valor), Number(manual.n), manual.nota, token);
+      setManual({ ...manual, valor: "", n: "", nota: "" });
+      cargar();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  if (!token) return <p className="suave">Escribe la clave de administrador para ver las métricas.</p>;
+  return (
+    <div>
+      <div className="fila-campos">
+        <div className="campo">
+          <label htmlFor="dias">Periodo</label>
+          <select id="dias" className="entrada" value={dias} onChange={(e) => setDias(Number(e.target.value))}>
+            {[1, 7, 30, 90, 365].map((d) => <option key={d} value={d}>Últimos {d} {d === 1 ? "día" : "días"}</option>)}
+          </select>
+        </div>
+        <button className="boton secundario chico" onClick={cargar}>Actualizar</button>
+        <button className="boton secundario chico" onClick={() => api.descargarMetricas(dias, token).catch((e) => setError((e as Error).message))}>Descargar CSV</button>
+      </div>
+      {error ? <p className="mensaje-estado error" role="alert">{error}</p> : null}
+      {datos ? (
+        <>
+          {servidor.perfil ? (
+            <p className="chico suave">
+              Modelos: {servidor.perfil === "pago" ? "de pago (Claude Haiku 4.5, sin retención de datos)" : "gratis de OpenRouter"} · Métricas guardadas en{" "}
+              {servidor.almacen === "supabase" ? "Supabase" : servidor.almacen === "archivo" ? "un archivo del servidor" : "memoria (se pierden al reiniciar)"}
+            </p>
+          ) : null}
+          <p className="chico suave">
+            {datos.sesiones} sesiones · {datos.sesiones_con_documentos} con documentos · {datos.sesiones_con_borrador} con borrador · {datos.llamadas_ia.ok} llamadas de IA
+            ({datos.llamadas_ia.cache} desde caché, {datos.llamadas_ia.error} con error). Los eventos no llevan cédulas, nombres, montos ni texto del chat.
+          </p>
+          <table className="tabla-kpi">
+            <thead><tr><th>KPI</th><th>Meta</th><th className="num">Valor</th><th>Estado</th></tr></thead>
+            <tbody>
+              {datos.kpis.map((k) => (
+                <tr key={k.id}>
+                  <td><strong>{k.id}</strong> {k.nombre}<br /><span className="chico suave">{k.criterio}</span></td>
+                  <td className="chico">{k.comparacion === "<=" ? "≤" : k.comparacion === ">=" ? "≥" : "="} {k.unidad === "USD" ? `USD ${k.meta}` : `${k.meta.toLocaleString("es-CO")} ${k.unidad}`}{k.fuente === "piloto" ? " · piloto" : ""}</td>
+                  <td className="num">{FORMATO_KPI(k)}<br /><span className="chico suave">n = {k.n}</span></td>
+                  <td><span className={`estado-kpi ${k.estado}`}>{ESTADO_KPI[k.estado]}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <h3 className="titular t-21 mt-3">Resultados del piloto</h3>
+          <p className="chico suave">La exactitud frente al contador y el SUS se miden fuera de la app; regístralos aquí para verlos junto a los demás KPI.</p>
+          <div className="fila-campos">
+            <div className="campo">
+              <label htmlFor="kpi-manual">KPI</label>
+              <select id="kpi-manual" className="entrada" value={manual.kpi} onChange={(e) => setManual({ ...manual, kpi: e.target.value })}>
+                {datos.kpis.filter((k) => k.fuente === "piloto").map((k) => <option key={k.id} value={k.id}>{k.id} · {k.nombre}</option>)}
+              </select>
+            </div>
+            <div className="campo"><label htmlFor="kpi-valor">Valor</label><input id="kpi-valor" className="entrada" type="number" value={manual.valor} onChange={(e) => setManual({ ...manual, valor: e.target.value })} /></div>
+            <div className="campo"><label htmlFor="kpi-n">Casos (n)</label><input id="kpi-n" className="entrada" type="number" value={manual.n} onChange={(e) => setManual({ ...manual, n: e.target.value })} /></div>
+            <div className="campo"><label htmlFor="kpi-nota">Nota</label><input id="kpi-nota" className="entrada" value={manual.nota} onChange={(e) => setManual({ ...manual, nota: e.target.value })} /></div>
+            <button className="boton chico" onClick={guardarManual} disabled={!manual.valor || !manual.n}>Guardar</button>
+          </div>
+        </>
+      ) : !error ? <p className="suave" role="status">Cargando métricas…</p> : null}
+    </div>
+  );
+}
+
 export default function Configuracion() {
-  const [pestana, setPestana] = useState<"reglas" | "agentes">("reglas");
+  const [pestana, setPestana] = useState<"reglas" | "agentes" | "metricas">("reglas");
   const [token, setToken] = useToken();
   const { modoLlm } = useSesion();
   return (
     <div className="contenedor pagina">
       <FadeIn>
-        <h1 className="titular t-48">Reglas y agentes</h1>
-        <p className="lead">Cambia los valores tributarios de cada año sin tocar código y elige qué modelo usa cada agente.</p>
+        <h1 className="titular t-48">Reglas, agentes y métricas</h1>
+        <p className="lead">Cambia los valores tributarios de cada año sin tocar código, elige qué modelo usa cada agente y revisa los KPI.</p>
       </FadeIn>
       <p className="chico suave">
         {modoLlm === "openrouter" ? "Conectado a OpenRouter." : "Modo simulado: falta la variable OPENROUTER_API_KEY en el servidor, así que los agentes con IA usan su ruta sin modelo."}
@@ -277,7 +440,7 @@ export default function Configuracion() {
       <div className="campo campo-angosto">
         <label htmlFor="token">Clave de administrador</label>
         <input id="token" className="entrada" type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
-        <span className="ayuda">Necesaria para guardar cambios. Es la variable ADMIN_TOKEN del servidor.</span>
+        <span className="ayuda">Necesaria para guardar cambios y ver métricas. Es la variable ADMIN_TOKEN del servidor (o entra con una cuenta de ADMIN_EMAILS).</span>
       </div>
       <Pestanas
         etiqueta="Qué configurar"
@@ -287,10 +450,11 @@ export default function Configuracion() {
         opciones={[
           { valor: "reglas", texto: "Reglas por año" },
           { valor: "agentes", texto: "Agentes" },
+          { valor: "metricas", texto: "Métricas y KPI" },
         ]}
       />
       <div id="panel-config" role="tabpanel" aria-labelledby={`pestana-panel-config-${pestana}`}>
-        {pestana === "reglas" ? <PanelReglas token={token} /> : <PanelAgentes token={token} />}
+        {pestana === "reglas" ? <PanelReglas token={token} /> : pestana === "agentes" ? <PanelAgentes token={token} /> : <PanelMetricas token={token} />}
       </div>
     </div>
   );

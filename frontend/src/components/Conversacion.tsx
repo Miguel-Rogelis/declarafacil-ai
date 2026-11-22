@@ -123,12 +123,12 @@ function SubirExogena() {
         }}
       >
         <strong>Arrastra tu exógena y tus certificados, o haz clic para elegirlos</strong>
-        <span className="chico suave">Puedes subir varios a la vez: exógena, certificado de ingresos y retenciones, del banco, de vivienda, de prepagada… En Excel o PDF. Los leo en memoria y no los guardo.</span>
+        <span className="chico suave">Puedes subir varios a la vez: exógena, certificado de ingresos y retenciones, del banco, de vivienda, de prepagada… En Excel, PDF o foto (las fotos y escaneos se leen con OCR y te confirmo cada cifra). Los leo en memoria y no los guardo.</span>
       </div>
       <input
         ref={input}
         type="file"
-        accept=".xlsx,.pdf"
+        accept=".xlsx,.pdf,.png,.jpg,.jpeg,.webp"
         multiple
         className="visualmente-oculto"
         onChange={(e) => {
@@ -513,13 +513,13 @@ export default function Conversacion({ barra }: { barra?: ReactNode }) {
             mandar(texto);
           }}
         >
-          <button type="button" className="adjuntar" aria-label="Adjuntar documentos" title="Adjuntar exógena o certificados (Excel o PDF, varios a la vez)" onClick={() => adjuntar.current?.click()}>
+          <button type="button" className="adjuntar" aria-label="Adjuntar documentos" title="Adjuntar exógena o certificados (Excel, PDF o foto, varios a la vez)" onClick={() => adjuntar.current?.click()}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 12.5l-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.3-8.3" /></svg>
           </button>
           <input
             ref={adjuntar}
             type="file"
-            accept=".xlsx,.pdf"
+            accept=".xlsx,.pdf,.png,.jpg,.jpeg,.webp"
             multiple
             className="visualmente-oculto"
             onChange={(e) => {

@@ -22,7 +22,7 @@ function textoResumen(r) {
   if (r.noEncontradas.length) partes.push(`No encontré: ${r.noEncontradas.join(", ")}.`);
   const distintas = r.calculadas.filter((c) => c.muisca !== c.borrador);
   if (distintas.length) partes.push("MUISCA calculó distinto: " + distintas.map((c) => `${c.n} (${pesos(c.muisca)} vs. ${pesos(c.borrador)})`).join("; ") + ".");
-  else if (r.calculadas.length) partes.push(`Los ${r.calculadas.length} totales de MUISCA cuadran con tu borrador.`);
+  else if (r.calculadas.length) partes.push(r.calculadas.length === 1 ? "El total de MUISCA cuadra con tu borrador." : `Los ${r.calculadas.length} totales de MUISCA cuadran con tu borrador.`);
   return partes.join(" ");
 }
 

@@ -30,29 +30,38 @@
     <main>
       <a class="volver" href="./">← Volver a DeclaraFácil</a>
       <h1>Privacidad</h1>
-      <p class="fecha">Actualizada el 16 de noviembre de 2026</p>
+      <p class="fecha">Actualizada el 22 de noviembre de 2026 · versión de la autorización: 2026-11</p>
 
       <p>DeclaraFácil es un proyecto educativo del curso Problem Discovery &amp; Solution Design with AI (Universidad Católica de Colombia). Te ayuda a armar un borrador de tu declaración de renta. Aquí te contamos, en simple, qué datos usa y qué hace con ellos.</p>
+
+      <h2>Tu autorización (Ley 1581 de 2012)</h2>
+      <p>Antes de leer tu primer documento te pedimos que autorices el tratamiento de tus datos. El responsable es el equipo del proyecto DeclaraFácil (contacto abajo). Tus datos tributarios pueden incluir información sobre tu salud (por ejemplo, gastos médicos o pagos a medicina prepagada), que la ley considera sensible: no estás obligado a dar esa información y, si no la das, igual puedes armar tu borrador. Puedes conocer, actualizar, rectificar y pedir que borremos tus datos, y retirar la autorización cuando quieras con el botón <strong>Borrar mis datos</strong>. Guardamos qué versión de esta autorización aceptaste y cuándo.</p>
 
       <h2>Lo que no guardamos</h2>
       <ul>
         <li><strong>Tus archivos.</strong> Sin sesión, la exógena y los certificados que subes se leen en memoria para sacar las cifras y se descartan: no quedan guardados. Con sesión iniciada, además se guarda una copia en una carpeta privada de tu cuenta (en Supabase), que solo tú puedes ver, para volver a leerlos desde otro dispositivo.</li>
         <li><strong>Tu cédula, tu nombre y tus cuentas en la IA.</strong> Antes de enviar algo a un modelo de IA los quitamos de los documentos, y del chat quitamos la cédula completa, el correo y los números de cuenta o celular. Las cifras de tu declaración las calcula el código, no la IA.</li>
-        <li><strong>Tu contraseña de la DIAN.</strong> Nunca la pedimos. La extensión de DeclaraFácil para Chrome usa la sesión de MUISCA que tú abres: no lee ni guarda tu contraseña, no guarda tu exógena (la pasa directo a esta página) y no firma ni presenta nada. En tu navegador solo recuerda en qué campo de MUISCA va cada casilla, sin valores.</li>
+        <li><strong>Tu contraseña de la DIAN.</strong> Nunca la pedimos.</li>
       </ul>
 
       <h2>Lo que se guarda y dónde</h2>
       <ul>
         <li><strong>Sin iniciar sesión:</strong> la conversación y los datos que anotaste se guardan solo en tu navegador, para que no se pierdan si recargas. No salen de tu dispositivo.</li>
         <li><strong>Si inicias sesión con Google o con tu correo:</strong> guardamos tu nombre, tu correo y tu foto de perfil (los da Google al entrar), una copia de tu borrador de cada año (lo que contaste en el chat y las cifras que leímos de tus documentos) y los archivos que subiste, para que lo sigas desde cualquier dispositivo. Todo eso lo puedes ver solo tú.</li>
-        <li><strong>Mensajes del chat:</strong> se envían a modelos de IA a través de OpenRouter para responderte, junto con las cifras de tus documentos que el agente necesita para contestarte sobre tu caso (sin tu identidad). No los usamos para nada más.</li>
+        <li><strong>Mensajes del chat:</strong> se envían a modelos de IA a través de OpenRouter para responderte, junto con las cifras de tus documentos que el agente necesita para contestarte sobre tu caso (sin tu identidad). No los usamos para nada más. Con el perfil de modelos de pago pedimos a OpenRouter que solo use proveedores que no guardan ni entrenan con lo que les mandamos.</li>
+        <li><strong>Fotos y PDF escaneados:</strong> si subes una foto de un certificado, el texto se lee en nuestro servidor (sin enviarlo a nadie) y las cifras que salen así quedan marcadas para que las confirmes antes de usarlas.</li>
+        <li><strong>Métricas de uso:</strong> para saber si la app cumple sus metas (por ejemplo, cuánto tarda en responder o cuántas personas llegan al borrador) guardamos eventos sin datos personales: un identificador aleatorio de la sesión, el tipo de evento, tiempos, conteos y el perfil general (asalariado, independiente, pensionado). Nunca guardamos ahí tu nombre, tu cédula, tus montos ni el texto del chat. Se conservan como máximo un año.</li>
+        <li><strong>Cupo de mensajes con IA:</strong> para no pasarnos del límite guardamos cuántos mensajes llevas hoy, asociados a una huella cifrada de tu cuenta o de tu conexión, no a tu correo ni a tu IP.</li>
       </ul>
 
+      <h2 id="extension">La extensión para Chrome</h2>
+      <p>La extensión «DeclaraFácil: puente con la DIAN» tiene un solo propósito: llevar tu borrador a MUISCA y traer tu exógena usando la sesión que tú abres. No lee ni guarda tu contraseña, no firma, no presenta ni paga. El borrador queda solo en la memoria del navegador (se borra al cerrarlo y vence a las 3 horas); la exógena pasa directo a DeclaraFácil y no se guarda; en el disco solo recuerda en qué campo de MUISCA va cada casilla, sin valores. No envía nada a servidores distintos de la DIAN y DeclaraFácil, no usa analítica y no vende ni transfiere datos a terceros.</p>
+
       <h2>Para qué usamos tus datos</h2>
-      <p>Solo para armar tu borrador, responderte y darte un cupo de mensajes con IA. No los vendemos, no hacemos publicidad y no los compartimos con nadie distinto a los servicios que hacen funcionar la app: Render (servidor), Supabase (cuentas y guardado) y OpenRouter (modelos de IA).</p>
+      <p>Solo para armar tu borrador, responderte, darte un cupo de mensajes con IA y medir, sin datos personales, si la app funciona bien. No los vendemos, no hacemos publicidad y no los compartimos con nadie distinto a los servicios que hacen funcionar la app: Render (servidor), Supabase (cuentas y guardado) y OpenRouter (modelos de IA).</p>
 
       <h2>Cómo borrarlos</h2>
-      <p>En el chat, el botón <strong>Borrar mis datos</strong> borra tu conversación de este navegador y, si iniciaste sesión, también las copias de tu cuenta y los archivos que guardaste. En «Tus datos y documentos» puedes borrar un archivo a la vez. Para borrar tu cuenta por completo, escríbenos (abajo está cómo) y la eliminamos.</p>
+      <p>En el chat, el botón <strong>Borrar mis datos</strong> borra tu conversación de este navegador y, si iniciaste sesión, también las copias de tu cuenta y los archivos que guardaste. En «Tus datos y documentos» puedes borrar un archivo a la vez. Para borrar tu cuenta por completo, escríbenos (abajo está cómo) y la eliminamos en un plazo máximo de 15 días hábiles.</p>
 
       <h2>Importante</h2>
       <p>DeclaraFácil prepara un borrador con fines educativos. No reemplaza la asesoría de un contador ni presenta la declaración por ti: la firma en la DIAN siempre es tuya.</p>

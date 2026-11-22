@@ -45,6 +45,7 @@ from app.agents.conocimiento import (
     puntajes,
     valores_anio,
 )
+from app import metricas
 from app.llm import cliente, cupo
 from app.orquestador import Respuestas, SolicitudLiquidacion, construir_declaracion
 from app.tax import reglas as repo_reglas
@@ -98,10 +99,33 @@ CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
     "sancionado_ultimos_2_anios": ("sin_sanciones_ultimos_2_anios", "booleano", "Sancionado por declarar tarde en los últimos 2 años", 0, 1),
     "bien": ("bienes_adicionales", "item", "Bien", 1, 5e10),
     "deuda": ("deudas_adicionales", "item", "Deuda", 1, 5e10),
+    # Rentas del exterior, ECE, pérdidas y comparación patrimonial (en pesos; la TRM la aplica la persona o el agente le explica cómo)
+    "salario_exterior": ("exterior.salarios", "pesos", "Salario pagado desde el exterior", 0, 5e10),
+    "honorarios_exterior": ("exterior.honorarios", "pesos", "Honorarios cobrados en el exterior", 0, 5e10),
+    "rentas_capital_exterior": ("exterior.rentas_capital", "pesos", "Intereses o arriendos del exterior", 0, 5e10),
+    "otros_ingresos_exterior": ("exterior.otras_rentas", "pesos", "Otros ingresos del exterior", 0, 5e10),
+    "pension_exterior": ("exterior.pensiones", "pesos", "Pensión del exterior", 0, 5e10),
+    "dividendos_exterior": ("exterior.dividendos", "pesos", "Dividendos de sociedades del exterior", 0, 5e10),
+    "dividendos_exterior_exentos": ("exterior.dividendos_exentos", "pesos", "Parte exenta de los dividendos del exterior", 0, 5e10),
+    "ganancia_ocasional_exterior": ("exterior.ganancias_ocasionales", "pesos", "Ganancia ocasional en el exterior", 0, 5e10),
+    "impuesto_pagado_exterior": ("exterior.impuesto_pagado_renta", "pesos", "Impuesto de renta pagado en el exterior", 0, 5e10),
+    "impuesto_exterior_ganancia_ocasional": ("exterior.impuesto_pagado_go", "pesos", "Impuesto pagado en el exterior por ganancias ocasionales", 0, 5e10),
+    "ece_rentas_pasivas_capital": ("exterior.ece_rentas_pasivas_capital", "pesos", "Rentas pasivas de capital de una sociedad controlada del exterior (ECE)", 0, 5e10),
+    "ece_rentas_pasivas_otras": ("exterior.ece_rentas_pasivas_no_laborales", "pesos", "Otras rentas pasivas de una ECE", 0, 5e10),
+    "perdidas_capital": ("perdidas.capital", "pesos", "Pérdidas de rentas de capital de años anteriores", 0, 5e10),
+    "perdidas_no_laborales": ("perdidas.no_laborales", "pesos", "Pérdidas de rentas no laborales de años anteriores", 0, 5e10),
+    "perdidas_independiente": ("perdidas.trabajo_no_laboral", "pesos", "Pérdidas como independiente de años anteriores", 0, 5e10),
+    "perdidas_2018": ("perdidas.anios_2018_y_anteriores", "pesos", "Pérdidas de 2018 o antes por compensar", 0, 5e10),
+    "patrimonio_liquido_anterior": ("comparacion.patrimonio_liquido_anterior", "pesos", "Patrimonio líquido del año anterior", 0, 5e11),
+    "impuestos_pagados_anio": ("comparacion.impuestos_pagados_en_el_anio", "pesos", "Impuesto de renta que pagaste durante el año", 0, 5e10),
+    "causas_justificativas": ("comparacion.causas_justificativas", "pesos", "Aumentos de patrimonio que puedes probar (valorizaciones, préstamos…)", 0, 5e11),
 }
 
+# Campos que valen «no sé» (None) en vez de 0: quitarlos no debe volverlos cero
+_OPCIONALES = {"comparacion.patrimonio_liquido_anterior", "comparacion.impuestos_pagados_en_el_anio"}
+
 # Cifras que la gente suele decir por mes: si no dice el periodo, el agente pregunta.
-_MENSUALES = {"salarios", "pension", "arriendos", "medicina_prepagada", "honorarios", "aportes_voluntarios", "intereses_vivienda", "intereses_icetex", "aportes_independiente"}
+_MENSUALES = {"salario_exterior", "pension_exterior", "honorarios_exterior", "salarios", "pension", "arriendos", "medicina_prepagada", "honorarios", "aportes_voluntarios", "intereses_vivienda", "intereses_icetex", "aportes_independiente"}
 
 # Tema de cada campo (para no volver a preguntar lo mismo)
 _TEMA = {
@@ -110,6 +134,10 @@ _TEMA = {
     "intereses_vivienda": "deducciones", "aportes_voluntarios": "deducciones", "gmf": "deducciones", "declaraciones_previas": "historial",
     "intereses_icetex": "deducciones", "costos_arriendos": "costos_arriendo", "donaciones_realizadas": "donaciones_hechas",
     "ultimos_dos_digitos_cedula": "cedula", "bien": "patrimonio", "deuda": "patrimonio",
+    "salario_exterior": "exterior", "honorarios_exterior": "exterior", "rentas_capital_exterior": "exterior", "otros_ingresos_exterior": "exterior",
+    "pension_exterior": "exterior", "dividendos_exterior": "exterior", "ganancia_ocasional_exterior": "exterior", "impuesto_pagado_exterior": "exterior",
+    "perdidas_capital": "perdidas", "perdidas_no_laborales": "perdidas", "perdidas_independiente": "perdidas", "perdidas_2018": "perdidas",
+    "patrimonio_liquido_anterior": "comparacion", "impuestos_pagados_anio": "comparacion", "causas_justificativas": "comparacion",
     "compras_factura": "factura", "rendimientos": "rendimientos", "aportes_independiente": "aportes_pila",
 }
 
@@ -372,7 +400,7 @@ def quitar(respuestas: Respuestas, items: list[dict[str, Any]]) -> tuple[Respues
                     quitadas.append(f"{etiqueta}: {b.concepto}")
             setattr(r, ruta, quedan)
         elif tipo == "pesos" and _leer(r, ruta):
-            _poner(r, ruta, 0.0)
+            _poner(r, ruta, None if ruta in _OPCIONALES else 0.0)
             quitadas.append(etiqueta)
         elif tipo == "entero" and _leer(r, ruta):
             _poner(r, ruta, None if clave == "declaraciones_previas" else 0)
@@ -611,7 +639,15 @@ _SEGUIMIENTO = {
 _RE_AFIRMATIVO = re.compile(r"^(si|sip|claro|asi es|correcto|exacto|obvio|afirmativo)\b")
 _RE_NO_SE = re.compile(r"^(no se|ni idea|no tengo idea|no me acuerdo|no recuerdo|no estoy segur\w*)\b")
 
+_AFUERA = r"(del exterior|en el exterior|afuera|fuera del pais|extranjer\w*|estados unidos|\busa\b|\beeuu\b|espana|canada|en dolares|en euros)"
 _CONCEPTOS: list[tuple[str, str]] = [
+    # Rentas del exterior y comparación patrimonial (antes que los conceptos generales: «pensión», «dividendos»…)
+    (rf"impuesto\w*.{{0,40}}{_AFUERA}|{_AFUERA}.{{0,30}}impuesto", "impuesto_pagado_exterior"),
+    (rf"pension\w*.{{0,40}}{_AFUERA}|{_AFUERA}.{{0,20}}pension", "pension_exterior"),
+    (rf"dividend\w*.{{0,40}}{_AFUERA}|{_AFUERA}.{{0,30}}dividend", "dividendos_exterior"),
+    (rf"(honorari|factur|freelance|clientes?).{{0,40}}{_AFUERA}", "honorarios_exterior"),
+    (rf"(salario|sueldo|me pagan|me pagaron|trabajo remoto|empleador|empresa).{{0,40}}{_AFUERA}", "salario_exterior"),
+    (r"patrimonio liquido.{0,40}(ano pasado|ano anterior|declaracion anterior|del \d{4})|(ano pasado|declaracion anterior).{0,30}patrimonio liquido", "patrimonio_liquido_anterior"),
     (r"cesantia", "cesantias"),
     (r"compr\w*.{0,40}factura|factura electronica.{0,30}(compr|a mi nombre|con mi cedula)|(pido|pedi|pidiendo|pidio) (la )?factura", "compras_factura"),
     (r"rendimient|(interes\w*|me (dio|dieron|pago|pagaron)|rindio|rindieron|gane).{0,40}\b(cdt|ahorros?|cuentas?|banco|inversion\w*|fondos?|fiducia)\b"
@@ -1077,36 +1113,37 @@ ACCIONES (las ejecuta el sistema después de validar)
 - "pregunta": si tu respuesta pide un dato, {{"campos": [claves de CAMPOS que esperas], "intencion": "calcular" | "obligacion" | "vencimiento" | "simular" | null}}. Si no preguntas nada, null.
 - "fuente": el título exacto de la sección de la BASE DE CONOCIMIENTO que usaste, o null.
 
-Responde SOLO con un objeto JSON, sin texto antes ni después:
+Responde SOLO con un objeto JSON, sin texto antes ni después. Claves posibles:
 {{"respuesta": "...", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+Omite las que queden vacías (el sistema las toma como vacías); "respuesta" siempre va.
 
 EJEMPLOS
 Usuario: que es la dian
-{{"respuesta": "Es la Dirección de Impuestos y Aduanas Nacionales, la entidad del Gobierno que recibe las declaraciones y cobra los impuestos nacionales. Sus trámites en línea se hacen en el portal MUISCA.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": "¿Qué es la DIAN?"}}
+{{"respuesta": "Es la Dirección de Impuestos y Aduanas Nacionales, la entidad del Gobierno que recibe las declaraciones y cobra los impuestos nacionales. Sus trámites en línea se hacen en el portal MUISCA.", "fuente": "¿Qué es la DIAN?"}}
 Usuario: gano 4 millones al mes y tengo un hijo
-{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "salarios", "valor": "4 millones", "periodo": "mensual"}}, {{"campo": "dependientes", "valor": 1}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "salarios", "valor": "4 millones", "periodo": "mensual"}}, {{"campo": "dependientes", "valor": 1}}]}}
 Usuario: me pagan 3 millones
-{{"respuesta": "¿Esos 3 millones son tu salario al mes o lo que recibiste en todo el año? Lo necesito para sumar bien tus ingresos.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": {{"campos": ["salarios"], "intencion": null}}, "fuente": null}}
+{{"respuesta": "¿Esos 3 millones son tu salario al mes o lo que recibiste en todo el año? Lo necesito para sumar bien tus ingresos.", "pregunta": {{"campos": ["salarios"], "intencion": null}}}}
 Usuario: y si pago prepagada de 300 mil al mes, cuánto me ahorro?
-{{"respuesta": "Mira la diferencia:", "anotar": [], "quitar": [], "simular": [{{"campo": "medicina_prepagada", "valor": "300 mil", "periodo": "mensual"}}], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Mira la diferencia:", "simular": [{{"campo": "medicina_prepagada", "valor": "300 mil", "periodo": "mensual"}}]}}
 Usuario: quita el carro, ya lo vendí
-{{"respuesta": "Listo, lo quité.", "anotar": [], "quitar": [{{"campo": "bien", "concepto": "carro"}}], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, lo quité.", "quitar": [{{"campo": "bien", "concepto": "carro"}}]}}
 Usuario: me retienen como 150 mil cada mes y mantengo a mi mamá
-{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "retenciones", "valor": "150 mil", "periodo": "mensual"}}, {{"campo": "dependientes", "valor": 1}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "retenciones", "valor": "150 mil", "periodo": "mensual"}}, {{"campo": "dependientes", "valor": 1}}]}}
 Usuario: soy independiente, facturé 95 millones el año pasado y tuve gastos de 20 millones
-{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "honorarios", "valor": "95 millones", "periodo": "anual"}}, {{"campo": "costos_independiente", "valor": "20 millones"}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "honorarios", "valor": "95 millones", "periodo": "anual"}}, {{"campo": "costos_independiente", "valor": "20 millones"}}]}}
 Usuario: no, perdón, eran 4 millones no 5   (antes había dicho "gano 5 millones al mes")
-{{"respuesta": "Listo, lo corregí.", "anotar": [{{"campo": "salarios", "valor": "4 millones", "periodo": "mensual"}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, lo corregí.", "anotar": [{{"campo": "salarios", "valor": "4 millones", "periodo": "mensual"}}]}}
 Usuario: no me hicieron retención
-{{"respuesta": "Listo, anoté que no te hicieron retención.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, anoté que no te hicieron retención."}}
 Usuario: compré como 20 millones con factura electrónica a mi nombre y el CDT me dio 1 millón de intereses
-{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "compras_factura", "valor": "20 millones", "periodo": "anual"}}, {{"campo": "rendimientos", "valor": "1 millón", "periodo": "anual"}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, lo anoté.", "anotar": [{{"campo": "compras_factura", "valor": "20 millones", "periodo": "anual"}}, {{"campo": "rendimientos", "valor": "1 millón", "periodo": "anual"}}]}}
 Usuario: tengo 15 millones en bitcoin
-{{"respuesta": "Listo, lo anoté en tu patrimonio.", "anotar": [{{"campo": "bien", "valor": "15 millones", "concepto": "Criptomonedas"}}], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, lo anoté en tu patrimonio.", "anotar": [{{"campo": "bien", "valor": "15 millones", "concepto": "Criptomonedas"}}]}}
 Usuario: no tengo nada de eso   (le habías preguntado por factura electrónica e intereses)
-{{"respuesta": "Listo, anoté que no tienes eso.", "anotar": [], "quitar": [], "simular": [], "calcular": false, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}
+{{"respuesta": "Listo, anoté que no tienes eso."}}
 Usuario: calcula
-{{"respuesta": "Calculo tu borrador con lo que tengo.", "anotar": [], "quitar": [], "simular": [], "calcular": true, "cambiar_anio": null, "mostrar": [], "pregunta": null, "fuente": null}}"""
+{{"respuesta": "Calculo tu borrador con lo que tengo.", "calcular": true}}"""
 
 
 def _datos_anio_texto(anio: int) -> str:
@@ -1283,7 +1320,37 @@ def _lista_dict(v: Any) -> list[dict[str, Any]]:
     return [{k: y for k, y in x.items() if not str(k).startswith("_")} for x in (v or []) if isinstance(x, dict)] if isinstance(v, list) else []
 
 
-KB_SECCIONES = 6  # secciones completas por turno; el resto va solo con su título
+KB_SECCIONES = 6  # secciones completas por turno
+OTRAS_SECCIONES = 12  # y los títulos de las que siguen en parecido
+
+
+# Grupos de campos que pocas personas usan: van en el prompt solo cuando la conversación los toca (RNF-08).
+_GRUPOS_RAROS = {
+    "exterior": rf"{_AFUERA}|\bece\b|sociedad\w* controlada|exterior",
+    "perdidas": r"perdida",
+    "comparacion": r"patrimonio|comparacion|primera declaracion|declaracion anterior|ano pasado declare|justific",
+}
+
+
+def _campos_texto(t: TurnoChat) -> str:
+    """Los campos que el modelo puede anotar. Los de exterior, pérdidas y comparación patrimonial solo si vienen al caso."""
+    reciente = norm(" ".join([t.mensaje, *(m.texto for m in t.historial[-4:])]))
+    usados = t.estado.respuestas.model_dump(exclude_defaults=True)
+    pendientes = set(t.estado.pregunta_pendiente.temas) if t.estado.pregunta_pendiente else set()
+    activos = {g for g, rx in _GRUPOS_RAROS.items() if re.search(rx, reciente) or usados.get(g) or g in pendientes}
+    lineas, ocultos = [], []
+    for k, v in CAMPOS.items():
+        grupo = v[0].split(".")[0]
+        if grupo in _GRUPOS_RAROS and grupo not in activos:
+            ocultos.append(grupo)
+            continue
+        lineas.append(f"- {k}: {v[2]}")
+    if ocultos:
+        nombres = {"exterior": "rentas del exterior y sociedades del exterior (ECE)", "perdidas": "pérdidas de años anteriores",
+                   "comparacion": "comparación patrimonial"}
+        lineas.append("(Hay más campos para " + ", ".join(nombres[g] for g in sorted(set(ocultos)))
+                      + ": aparecen aquí cuando la persona habla de eso. Si lo menciona sin cifras, pregúntale.)")
+    return "\n".join(lineas)
 
 
 def _base_relevante(t: TurnoChat, base: list[SeccionKB]) -> str:
@@ -1296,7 +1363,9 @@ def _base_relevante(t: TurnoChat, base: list[SeccionKB]) -> str:
     elegidas = [i for _, i in puntajes(t.mensaje)[:KB_SECCIONES]]
     elegidas += [i for _, i in puntajes(previo)[:2] if i not in elegidas]
     completas = "\n".join(f"### {base[i].titulo}\n{base[i].texto}" for i in elegidas)
-    titulos = "; ".join(s.titulo for i, s in enumerate(base) if i not in elegidas)
+    # Solo los títulos que se parecen algo a la conversación (antes iban los ~60: ~600 tokens por turno, RNF-08)
+    cercanas = [i for _, i in puntajes(f"{t.mensaje} {previo}") if i not in elegidas][:OTRAS_SECCIONES]
+    titulos = "; ".join(base[i].titulo for i in cercanas) or "—"
     return (completas or "(ninguna sección coincide con el mensaje)") + (
         f"\n\nOTRAS SECCIONES (solo el título; si la pregunta es sobre una de estas y no tienes su texto, responde lo básico sin inventar cifras): {titulos}"
     )
@@ -1341,11 +1410,13 @@ async def _con_ia(t: TurnoChat, vp: Liquidacion | None, al_texto: AlTexto | None
     base = base_del_anio(e.anio_gravable)
     sistema = (
         SISTEMA.format(hoy=fecha_texto(date.today()))
-        + "\n\nCAMPOS (claves para anotar, quitar o simular):\n" + "\n".join(f"- {k}: {v[2]}" for k, v in CAMPOS.items())
+        + "\n\nCAMPOS (claves para anotar, quitar o simular):\n" + _campos_texto(t)
         + "\n\nDATOS DEL AÑO:\n" + _datos_anio_texto(e.anio_gravable)
         + "\n\nBASE DE CONOCIMIENTO:\n" + _base_relevante(t, base)
     )
-    historial = "\n".join(f"{'Usuario' if m.rol == 'usuario' else 'Tú'}: {sin_datos_personales(m.texto[:500])}" for m in t.historial[-10:])
+    # Las respuestas propias se recortan más: lo que importa es lo que dijo la persona (RNF-08)
+    historial = "\n".join(f"{'Usuario' if m.rol == 'usuario' else 'Tú'}: {sin_datos_personales(m.texto[:500] if m.rol == 'usuario' else m.texto[:280])}"
+                          for m in t.historial[-8:])
     usuario = f"ESTADO:\n{_estado_texto(e, vp)}\n\nCONVERSACIÓN RECIENTE:\n{historial or '(es el primer mensaje)'}\n\nMENSAJE DEL USUARIO: {sin_datos_personales(t.mensaje)}"
 
     al_escribir = None
@@ -1357,6 +1428,7 @@ async def _con_ia(t: TurnoChat, vp: Liquidacion | None, al_texto: AlTexto | None
                 await al_texto(nuevo)
 
     r = await cliente.completar("asistente", sistema, usuario, json_mode=True, max_tokens=1800, al_escribir=al_escribir)
+    metricas.marcar(tokens_entrada=r.tokens_entrada)
     try:
         j = cliente.extraer_json(r.texto)
         if not isinstance(j, dict):
@@ -1592,6 +1664,12 @@ async def responder(t: TurnoChat, al_texto: AlTexto | None = None) -> RespuestaC
             con_ia = True
         except Exception as ex:  # noqa: BLE001 - si el modelo falla, responde la ruta sin IA
             log.warning("Asistente sin IA en este turno: %s", ex)
+            if "cifras" in str(ex):
+                metricas.marcar(descartada=True)  # la IA respondió, pero con cifras que no estaban en sus datos
+            elif cupo.limitado.get():
+                metricas.marcar(sin_cupo=True)
+            else:
+                metricas.marcar(error_ia=True)
     if plan is None:
         plan = _sin_ia(t)
 

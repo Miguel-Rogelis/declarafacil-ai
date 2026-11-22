@@ -71,11 +71,14 @@ def _uvt(n: float) -> str:
 class _Calculo:
     """Una liquidación completa para una opción de independiente dada."""
 
-    def __init__(self, d: DatosDeclaracion, r: dict[str, Any], opcion_ind: str, adicional: float = 0.0):
+    def __init__(self, d: DatosDeclaracion, r: dict[str, Any], opcion_ind: str, adicional: float = 0.0, dep_solo_72: bool = False):
         self.d = d
         self.r = r
         self.uvt = float(r["uvt"])
         self.opcion_ind = opcion_ind
+        # Sin salarios, cada dependiente da derecho a una sola de las dos deducciones (num. 1.1.2 art. 1.2.1.20.3 DUR,
+        # Decreto 2231 de 2023): o el 10 % del art. 387 o 72 UVT. Con esto se usa 72 UVT para todos.
+        self.dep_solo_72 = dep_solo_72
         self.adicional = adicional  # rentas gravables (casilla 96): la renta por comparación patrimonial
         self.secciones: list[Seccion] = []
         self.alertas: list[Alerta] = []
@@ -143,7 +146,8 @@ class _Calculo:
 
         # Deducciones y rentas exentas sujetas al límite del 40 % (1.340 UVT desde 2023; 5.040 UVT antes)
         dep_387 = 0.0
-        if ded.dependientes >= 1 and hay_trabajo:
+        solo_72 = self.dep_solo_72 and ingresos_lab <= 0
+        if ded.dependientes >= 1 and hay_trabajo and not solo_72:
             dep_387 = min(ingresos_trabajo * cg["dependiente_art387_pct"], self.u(cg["dependiente_art387_tope_uvt"]))
         prepagada = min(ded.medicina_prepagada, self.u(cg["medicina_prepagada_tope_uvt"])) if hay_trabajo else 0
         intereses = min(ded.intereses_vivienda, self.u(cg["intereses_vivienda_tope_uvt"]))
@@ -224,7 +228,7 @@ class _Calculo:
         # Fuera del límite
         n_72 = 0
         if hay_trabajo and ded.dependientes > 0:
-            if ingresos_lab > 0:
+            if ingresos_lab > 0 or solo_72:
                 n_72 = min(ded.dependientes, cg["dependiente_adicional_max"])
             else:
                 n_72 = min(max(ded.dependientes - 1, 0), cg["dependiente_adicional_max"])
@@ -551,16 +555,24 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
     uvt = float(r["uvt"])
     redondeo = int(r.get("redondeo_pesos", 1000))
 
-    # Independientes: elegir costos o renta exenta del 25 %, lo que resulte más favorable
+    # Independientes: elegir costos o renta exenta del 25 %, lo que resulte más favorable. Y si solo hay honorarios
+    # (sin salarios), elegir también para los dependientes entre el 10 % del art. 387 y 72 UVT por cada uno.
     opcion = d.independiente.opcion
     if d.independiente.honorarios_y_servicios <= 0:
         opcion = "renta_exenta_25"
+    opciones = ["costos", "renta_exenta_25"] if opcion == "auto" else [opcion]
+    sin_salarios = d.laboral.salarios_y_pagos_laborales + d.laboral.cesantias_e_intereses + d.exterior.salarios <= 0
+    hay_ind = d.independiente.honorarios_y_servicios + d.exterior.honorarios > 0
+    hay_72 = r["cedula_general"].get("dependiente_adicional_uvt", 0) > 0  # desde el AG 2023 (Ley 2277)
+    variantes_dep = [False, True] if (sin_salarios and hay_ind and hay_72 and d.deducciones.dependientes >= 1) else [False]
+    candidatos = []
+    for op in opciones:
+        for solo_72 in variantes_dep:
+            c = _Calculo(d, r, op, dep_solo_72=solo_72)
+            candidatos.append((c, c.ejecutar()))
+    calc, res = min(candidatos, key=lambda cr: cr[1]["impuesto_neto"])  # en empate, el primero
+    opcion_elegida = calc.opcion_ind if d.independiente.honorarios_y_servicios > 0 else None
     if opcion == "auto":
-        a = _Calculo(d, r, "costos")
-        b = _Calculo(d, r, "renta_exenta_25")
-        ra, rb = a.ejecutar(), b.ejecutar()
-        calc, res = (a, ra) if ra["impuesto_neto"] < rb["impuesto_neto"] else (b, rb)
-        opcion_elegida = calc.opcion_ind
         calc.alertas.append(
             Alerta(
                 nivel="info",
@@ -571,10 +583,15 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
                 + " te deja un impuesto menor. La ley no permite usar ambas a la vez.",
             )
         )
-    else:
-        calc = _Calculo(d, r, opcion)
-        res = calc.ejecutar()
-        opcion_elegida = opcion if d.independiente.honorarios_y_servicios > 0 else None
+    otra_dep = [res_o["impuesto_neto"] for c_o, res_o in candidatos if c_o.opcion_ind == calc.opcion_ind and c_o.dep_solo_72 != calc.dep_solo_72]
+    if otra_dep and otra_dep[0] > res["impuesto_neto"]:
+        calc.alertas.append(Alerta(
+            nivel="info", titulo="Elegimos cómo tomar la deducción por dependientes",
+            detalle=("Como tus ingresos de trabajo son honorarios (sin contrato laboral), cada dependiente da derecho a una sola deducción: "
+                     "el 10 % del art. 387 o 72 UVT (num. 3 art. 336 ET y art. 1.2.1.20.3 del DUR). "
+                     + ("Te conviene más tomar 72 UVT por cada uno, fuera del límite del 40 %." if calc.dep_solo_72
+                        else "Te conviene más el 10 % por uno de ellos y 72 UVT por cada uno de los demás.")),
+        ))
 
     # Patrimonio
     bruto = sum(b.valor for b in d.patrimonio.bienes)
@@ -595,7 +612,7 @@ def liquidar(d: DatosDeclaracion, r: dict[str, Any] | None = None) -> Liquidacio
         comparacion = (incremento, renta_comp)
         if renta_comp > 0:
             alertas_previas = [a for a in calc.alertas if a.titulo.startswith("Elegimos")]
-            calc = _Calculo(d, r, calc.opcion_ind, adicional=renta_comp)
+            calc = _Calculo(d, r, calc.opcion_ind, adicional=renta_comp, dep_solo_72=calc.dep_solo_72)
             res = calc.ejecutar()
             calc.alertas += alertas_previas
             calc.alertas.append(Alerta(

@@ -40,7 +40,7 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
     if not disponible(anio):
         return Formulario(
             anio_gravable=anio, disponible=False,
-            motivo=f"Para el año gravable {anio} la DIAN usó un formulario 210 con otra numeración. La vista casilla por casilla está para 2023, 2024 y 2025; "
+            motivo=f"Para el año gravable {anio} la DIAN usó un formulario 210 con otra numeración. La vista casilla por casilla está desde el año gravable 2023; "
                    "el borrador por secciones sí sirve para ese año.",
         )
     c: dict[int, float] = {}

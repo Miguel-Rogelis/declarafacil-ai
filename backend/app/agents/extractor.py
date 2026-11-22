@@ -125,6 +125,9 @@ def entidad_de(doc: DocumentoLeido, nombre_archivo: str = "") -> tuple[str | Non
                 nombre = c
                 break
     if nombre:
+        # Quitar el rótulo que a veces precede al nombre ("Retenedor: ACME S.A.S.")
+        nombre = re.sub(r"^\s*(agente retenedor|retenedor|empleador|pagador|entidad|expedido por|nombre o raz[oó]n social|raz[oó]n social)\s*[:\-]\s*", "",
+                        nombre, flags=re.IGNORECASE)
         nombre = re.sub(r"\s+", " ", nombre).strip()[:70]
     return nombre, nit
 
@@ -498,8 +501,11 @@ _PARENTESCO = re.compile(r"\b(hij[oa]s?|conyuge|esposa|esposo|companer[oa] perma
 def _pistas_220(lineas: list[str]) -> list[str]:
     """El 220 trae el dependiente económico (sin datos personales queda solo el parentesco)."""
     for i, linea in enumerate(lineas):
-        if "dependiente economico" in _n(linea):
-            m = _PARENTESCO.search(" ".join(_n(x) for x in lineas[i + 1:i + 6]))
+        n = _n(linea)
+        if re.search(r"\bdependiente(s)?\b", n) and "a cargo del trabajador" not in n:
+            # El parentesco puede venir en la misma línea ("Datos del dependiente: hijo") o en las siguientes
+            resto = n.split("dependiente", 1)[1]
+            m = _PARENTESCO.search(" ".join([resto] + [_n(x) for x in lineas[i + 1:i + 6]]))
             if m:
                 return [f"dependiente:{m.group(1)}"]
     return []

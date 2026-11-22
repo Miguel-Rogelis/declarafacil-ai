@@ -105,7 +105,7 @@ backend/
   data/agentes.json modelos y temperatura por agente (agentes_pago.json: perfil de pago; precios.json: USD por millón de tokens)
   data/conocimiento base de conocimiento del Asistente
   data/demo/        exógena y certificados ficticios (220 y banco) para probar
-  tests/            226 pruebas (motor por año, exterior, pérdidas y comparación patrimonial, formulario 210 casilla por casilla, agentes, OCR, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada, cuentas, cupo, almacén, métricas y KPI)
+  tests/            282 pruebas (motor por año, casos resueltos publicados, oráculo independiente y propiedades sobre miles de perfiles al azar, flujo con certificados variados, exterior, pérdidas y comparación patrimonial, formulario 210 casilla por casilla, agentes, OCR, certificados y cruce de documentos, conversaciones del chat, API, ruta con IA simulada, cuentas, cupo, almacén, métricas y KPI)
   scripts/          generadores de la exógena y los certificados demo y de las reglas 2021-2024; carga.py: prueba de carga y costo
 docs/carga/         resultados de la prueba de carga del pico de temporada
 frontend/           React + Vite + TypeScript, animaciones con Motion

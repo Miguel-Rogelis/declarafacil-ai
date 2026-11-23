@@ -22,7 +22,10 @@
     let cuerpo = null;
     const crear = () => {
       if (host?.isConnected) return true;
-      if (!document.body || document.body.tagName !== "BODY") return false;
+      if (document.querySelector("frameset")) return false;
+      // MUISCA puede tener dos <body>: el panel va en el que tiene el contenido
+      const destino = Array.from(document.querySelectorAll("body")).sort((a, b) => b.childElementCount - a.childElementCount)[0];
+      if (!destino) return false;
       host = document.createElement("div");
       host.id = "declarafacil-panel";
       host.style.cssText = "all: initial; position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;";
@@ -67,7 +70,7 @@
       cuerpo.setAttribute("aria-live", "polite");
       caja.append(cabeza, cuerpo);
       raiz.append(estilo, caja);
-      document.body.appendChild(host);
+      destino.appendChild(host);
       return true;
     };
     const el = (tag, clase, texto) => {
@@ -269,7 +272,7 @@
       const caja = Array.from(document.querySelectorAll('input[type="checkbox"], input[type="radio"]')).find((c) => !c.checked && DF.visible(c) && ACEPTA.test(textoCerca(c)));
       if (caja) return { clave: "acepto", texto: "Acepto las condiciones del servicio de consulta.", hacer: () => caja.click() };
       // En MUISCA las condiciones se aceptan con un botón «Aceptar» debajo del texto (sin casilla)
-      if (/condiciones|terminos/.test(DF.norm(document.body?.innerText?.slice(0, 30000)))) {
+      if (/condiciones|terminos/.test(DF.textoPagina())) {
         const b = hallar(/^(aceptar|acepto|aceptar condiciones)$/);
         if (b)
           return {
@@ -290,6 +293,9 @@
       for (const s of document.querySelectorAll("select")) {
         if (!DF.visible(s) || s.disabled) continue;
         const op = Array.from(s.options).find((o) => new RegExp(`\\b${anio}\\b`).test(o.text) || o.value === String(anio));
+        const anios = Array.from(s.options, (o) => (o.text.match(/\b(20\d{2})\b/) || [])[1]).filter(Boolean);
+        if (!op && anios.length >= 2)
+          return { clave: "sin_anio", texto: `La DIAN todavía no tiene la exógena del año gravable ${anio}. En la consulta solo aparecen ${anios.join(", ")}.` };
         if (op && s.value !== op.value) return { clave: "anio", texto: `Elijo el año gravable ${anio}.`, hacer: () => DF.escribir(s, op.value) };
         if (op) hechos.add("anio");
       }
@@ -320,6 +326,12 @@
     let avisoLogin = false;
     while (flujo && quieto < 40) {
       const a = siguienteAccion(flujo.anio, hechos);
+      if (a?.clave === "sin_anio") {
+        mostrarFlujo(a.texto);
+        void enviar({ tipo: "m:detener" });
+        flujo = null;
+        return;
+      }
       if (a?.clave === "login") {
         if (!avisoLogin) mostrarFlujo(a.texto);
         avisoLogin = true;
@@ -440,8 +452,28 @@
 
   const pareceFormulario210 = () => {
     const campos = Array.from(document.querySelectorAll(DF.CAMPOS)).filter(DF.esCampo).length;
-    const texto = DF.norm(document.body?.innerText?.slice(0, 30000));
+    const texto = DF.textoPagina();
     return campos >= 15 && /\b210\b/.test(texto) && /renta/.test(texto);
+  };
+
+  /** Espera unos segundos a que aparezca el 210 y ofrece llenarlo. */
+  const ofrecerLlenado = async (f) => {
+    for (let i = 0; i < 15; i++) {
+      if (pareceFormulario210()) {
+        panel.poner(
+          panel.el("p", null, `Tienes tu borrador del formulario 210 (año gravable ${f.anio}): ${f.escribir} casilla${f.escribir === 1 ? "" : "s"} para escribir.`),
+          panel.boton("Llenar casillas", async () => {
+            panel.poner(panel.el("p", null, "Escribiendo tus casillas…"));
+            const r = await enviar({ tipo: "m:llenar" });
+            if (!r?.ok) panel.poner(panel.el("p", "mal", r?.error || "No pude llenar las casillas."));
+          }),
+          panel.el("p", "suave", "Solo escribo los valores. Revisas, firmas y presentas tú."),
+        );
+        return true;
+      }
+      await esperar(2000);
+    }
+    return false;
   };
 
   (async () => {
@@ -452,23 +484,21 @@
       void recorrerExogena();
       return;
     }
-    if (!estado.formulario || !(ES_TOP || esMarcoGrande())) return;
+    if (!(ES_TOP || esMarcoGrande())) return;
     // El formulario de MUISCA puede tardar en armarse: se revisa unos segundos
-    for (let i = 0; i < 15; i++) {
-      if (pareceFormulario210()) {
-        const f = estado.formulario;
-        panel.poner(
-          panel.el("p", null, `Tienes tu borrador del formulario 210 (año gravable ${f.anio}): ${f.escribir} casilla${f.escribir === 1 ? "" : "s"} para escribir.`),
-          panel.boton("Llenar casillas", async () => {
-            panel.poner(panel.el("p", null, "Escribiendo tus casillas…"));
-            const r = await enviar({ tipo: "m:llenar" });
-            if (!r?.ok) panel.poner(panel.el("p", "mal", r?.error || "No pude llenar las casillas."));
-          }),
-          panel.el("p", "suave", "Solo escribo los valores. Revisas, firmas y presentas tú."),
-        );
-        return;
+    if (estado.formulario) await ofrecerLlenado(estado.formulario);
+    // El 210 nuevo de MUISCA es una aplicación de una sola página (Angular): el formulario aparece al
+    // cambiar la ruta (#/ingreso → #/formulario) sin recargar, así que se vuelve a mirar en cada cambio
+    let buscando = false;
+    addEventListener("hashchange", async () => {
+      if (buscando || flujo) return;
+      buscando = true;
+      try {
+        const e = await enviar({ tipo: "m:hola", principal: ES_TOP });
+        if (e?.formulario) await ofrecerLlenado(e.formulario);
+      } finally {
+        buscando = false;
       }
-      await esperar(2000);
-    }
+    });
   })();
 })();

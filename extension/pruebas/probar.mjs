@@ -52,6 +52,33 @@ const FORMULARIO_210 = pagina(
    </script>`,
 );
 
+// El 210 nuevo de MUISCA (revisado el 22-nov-2026): aplicación de una sola página en Angular en
+// /WebDilIngresoFormRenta210/. El formulario aparece al cambiar la ruta a #/formulario, sin recargar, y cada
+// campo se llama cs_id_<casilla> (id y name), con formato de miles al salir del campo; las calculadas, deshabilitadas.
+const casillaSpa = (n, nombre, calculada) =>
+  `<div class="fila"><span class="num">${n}</span><label for="cs_id_${n}">${nombre}</label>
+   <input type="text" id="cs_id_${n}" name="cs_id_${n}" class="inputs-form number-value"${calculada ? " disabled" : ""}></div>`;
+const FORMULARIO_SPA = pagina(
+  "DIAN",
+  `<div id="app">Declaración de renta personas naturales · Haga su declaración de renta</div>
+   <script>
+     function pintar() {
+       if (location.hash.indexOf("#/formulario") !== 0) return;
+       document.getElementById("app").innerHTML = "<h2>Formulario 210 · Declaración de renta y complementario personas naturales · Año gravable 2025</h2>" +
+         ${JSON.stringify(
+           [casillaSpa(29, "Total patrimonio bruto"), casillaSpa(30, "Deudas"), casillaSpa(31, "Total patrimonio líquido", true), casillaSpa(32, "Ingresos brutos de las rentas de trabajo"),
+            casillaSpa(33, "Ingresos no constitutivos de renta"), casillaSpa(36, "Rentas exentas AFC"), casillaSpa(58, "Ingresos brutos de las rentas de capital"),
+            casillaSpa(91, "Renta líquida cédula general", true), ...Array.from({ length: 12 }, (_, i) => casillaSpa(200 + i, "Casilla de relleno"))].join(""),
+         )};
+       const v = (id) => Number((document.getElementById(id).value || "").replace(/\\D/g, "") || 0);
+       document.querySelectorAll(".number-value").forEach((i) => i.addEventListener("blur", () => {
+         const d = i.value.replace(/\\D/g, ""); i.value = d ? Number(d).toLocaleString("es-CO") : "";
+         document.getElementById("cs_id_31").value = (v("cs_id_29") - v("cs_id_30")).toLocaleString("es-CO");
+       }));
+     }
+     addEventListener("hashchange", () => setTimeout(pintar, 800));
+   </script>`,
+);
 const LOGIN = pagina(
   "Ingreso MUISCA",
   `<form method="post" action="/WebIdentidadLogin/entrar"><label>Usuario <input name="usuario"></label>
@@ -96,6 +123,47 @@ const TABLERO = pagina(
        <div id="filaAnio" style="display:none">Año : <select name="frmExo:anio"><option>2023</option><option>2024</option><option selected>2025</option></select>
          <input type="image" name="frmExo:consultar" alt="Consultar" style="width:80px;height:22px"></div>
      </form></div>`,
+);
+// La MUISCA real, revisada el 22-nov-2026 con una sesión real: dos <body> (el primero vacío), Prototype.js 1.6
+// (Array.from = $A, que ignora el mapeo y no entiende FormData; toJSON en los arreglos), el diálogo «Consulta
+// Exógena» con botones de imagen SIN alt (botaceptarutv.gif, botconsultar.gif), el año en un select y la descarga
+// con un enlace de comando de JSF (form.submit() con «_idcl»). Para años anteriores a 2023, window.open del reporte.
+const TABLERO_REAL = pagina(
+  "Inicio",
+  `<script>
+     Array.from = function $A(it) { if (!it) return []; if (it.toArray) return it.toArray(); var n = it.length, r = new Array(n); while (n--) r[n] = it[n]; return r; };
+     Array.prototype.toJSON = function () { return "[" + this.join(", ") + "]"; };
+   </script>
+   <form id="vistaDashboard:frmDashboard" method="post" action="/WebDashboard/DefDashboard.faces;jsessionid=ABC">
+     <input type="hidden" name="javax.faces.ViewState" value="r-1">
+     <input type="hidden" name="vistaDashboard:frmDashboard:_idcl" value="">
+     <table><tr><td><a href="${MUISCA}/WebDashboard/;jsessionid=ABC" onclick="showAnios(true);return false;">Consultar información Exógena<br>Información Reportada por terceros</a></td></tr></table>
+     <div id="vistaDashboard:frmDashboard:aniosPanel" style="display:none">
+       <div>Consulta Exógena: CONDICIONES ACEPTACION INFORMACION REPORTADA POR TERCEROS</div>
+       <p>4. Usted deberá aceptar las condiciones aquí mencionadas con el fin de acceder a la consulta de la información de los años gravables.</p>
+       <input type="image" id="vistaDashboard:frmDashboard:btnBuscar" name="vistaDashboard:frmDashboard:btnBuscar" src="/WebArquitectura/imagenes/es/botones/botrollover.gif" onmouseover="this.src='/WebArquitectura/imagenes/es/botones/botrollover.gif';null" onmouseout="this.src='/WebDashboard/imagenes/es/botonesTexto/botaceptarutv.gif';null" style="width:80px;height:22px" onclick="consReporteExogena();return false;">
+       <div id="vistaDashboard:frmDashboard:panelSeleccion" style="display:none">Año :
+         <select id="vistaDashboard:frmDashboard:anioSel" name="vistaDashboard:frmDashboard:anioSel"><option value="">Seleccione</option><option value="2021">2021</option><option value="2022">2022</option><option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option></select>
+         <input type="hidden" id="vistaDashboard:frmDashboard:hddAnioSel" name="vistaDashboard:frmDashboard:hddAnioSel" value="">
+         <input type="image" id="vistaDashboard:frmDashboard:btnExogenaGenerar" src="botconsultar.gif;jsessionid=ABC" style="width:80px;height:22px" onclick="reporteExogena('','');return false;">
+         <a href="#" id="vistaDashboard:frmDashboard:lnkDescargarReporteExogena" onclick="document.forms['vistaDashboard:frmDashboard']['vistaDashboard:frmDashboard:_idcl'].value='vistaDashboard:frmDashboard:lnkDescargarReporteExogena'; document.forms['vistaDashboard:frmDashboard'].submit();return false;"></a>
+       </div>
+     </div>
+   </form>
+   <script>
+     function showAnios(v) { document.getElementById("vistaDashboard:frmDashboard:aniosPanel").style.display = v ? "block" : "none"; }
+     function consReporteExogena() { document.getElementById("vistaDashboard:frmDashboard:panelSeleccion").style.display = "block"; }
+     function reporteExogena() {
+       var s = document.getElementById("vistaDashboard:frmDashboard:anioSel");
+       if (s.selectedIndex == 0) return false;
+       var anio = s.options[s.selectedIndex].value;
+       if (anio < 2023) window.open("/WebReportes/reportservlet?PR_reporte=reporteInformacionExogena&PU_anio=" + anio + "&PR_renderer=xls", "", "width=350,height=280,scrollbars=yes");
+       else { document.getElementById("vistaDashboard:frmDashboard:hddAnioSel").value = anio; document.getElementById("vistaDashboard:frmDashboard:lnkDescargarReporteExogena").onclick(); }
+       showAnios(false);
+       return false;
+     }
+     (function () { var b2 = document.createElement("body"); while (document.body.firstChild) b2.appendChild(document.body.firstChild); document.documentElement.appendChild(b2); })();
+   </script>`,
 );
 const APP_HTML = pagina(
   "DeclaraFácil (simulada)",
@@ -149,8 +217,18 @@ await contexto.route(`${MUISCA}/**`, async (route) => {
   peticiones.push(`${r.method()} ${url.pathname}`);
   const html = (h) => route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: h });
   if (url.pathname.startsWith("/WebFormulario")) return html(FORMULARIO_210);
+  if (url.pathname.startsWith("/WebDilIngresoFormRenta210")) return html(FORMULARIO_SPA);
+  if (url.pathname === "/WebDashboard/DefDashboard.faces;jsessionid=ABC") {
+    const descarga = cuerpo.includes("_idcl=vistaDashboard%3AfrmDashboard%3AlnkDescargarReporteExogena") && cuerpo.includes("hddAnioSel=2025");
+    if (descarga) return route.fulfill({ status: 200, headers: { "content-type": "application/vnd.ms-excel", "content-disposition": 'attachment; filename="InformacionExogena2025.xlsx"' }, body: EXOGENA });
+    return html(TABLERO_REAL);
+  }
+  if (url.pathname === "/WebReportes/reportservlet") {
+    if (url.searchParams.get("PU_anio") !== "2022" || url.searchParams.get("PR_renderer") !== "xls") return route.fulfill({ status: 400, body: "reporte equivocado" });
+    return route.fulfill({ status: 200, headers: { "content-type": "application/vnd.ms-excel", "content-disposition": 'attachment; filename="reporte.xls"' }, body: EXOGENA });
+  }
   if (url.pathname === "/WebDashboard/DefDashboard.faces") {
-    if (r.method() === "GET") return html(TABLERO);
+    if (r.method() === "GET") return html(url.searchParams.get("real") ? TABLERO_REAL : TABLERO);
     if (cuerpo.includes("frmExo%3Aaceptado=si") && cuerpo.includes("frmExo%3Aanio=2025") && cuerpo.includes("frmExo%3Aconsultar"))
       return route.fulfill({ status: 200, headers: { "content-type": "application/vnd.ms-excel", "content-disposition": 'attachment; filename="InformacionExogena2025.xlsx"' }, body: EXOGENA });
     return html(TABLERO);
@@ -220,6 +298,27 @@ assert.ok(c31 && c31.muisca === 200_000_000 && c31.borrador === 200_000_000, JSO
 assert.equal(r1.resumen.avisoAnio, null);
 assert.equal(await f210.evaluate(() => window.firmado ?? false), false);
 paso("llena por atributo y por etiqueta, respeta la máscara y compara el total que calcula MUISCA");
+
+// 2b) El 210 nuevo de MUISCA (Angular): el formulario aparece al cambiar la ruta y los campos se llaman cs_id_<casilla>
+const spa = await contexto.newPage();
+await spa.goto(`${MUISCA}/WebDilIngresoFormRenta210/#/ingreso`);
+await new Promise((r) => setTimeout(r, 1500));
+assert.equal(await spa.$("#declarafacil-panel"), null); // en el menú todavía no hay formulario
+await spa.evaluate(() => {
+  location.hash = "#/formulario";
+});
+await spa.waitForSelector("#declarafacil-panel", { timeout: 15000 });
+const tabSpa = await sw.evaluate(async () => (await chrome.tabs.query({ url: "https://muisca.dian.gov.co/WebDilIngresoFormRenta210/*" }))[0].id);
+const rSpa = await sw.evaluate((id) => llenarEn(id), tabSpa);
+assert.equal(rSpa.ok, true, rSpa.error);
+assert.deepEqual(rSpa.resumen.llenadas.map((x) => x.n).sort((a, b) => a - b), [29, 30, 32, 33, 36, 58]);
+assert.deepEqual(rSpa.resumen.noEncontradas, []);
+assert.equal(await spa.inputValue("#cs_id_29"), "250.000.000");
+assert.equal(await spa.inputValue("#cs_id_58"), "1.000.000");
+const c31spa = rSpa.resumen.calculadas.find((c) => c.n === 31);
+assert.ok(c31spa && c31spa.muisca === 200_000_000, JSON.stringify(rSpa.resumen.calculadas));
+await spa.close();
+paso("en el 210 nuevo de MUISCA (Angular): aparece al cambiar de ruta y llena los campos cs_id_<casilla>");
 
 // 3) Enseñar la casilla 36 y volver a llenar
 await sw.evaluate((id) => ensenar(id, 36), tabId);
@@ -302,6 +401,38 @@ const recibido3 = await esperarHasta(() => app.evaluate(() => window.recibido), 
 assert.equal(recibido3.nombre, "InformacionExogena2025.xlsx");
 assert.ok(Buffer.from(recibido3.base64, "base64").equals(EXOGENA));
 paso("en el tablero real: abre «Consulta de información exógena», acepta con el botón, consulta y trae el archivo");
+
+// 4d) La MUISCA real (22-nov-2026): dos <body>, Prototype.js, botones de imagen sin alt y descarga por JSF
+for (const [anio, nombre, ruta] of [
+  [2025, "InformacionExogena2025.xlsx", "POST /WebDashboard/DefDashboard.faces;jsessionid=ABC"],
+  [2022, "reporte.xls", "GET /WebReportes/reportservlet"],
+]) {
+  await app.evaluate(() => {
+    window.recibido = null;
+  });
+  peticiones.length = 0;
+  await dian.goto(`${MUISCA}/WebDashboard/DefDashboard.faces?real=1`);
+  await app.evaluate((a) => window.mandar({ tipo: "pedir-exogena", id: 10 + a, anio: a }), anio);
+  const r = await esperarHasta(() => app.evaluate(() => window.recibido), 30000, `la exógena ${anio} desde el tablero real`);
+  assert.equal(r.nombre, nombre);
+  assert.ok(Buffer.from(r.base64, "base64").equals(EXOGENA));
+  assert.ok(peticiones.includes(ruta), `faltó ${ruta}: ${peticiones.join(", ")}`);
+}
+paso("en la MUISCA real (dos <body>, Prototype.js, botones sin alt): trae la exógena 2025 por JSF y la 2022 por la ventanita");
+
+// 4e) Si el año todavía no está en la consulta, para y lo dice (sin consultar otro año)
+await app.evaluate(() => {
+  window.recibido = null;
+});
+peticiones.length = 0;
+await dian.goto(`${MUISCA}/WebDashboard/DefDashboard.faces?real=1`);
+await app.evaluate(() => window.mandar({ tipo: "pedir-exogena", id: 20, anio: 2026 }));
+await esperarHasta(async () => (await sw.evaluate(async () => (await chrome.storage.session.get("flujo")).flujo ?? null)) !== null, 10000, "que empiece el pedido");
+await esperarHasta(async () => (await sw.evaluate(async () => (await chrome.storage.session.get("flujo")).flujo ?? null)) === null, 20000, "que el pedido termine");
+await new Promise((r) => setTimeout(r, 1500));
+assert.equal(await app.evaluate(() => window.recibido), null);
+assert.ok(!peticiones.some((p) => p.startsWith("POST /WebDashboard") || p.startsWith("GET /WebReportes")), peticiones.join(", "));
+paso("si el año aún no está en la consulta de la DIAN, para y no consulta otro año");
 
 // 5) Si DeclaraFácil estaba cerrado, la exógena queda en memoria y se entrega al abrirlo
 await sw.evaluate(async () => {

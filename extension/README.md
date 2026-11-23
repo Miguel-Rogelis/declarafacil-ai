@@ -41,7 +41,7 @@ Todo está listo en `tienda/`: `python extension/tienda/empaquetar.py --tienda` 
 
 ## Cómo encuentra cada casilla
 
-En este orden: lo que la persona le enseñó → el número en el `id`, `name` o título del campo (`cas32`, `casilla_32`) → la cajita con el número de la casilla en la misma fila. Como no tenemos acceso a una cuenta de MUISCA para probar, la primera vez puede que no encuentre todas: para eso están «Mostrarme dónde están» y el **diagnóstico**.
+En este orden: lo que la persona le enseñó → el número en el `id`, `name` o título del campo (`cs_id_32` en el 210 de MUISCA, también `cas32` o `casilla_32`) → la cajita con el número de la casilla en la misma fila. El 210 de MUISCA es una aplicación en Angular que guarda cada casilla como `modelo.doc.cuerpo.cs_id_<n>` y arma los campos con `id="cs_id_<n>"`; la extensión vuelve a buscar el formulario cada vez que cambia la ruta, porque aparece sin recargar la página. Si alguna casilla no aparece, están «Mostrarme dónde están» y el **diagnóstico**.
 
 **Diagnóstico** (ventanita → Herramientas → Copiar diagnóstico): copia cómo está armada la página abierta de MUISCA (ids y nombres de los campos, textos de botones y enlaces, números de casilla en pantalla), **sin valores** y con los números largos tapados. Si alguien del equipo lo corre una vez en el formulario 210 y en la consulta de la exógena, con eso se ajustan los selectores para todos. «Copiar casillas aprendidas» exporta lo que la persona le enseñó, para incluirlo como mapa por defecto.
 
@@ -51,7 +51,8 @@ En este orden: lo que la persona le enseñó → el número en el `id`, `name` o
 
 ## Límites
 
-- Hecha y probada contra páginas simuladas: los nombres reales de los botones y campos de MUISCA hay que confirmarlos con el diagnóstico.
-- Si MUISCA abre la exógena en una ventana emergente o la manda al correo, hay que descargarla y subirla a mano.
+- **Exógena, revisada en la MUISCA real (22-nov-2026):** el diálogo «Consulta Exógena» del tablero tiene los botones «Aceptar» y «Consultar» como imágenes sin texto (`botaceptarutv.gif`, `botconsultar.gif`), la página tiene dos `<body>` (el primero vacío) y carga Prototype.js 1.6, que cambia `Array.from`. Desde 2023 el Excel sale de un enlace de comando de JSF (`lnkDescargarReporteExogena`, con `form.submit()`); antes de 2023, de una ventanita (`/WebReportes/reportservlet?…&PR_renderer=xls`). Con la sesión real, repetir ese envío devolvió el Excel (.xlsx). Si el año pedido no está en la lista, la extensión lo dice y no consulta otro.
+- **Formulario 210:** la estructura (`cs_id_<n>`) se tomó del código de la aplicación de MUISCA; falta verlo con un borrador abierto, porque abrir uno crea un borrador en la cuenta.
+- Si MUISCA manda la exógena al correo, hay que descargarla y subirla a mano.
 - Las casillas que abren un anexo en MUISCA (por ejemplo, la 299 de compras con factura electrónica) se llenan a mano.
 - Las casillas en 0 no se tocan: si MUISCA trae un valor sugerido ahí, revísalo.

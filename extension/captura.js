@@ -10,6 +10,15 @@
   if (window.__dfCaptura) return;
   window.__dfCaptura = true;
 
+  // MUISCA carga Prototype.js 1.6, que cambia Array.from por su $A (ignora la función de mapeo y no
+  // entiende FormData) y le pone toJSON a los arreglos. Aquí no se usa ninguno de los dos: solo
+  // ciclos for…of y copias con [...x], que siguen siendo nativos.
+  const pares = (iterable, f) => {
+    const out = [];
+    for (const x of iterable) out.push(f(x));
+    return out;
+  };
+
   let armado = false;
   let dejarPasar = false;
   let ultimoClic = { texto: "", cuando: 0 };
@@ -20,11 +29,30 @@
   const DESCARGA = /descarg|export|excel|\bxlsx?\b|\bcsv\b|generar|archivo|^consultar$|^consultar reporte|^ver reporte|^ver archivo/i;
   const ARCHIVO = /spreadsheet|excel|octet-stream|vnd\.ms|officedocument|zip|csv|pdf/i;
 
+  // Botones de imagen sin alt (MUISCA: botconsultar.gif): el texto sale del nombre del archivo
+  const deImagen = (src) => {
+    const base = String(src || "").split(/[?#;]/)[0].split("/").pop().replace(/\.(gif|png|jpe?g|svg|webp)$/i, "");
+    return base.replace(/^(boton|bot|btn)[_-]?/i, "").replace(/(utv|_?es|_?on|_?off|_?activo|_?hover|\d+)$/i, "").replace(/[_-]+/g, " ").trim();
+  };
+
   const texto = (el) => {
     if (!el) return "";
     const t = el.tagName === "INPUT" ? el.value || el.getAttribute("alt") || el.title : el.innerText || el.textContent || el.title;
     const img = el.querySelector?.("img[alt]")?.getAttribute("alt");
-    return String(t?.trim() || img || el.getAttribute?.("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    const srcDe = (x) => {
+      const src = x?.getAttribute?.("src") || "";
+      const fuera = (x?.getAttribute?.("onmouseout") || "").match(/src\s*=\s*['"]([^'"]+)['"]/);
+      return fuera && (/rollover|hover|over\./i.test(src) || !src) ? fuera[1] : src;
+    };
+    const archivo = el.tagName === "INPUT" && el.type === "image" ? deImagen(srcDe(el)) : deImagen(srcDe(el.querySelector?.("img")));
+    return String(t?.trim() || img || el.getAttribute?.("aria-label") || archivo || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  };
+
+  // En JSF un enlace de comando llena el campo oculto «…:_idcl» con su id justo antes de form.submit():
+  // si ese id habla de descargar o de un reporte, el envío es la descarga (MUISCA: lnkDescargarReporteExogena)
+  const enlaceJsf = (form) => {
+    const campo = form?.querySelector?.('input[type="hidden"][name$="_idcl"], input[type="hidden"][name$=":_link_hidden_"]');
+    return campo?.value || "";
   };
 
   document.addEventListener("df-armar", (e) => {
@@ -65,9 +93,10 @@
     document.dispatchEvent(new CustomEvent("df-archivo", { detail: JSON.stringify({ nombre, mime, base64: aBase64(buf), bytes: buf.byteLength }) }));
   };
 
-  const pareceDescarga = (submitter) => {
+  const pareceDescarga = (submitter, form) => {
     if (!armado) return false;
     if (submitter && DESCARGA.test(texto(submitter))) return true;
+    if (/descarg|export|reporte|excel/i.test(enlaceJsf(form))) return true;
     return Date.now() - ultimoClic.cuando < 4000 && DESCARGA.test(ultimoClic.texto);
   };
 
@@ -81,7 +110,7 @@
       if (metodo === "GET") {
         for (const [k, v] of datos) if (typeof v === "string") url.searchParams.append(k, v);
       } else {
-        opciones.body = form.enctype === "multipart/form-data" ? datos : new URLSearchParams(Array.from(datos, ([k, v]) => [k, typeof v === "string" ? v : ""]));
+        opciones.body = form.enctype === "multipart/form-data" ? datos : new URLSearchParams(pares(datos, ([k, v]) => [k, typeof v === "string" ? v : ""]));
       }
       const r = await fetch(url.href, opciones);
       const tipo = r.headers.get("content-type") || "";
@@ -101,9 +130,9 @@
   // un archivo, se vuelven a poner para que la página reciba la misma petición.
   const submitOriginal = HTMLFormElement.prototype.submit;
   HTMLFormElement.prototype.submit = function () {
-    if (!dejarPasar && pareceDescarga(null)) {
+    if (!dejarPasar && pareceDescarga(null, this)) {
       const form = this;
-      const ocultos = Array.from(form.querySelectorAll('input[type="hidden"][name]'), (i) => [i.name, i.value]);
+      const ocultos = pares(form.querySelectorAll('input[type="hidden"][name]'), (i) => [i.name, i.value]);
       void interceptar(form, null, () => {
         const puestos = ocultos
           .filter(([k]) => !form.querySelector(`input[name="${CSS.escape(k)}"]`))
@@ -126,7 +155,7 @@
   // 2) Formularios que se envían con un botón (evento submit que la página no canceló)
   window.addEventListener("submit", (e) => {
     const form = e.target;
-    if (dejarPasar || e.defaultPrevented || !(form instanceof HTMLFormElement) || !pareceDescarga(e.submitter)) return;
+    if (dejarPasar || e.defaultPrevented || !(form instanceof HTMLFormElement) || !pareceDescarga(e.submitter, form)) return;
     e.preventDefault();
     const submitter = e.submitter;
     void interceptar(form, submitter, () => {
@@ -157,6 +186,30 @@
         location.href = url.href;
       });
   });
+
+  // 3b) Reportes que se abren en una ventanita (MUISCA, años anteriores a 2023:
+  //     window.open("/WebReportes/reportservlet?…&PR_renderer=xls")): se piden aquí con la misma sesión
+  const abrirOriginal = window.open;
+  window.open = function (url, ...resto) {
+    try {
+      const u = new URL(String(url || ""), location.href);
+      const esReporte = /reportservlet|renderer=xls|\.(xlsx?|csv)(\?|$)|descarg|export/i.test(u.pathname + u.search);
+      if (armado && /(^|\.)dian\.gov\.co$/.test(u.hostname) && esReporte) {
+        fetch(u.href, { credentials: "include" })
+          .then(async (r) => {
+            const tipo = r.headers.get("content-type") || "";
+            const disp = r.headers.get("content-disposition") || "";
+            if (r.ok && (/attachment/i.test(disp) || ARCHIVO.test(tipo))) entregar(await r.arrayBuffer(), nombreDe(disp, "exogena.xls"), tipo);
+            else abrirOriginal.call(window, u.href, ...resto);
+          })
+          .catch(() => abrirOriginal.call(window, u.href, ...resto));
+        return null;
+      }
+    } catch {
+      /* una URL rara: que la abra la página */
+    }
+    return abrirOriginal.call(window, url, ...resto);
+  };
 
   // 4) Archivos que la página arma en el navegador (blob) y descarga con un enlace
   const crearOriginal = URL.createObjectURL;

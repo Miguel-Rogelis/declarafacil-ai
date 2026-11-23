@@ -25,13 +25,34 @@
     return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none";
   };
 
+  /** El texto de un botón de imagen sin alt, sacado del nombre del archivo (MUISCA: botaceptarutv.gif → «aceptar»). */
+  const textoDeImagen = (src) => {
+    const base = String(src || "").split(/[?#;]/)[0].split("/").pop().replace(/\.(gif|png|jpe?g|svg|webp)$/i, "");
+    const t = base.replace(/^(boton|bot|btn)[_-]?/i, "").replace(/(utv|_?es|_?on|_?off|_?activo|_?hover|\d+)$/i, "").replace(/[_-]+/g, " ").trim();
+    return t.length >= 3 ? t : "";
+  };
+
+  /** La imagen «de verdad» de un botón: si el mouse está encima, MUISCA la cambia por botrollover.gif y la
+   * original queda en onmouseout ("this.src='…/botaceptarutv.gif'"). */
+  const srcDe = (el) => {
+    const src = el?.getAttribute?.("src") || "";
+    const fuera = (el?.getAttribute?.("onmouseout") || "").match(/src\s*=\s*['"]([^'"]+)['"]/);
+    return fuera && (/rollover|hover|over\./i.test(src) || !src) ? fuera[1] : src;
+  };
+
   /** Texto que se lee en un botón, enlace o elemento. */
   const textoDe = (el) => {
     if (!el) return "";
+    const esImagen = el.tagName === "INPUT" && el.type === "image";
     const t = el.tagName === "INPUT" ? el.value || el.getAttribute("alt") || el.getAttribute("aria-label") || el.title : el.innerText || el.textContent;
     const img = el.querySelector?.("img[alt]")?.getAttribute("alt"); // botones de MUISCA: un ícono con el texto en alt
-    return (t?.trim() || img || el.getAttribute?.("aria-label") || el.title || "").replace(/\s+/g, " ").trim().slice(0, 160);
+    const deArchivo = esImagen ? textoDeImagen(srcDe(el)) : textoDeImagen(srcDe(el.querySelector?.("img")));
+    return (t?.trim() || img || el.getAttribute?.("aria-label") || el.title || deArchivo || "").replace(/\s+/g, " ").trim().slice(0, 160);
   };
+
+  /** Todo el texto visible de la página. MUISCA arma algunas páginas con dos <body> y el primero queda
+   * vacío, así que document.body no sirve: se lee desde <html>. */
+  const textoPagina = (max = 30000) => norm((document.documentElement?.innerText || "").slice(0, max));
 
   /** Texto propio de un elemento, sin el de sus hijos (la cajita con el número de la casilla). */
   const textoPropio = (el) =>
@@ -102,7 +123,8 @@
       const v = el.getAttribute(attr);
       if (!v) continue;
       const cola = v.split(/[:]/).pop();
-      const m = cola.match(/^(?:cas(?:illa)?|reng(?:lon)?|ren|campo|txt|valor|val|c|r|f)[_\-.]?0*(\d{1,3})(?:[_\-.]?(?:valor|val|txt|input|campo))?$/i);
+      // El 210 de MUISCA (aplicación en Angular) nombra cada campo cs_id_<casilla>: id="cs_id_32"
+      const m = cola.match(/^(?:cs[_\-.]?id|cas(?:illa)?|reng(?:lon)?|ren|campo|txt|valor|val|c|r|f)[_\-.]?0*(\d{1,3})(?:[_\-.]?(?:valor|val|txt|input|campo))?$/i);
       if (m) return Number(m[1]);
     }
     for (const attr of ["title", "aria-label", "placeholder"]) {
@@ -217,7 +239,7 @@
 
   /** El año gravable que dice la página, si lo dice. */
   const anioDeLaPagina = () => {
-    const texto = norm(document.body?.innerText?.slice(0, 20000));
+    const texto = textoPagina(20000);
     const m = texto.match(/ano gravable\D{0,15}(20\d{2})/);
     if (m) return Number(m[1]);
     for (const s of document.querySelectorAll("select")) {
@@ -230,5 +252,5 @@
     return null;
   };
 
-  window.DF = { norm, PELIGRO, visible, textoDe, textoPropio, enmascarar, CAMPOS, esCampo, bloqueado, selectorDe, porSelector, numeroEnAtributos, buscarCampo, escribir, leerNumero, resaltar, anioDeLaPagina, idEstable };
+  window.DF = { norm, PELIGRO, visible, textoDe, textoDeImagen, textoPagina, textoPropio, enmascarar, CAMPOS, esCampo, bloqueado, selectorDe, porSelector, numeroEnAtributos, buscarCampo, escribir, leerNumero, resaltar, anioDeLaPagina, idEstable };
 })();

@@ -59,6 +59,7 @@ class Respuestas(BaseModel):
     cesantias_no_reportadas: float = 0
     retenciones_no_reportadas: float = 0
     rendimientos_financieros: float = 0
+    restar_componente_inflacionario: bool = True  # False reproduce una declaración (o la sugerida) que no lo restó
     compras_factura_electronica: float = 0
     aportes_independiente: float = 0
     dividendos_no_reportados: float = 0
@@ -359,6 +360,7 @@ def construir_declaracion(sol: SolicitudLiquidacion) -> DatosDeclaracion:
     d.independiente.honorarios_y_servicios += r.honorarios_no_reportados
     d.independiente.costos_gastos_procedentes += r.costos_independiente
     d.capital.rendimientos_financieros += r.rendimientos_financieros
+    d.capital.restar_componente_inflacionario = r.restar_componente_inflacionario
     d.deducciones.compras_factura_electronica += r.compras_factura_electronica
     if r.aportes_independiente and not (d.independiente.aportes_obligatorios_pension or d.independiente.aportes_obligatorios_salud):
         # La PILA suele decirse en un solo valor: salud (12,5 %) y pensión (16 %) sobre la misma base

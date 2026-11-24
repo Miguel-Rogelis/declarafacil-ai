@@ -33,6 +33,11 @@ class RentasCapital(BaseModel):
     arrendamientos: float = 0
     regalias_y_otros: float = 0
     costos_gastos_procedentes: float = 0
+    restar_componente_inflacionario: bool = Field(
+        default=True,
+        description="Restar el componente inflacionario de los rendimientos (art. 38 ET, casilla 59). Es opcional: la declaración "
+                    "sugerida de la DIAN no lo resta y quien la presenta así deja la casilla 59 en cero.",
+    )
 
 
 class RentasNoLaborales(BaseModel):

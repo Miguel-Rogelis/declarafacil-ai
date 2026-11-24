@@ -258,7 +258,7 @@ Desde el año gravable 2023, el 1 % de lo que compraste con factura electrónica
 
 ## ¿Cómo declaro los intereses de mis CDT y cuentas de ahorro?
 También: rendimientos financieros | intereses del cdt | intereses de ahorros | lo que me dio el banco | componente inflacionario
-Los intereses que te pagaron tus cuentas, CDT o fondos son ingresos de capital. Una parte, el componente inflacionario, no paga impuesto. El banco te da un certificado tributario con los rendimientos del año y el saldo al 31 de diciembre, que también va en tu patrimonio. Si te retuvieron sobre esos intereses, esa retención se resta de tu impuesto.
+Los intereses que te pagaron tus cuentas, CDT o fondos son ingresos de capital. Una parte, el componente inflacionario, no paga impuesto (55,43 % en el año gravable 2025): restarlo es opcional y la declaración sugerida de la DIAN no lo resta; aquí sí se resta, salvo que pidas dejarlo como la sugerida. El banco te da un certificado tributario con los rendimientos del año y el saldo al 31 de diciembre, que también va en tu patrimonio. Si te retuvieron sobre esos intereses, esa retención se resta de tu impuesto.
 
 ## ¿Cómo declaro criptomonedas o cuentas en el exterior?
 También: bitcoin | binance | cripto | cuenta en estados unidos | bienes en el exterior | formulario 160 | activos en el exterior | dólares

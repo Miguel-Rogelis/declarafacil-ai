@@ -96,6 +96,7 @@ CAMPOS: dict[str, tuple[str, Tipo, str, float, float]] = {
     "anticipo_anio_anterior": ("anticipo_anio_anterior", "pesos", "Anticipo pagado el año anterior", 0, 5e10),
     "ultimos_dos_digitos_cedula": ("ultimos_dos_digitos_nit", "digitos", "Dos últimos dígitos de tu cédula", 0, 99),
     "responsable_iva": ("responsable_iva", "booleano", "Responsable de IVA", 0, 1),
+    "restar_componente_inflacionario": ("restar_componente_inflacionario", "booleano", "Restar el componente inflacionario de tus rendimientos", 0, 1),
     "sancionado_ultimos_2_anios": ("sin_sanciones_ultimos_2_anios", "booleano", "Sancionado por declarar tarde en los últimos 2 años", 0, 1),
     "bien": ("bienes_adicionales", "item", "Bien", 1, 5e10),
     "deuda": ("deudas_adicionales", "item", "Deuda", 1, 5e10),
@@ -844,6 +845,12 @@ def _extraer_datos(mensaje: str) -> list[dict[str, Any]]:
         anotar.append({"campo": "responsable_iva", "valor": False})
     elif re.search(r"soy responsable de iva", msg):
         anotar.append({"campo": "responsable_iva", "valor": True})
+    # «No restes el componente inflacionario» / «déjalo como la sugerida» (casilla 59 en cero) o lo contrario
+    if re.search(r"componente inflacionario", msg):
+        if re.search(r"\bno\b(?! se\b)(?:\s+\w+){0,2}?\s+(rest|quit|descuent|apliq|tom|us)\w*|sin (restar|aplicar|el componente)|como (la|en la) (declaracion )?sugerida|dej\w*\b.{0,40}\ben (cero|0)\b", msg):
+            anotar.append({"campo": "restar_componente_inflacionario", "valor": False})
+        elif re.search(r"\b(si|tambien)\b.{0,15}(rest|apliq|descuent)\w*|\b(restalo|aplicalo|restame|restar el componente|resta el componente)\b", msg):
+            anotar.append({"campo": "restar_componente_inflacionario", "valor": True})
     return anotar
 
 

@@ -112,7 +112,9 @@ class _Calculo:
         costos_ind = min(costos_ind_total, neto_ind)
 
         ingresos_cap = cap.rendimientos_financieros + cap.arrendamientos + cap.regalias_y_otros + ex.rentas_capital
-        incr_cap = cap.rendimientos_financieros * cg["componente_inflacionario_rendimientos_pct"]
+        # Componente inflacionario (art. 38 ET): un beneficio opcional; la declaración sugerida de la DIAN no lo resta
+        componente = cap.rendimientos_financieros * cg["componente_inflacionario_rendimientos_pct"]
+        incr_cap = componente if cap.restar_componente_inflacionario else 0.0
         costos_cap_total = cap.costos_gastos_procedentes
         costos_cap = min(costos_cap_total, max(ingresos_cap - incr_cap, 0))
         ece_cap = ex.ece_rentas_pasivas_capital
@@ -256,7 +258,8 @@ class _Calculo:
         self.valores["cg"] = {
             "trab": {"ingresos": ingresos_lab + (0 if con_costos else ingresos_ind), "incr": incr_lab + (0 if con_costos else incr_ind), "rl": rl_trab},
             "43": {"ingresos": ingresos_ind if con_costos else 0.0, "incr": incr_ind if con_costos else 0.0, "costos": costos_ind_total, "rl": rl_43},
-            "cap": {"ingresos": ingresos_cap, "incr": incr_cap, "costos": costos_cap_total, "rl": neto_cap, "ece": ece_cap},
+            "cap": {"ingresos": ingresos_cap, "incr": incr_cap, "costos": costos_cap_total, "rl": neto_cap, "ece": ece_cap,
+                    "componente_no_restado": componente - incr_cap},
             "nl": {"ingresos": ingresos_nl, "incr": incr_nl, "costos": costos_nl_total, "rl": neto_nl, "ece": ece_nl},
             "comp": comp,
             "comp_2018": comp_2018,

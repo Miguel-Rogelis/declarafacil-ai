@@ -178,6 +178,7 @@ export interface Respuestas {
   cesantias_no_reportadas?: number;
   retenciones_no_reportadas: number;
   rendimientos_financieros?: number;
+  restar_componente_inflacionario?: boolean; // false: casilla 59 en cero, como la declaración sugerida
   compras_factura_electronica?: number;
   aportes_independiente?: number;
   dividendos_no_reportados: number;

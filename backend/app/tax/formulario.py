@@ -55,7 +55,7 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
         return max(x, 0)
 
     cg = v["cg"]
-    sub, lim = cg["sub"], cg["limitadas"]
+    sub = cg["sub"]
     t, n43, cap, nl = cg["trab"], cg["43"], cg["cap"], cg["nl"]
     pen = v.get("pen", {"ingresos": 0, "incr": 0, "exenta": 0})
     dex = v.get("div_ext", {"ingresos": 0, "exentos": 0, "impuesto": 0})
@@ -73,8 +73,19 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
     poner(30, "Deudas", liq["deudas"], campos=["patrimonio.deudas"])
     poner(31, "Total patrimonio líquido", pos(c[29] - c[30]), "calculada", "29 - 30")
 
-    def subcedula(k: str, base: int, nombre: str) -> None:
-        """Casillas de exentas y deducciones de una subcédula, en el orden del formulario."""
+    # Límite del 40 % (o 1.340 UVT) sobre los ingresos netos de la cédula, con las casillas ya aproximadas
+    # ((32 - 33) + (43 - 44) + (58 - 59) + (74 - 75 - 76)), como lo calcula MUISCA, y repartido en el orden del formulario
+    rcg = r["cedula_general"]
+    base_limite = sum(_r(x["ingresos"]) - _r(x["incr"]) for x in (t, n43, cap, nl))
+    cupo = {"resto": _r(min(max(base_limite, 0) * rcg["limite_rentas_exentas_deducciones_pct"],
+                            rcg["limite_rentas_exentas_deducciones_uvt"] * float(r["uvt"])))}
+
+    def subcedula(k: str, base: int, nombre: str, renta_liquida: float) -> None:
+        """Casillas de exentas y deducciones de una subcédula, en el orden del formulario.
+
+        La casilla de limitadas sale de las casillas ya aproximadas (exentas + deducciones), sin pasar del
+        cupo que queda del límite ni de la renta líquida de la subcédula: si se aproximara la suma sin
+        redondear, podría quedar mil pesos por debajo de lo que calcula MUISCA."""
         s = sub[k]
         n_exe1, n_exe2, n_totexe, n_viv, n_otras, n_totded, n_lim = base, base + 1, base + 2, base + 3, base + 4, base + 5, base + 6
         poner(n_exe1, f"Rentas exentas de {nombre} – Aportes voluntarios AFC, FVP y/o AVC", s["afc"], campos=["deducciones.aportes_voluntarios_afc_fpv"])
@@ -87,7 +98,9 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
               campos=["deducciones.dependientes", "deducciones.medicina_prepagada", "deducciones.gmf_pagado", "deducciones.intereses_icetex"],
               nota="Dependiente (10 % de tus ingresos de trabajo), medicina prepagada, 50 % del 4x1000 y los intereses del ICETEX, según lo que tengas." if s["otras_deducciones"] else None)
         poner(n_totded, f"Total deducciones imputables a {nombre}", c[n_viv] + c[n_otras], "calculada", f"{n_viv} + {n_otras}")
-        poner(n_lim, f"Rentas exentas y/o deducciones imputables a {nombre} (Limitadas)", lim[k], "calculada",
+        limitada = min(c[n_totexe] + c[n_totded], cupo["resto"], max(renta_liquida, 0))
+        cupo["resto"] -= limitada
+        poner(n_lim, f"Rentas exentas y/o deducciones imputables a {nombre} (Limitadas)", limitada, "calculada",
               nota="La DIAN la calcula: tus exentas y deducciones hasta el 40 % de tus ingresos netos, con máximo "
                    f"{r['cedula_general']['limite_rentas_exentas_deducciones_uvt']:,} UVT, repartido primero a las rentas de trabajo.".replace(",", "."))
 
@@ -100,7 +113,7 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
                   "independiente.aportes_obligatorios_pension", "independiente.aportes_obligatorios_salud"],
           nota="Tus aportes obligatorios a salud y pensión (y los voluntarios al fondo obligatorio).")
     poner(34, "Renta líquida de las Rentas de trabajo", pos(c[32] - c[33]), "calculada", "32 - 33")
-    subcedula("trab", 35, "las Rentas de trabajo")
+    subcedula("trab", 35, "las Rentas de trabajo", c[34])
     poner(42, "Renta líquida ordinaria de las Rentas de trabajo", pos(c[34] - c[41]), "calculada", "34 - 41")
 
     # ---- Rentas de trabajo que no provengan de una relación laboral (43-57) ----
@@ -110,7 +123,7 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
     poner(44, "Ingresos no constitutivos de renta de " + nombre43, n43["incr"], campos=["independiente.aportes_obligatorios_pension", "independiente.aportes_obligatorios_salud"])
     poner(45, "Costos y deducciones procedentes de " + nombre43, n43["costos"], campos=["independiente.costos_gastos_procedentes"])
     poner(46, "Renta líquida de " + nombre43, pos(c[43] - c[44] - c[45]), "calculada", "43 - 44 - 45")
-    subcedula("43", 47, nombre43)
+    subcedula("43", 47, nombre43, c[46])
     poner(54, "Renta líquida ordinaria del ejercicio de " + nombre43, pos(c[46] - c[53]), "calculada", "46 - 53")
     poner(55, "Pérdida líquida ordinaria del ejercicio de " + nombre43, pos(c[44] + c[45] - c[43]), "calculada", "44 + 45 - 43")
     poner(56, "Compensaciones por pérdidas de " + nombre43, comp["43"], campos=["perdidas.trabajo_no_laboral"],
@@ -119,14 +132,21 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
 
     # ---- Rentas de capital (58-73) ----
     poner(58, "Ingresos brutos de las Rentas de capital", cap["ingresos"], campos=["capital.rendimientos_financieros", "capital.arrendamientos", "capital.regalias_y_otros", "exterior.rentas_capital"])
-    poner(59, "Ingresos no constitutivos de renta de las Rentas de capital", cap["incr"], campos=["capital.rendimientos_financieros"],
-          nota=f"El componente inflacionario de tus rendimientos financieros ({r['cedula_general']['componente_inflacionario_rendimientos_pct'] * 100:.2f} % en {anio}).".replace(".", ",")
-          if cap["incr"] else None)
+    pct_ci = f"{r['cedula_general']['componente_inflacionario_rendimientos_pct'] * 100:.2f} %".replace(".", ",")
+    no_restado = cap.get("componente_no_restado", 0)
+    nota59 = None
+    if cap["incr"]:
+        nota59 = f"El componente inflacionario de tus rendimientos financieros ({pct_ci} en {anio})."
+    elif no_restado >= 500:
+        monto = f"${_r(no_restado):,.0f}".replace(",", ".")
+        nota59 = (f"En cero porque elegiste no restar el componente inflacionario, como la declaración sugerida. "
+                  f"Podrías restar {monto} ({pct_ci} de tus rendimientos, art. 38 ET).")
+    poner(59, "Ingresos no constitutivos de renta de las Rentas de capital", cap["incr"], campos=["capital.rendimientos_financieros"], nota=nota59)
     poner(60, "Costos y deducciones procedentes de las Rentas de capital", cap["costos"], campos=["capital.costos_gastos_procedentes"])
     poner(61, "Renta líquida de las Rentas de capital", pos(c[58] - c[59] - c[60]), "calculada", "58 - 59 - 60")
     poner(62, "Rentas líquidas pasivas – ECE de las Rentas de capital", cap.get("ece", 0), campos=["exterior.ece_rentas_pasivas_capital"],
           nota="Rentas pasivas de una entidad controlada del exterior en la que tienes 10 % o más (arts. 882 a 893 ET)." if cap.get("ece") else None)
-    subcedula("cap", 63, "las Rentas de capital")
+    subcedula("cap", 63, "las Rentas de capital", c[61] + c[62])
     poner(70, "Renta líquida ordinaria del ejercicio de las Rentas de capital", pos(c[61] + c[62] - c[69]), "calculada", "61 + 62 - 69")
     poner(71, "Pérdida líquida del ejercicio de las Rentas de capital", pos(c[59] + c[60] - c[58]), "calculada", "59 + 60 - 58")
     poner(72, "Compensaciones por pérdidas de las Rentas de capital", comp["cap"], campos=["perdidas.capital"])
@@ -139,7 +159,7 @@ def armar(d: DatosDeclaracion, r: dict[str, Any], v: dict[str, Any], liq: dict[s
     poner(77, "Costos y deducciones procedentes de las Rentas no laborales", nl["costos"], campos=["no_laborales.costos_gastos_procedentes"])
     poner(78, "Renta líquida de las Rentas no laborales", pos(c[74] - c[75] - c[76] - c[77]), "calculada", "74 - 75 - 76 - 77")
     poner(79, "Rentas líquidas pasivas – ECE de las Rentas no laborales", nl.get("ece", 0), campos=["exterior.ece_rentas_pasivas_no_laborales"])
-    subcedula("nl", 80, "las Rentas no laborales")
+    subcedula("nl", 80, "las Rentas no laborales", c[78] + c[79])
     poner(87, "Renta líquida ordinaria del ejercicio de las Rentas no laborales", pos(c[78] + c[79] - c[86]), "calculada", "78 + 79 - 86")
     poner(88, "Pérdida líquida del ejercicio de las Rentas no laborales", pos(c[75] + c[76] + c[77] - c[74]), "calculada", "75 + 76 + 77 - 74")
     poner(89, "Compensaciones por pérdidas de las Rentas no laborales", comp["nl"], campos=["perdidas.no_laborales"])
